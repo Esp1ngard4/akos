@@ -42,9 +42,22 @@ Nothing syncs automatically. The dashboard is a snapshot, not a live view.
 
 ## Maintenance
 
-- **Regular use** — edit the register, then regenerate the dashboard. It carries no generation date of its own, so a stale dashboard is indistinguishable from a current one; refresh after every batch of edits rather than trusting memory.
-- **Before a schema change or bulk rewrite** — copy the register to a `PreviousV/` folder first.
-- **Periodically** — review items sitting in `Not Started` across several sprints. They are either genuinely deferred, in which case say so, or quietly abandoned.
+### Regular use
+
+1. **Add and edit items** in the register - IDs are assigned by you and never reused.
+2. **Regenerate the dashboard** after every batch of edits. It carries no generation
+   date, so a stale dashboard is indistinguishable from a current one; refresh rather
+   than trusting memory.
+3. **Move committed work out** to your task tracker. The WBS is not a task list and
+   degrades into an unusable one if treated as such.
+
+### Periodic
+
+- **Review stalled items** - anything sitting in `Not Started` across several sprints
+  is either genuinely deferred, in which case say so, or quietly abandoned.
+- **Re-check estimates** on items still ahead of you; the ones written at project
+  start are the least reliable.
+- **Before a schema change or bulk rewrite** - copy the register to `PreviousV/` first.
 
 ## Open items
 

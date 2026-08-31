@@ -56,10 +56,20 @@ If you want real task creation, delegate it to a skill that owns your tracker's 
 
 ## Maintenance
 
-- **Regular use** — add and edit entries, then regenerate the dashboard.
-- **Review cycle** — use the dashboard to find entries not reviewed recently; update the review dates when you touch them. An unstamped entry is indistinguishable from one never looked at.
-- **Closing** — set status to Resolved or Closed and fill the closure fields. Closed entries drop out of the active counts but stay in the register permanently.
-- **Before a schema change** — copy the register to a `PreviousV/` folder first.
+### Regular use
+
+1. **Add and edit entries**, then regenerate the dashboard.
+2. **Update review dates** whenever you touch an entry. An unstamped entry is
+   indistinguishable from one never looked at.
+3. **Close entries** by setting status and filling the closure fields. Closed entries
+   drop out of active counts but stay in the register permanently.
+
+### Periodic
+
+- **Work the review queue** - use the dashboard to find entries not reviewed recently.
+- **Re-score open risks.** Probability and severity drift as a project moves; a risk
+  scored at kickoff and never revisited is decoration.
+- **Before a schema change** - copy the register to `PreviousV/` first.
 
 ## Open items
 

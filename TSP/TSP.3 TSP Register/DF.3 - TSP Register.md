@@ -34,7 +34,34 @@ This document covers the rest: why the register exists, its conventions, the two
 - **Naming a skill in the `Skill` column is the expectation that it exists.** There is no separate "should be automated" flag: a skill named but not installed is a broken reference; a skill installed but named nowhere is automation nobody decided to keep. `audit_tsp.py` reports both.
 - **The schema is yours to adapt.** The shipped columns reflect one estate. `Primary Area` may want to be team, service or value stream; you may not need `Relevancy` at all. Change it in `create_tsp.py` before creating the register, not after.
 
-## The two controls
+## TSP types
+
+| Type | Meaning |
+|---|---|
+| `Tool` | Something used to get work done - a register, a script, a configured application |
+| `Manual` | A playbook describing a whole system, rather than a single tool |
+| `Work Instruction` | A defined procedure with steps - a routine, a checklist, a process someone follows |
+
+Most estates are overwhelmingly `Tool`. The other two matter because they stop the
+register becoming software-only: a morning routine and a documented handover process
+are things you depend on and would have to rebuild, which is the test.
+
+Status runs `Planned` -> `In Progress` -> `Implemented` -> `Obsolete`. Relevancy is
+the separate axis recording how much the tool is actually used, from `Critical` down
+to `Not in the last years`. **The two together are what the annual review acts on** -
+status alone cannot tell you whether something is worth keeping.
+
+## Relationship to other tools
+
+**Every other tool** is a row in this register — including the [WBS](../TSP.1%20WBS%20Register/DF.1%20-%20WBS%20Register.md) and [RAID](../TSP.2%20RAID%20Register/DF.2%20-%20RAID%20Register.md) registers, and this tool itself. Building a tool is not finished until its row exists.
+
+**Governance documents** — the `Doc Aux` flag records whether a tool has one. Whatever authors the document owns the document; this register owns the row. Neither does the other's write.
+
+**Nothing syncs automatically.** Rows change because someone changed them. `audit_tsp.py` is the compensating control: it compares the register against what is actually on disk and reports the drift in both directions.
+
+## Maintenance
+
+### The two controls
 
 The register exists to be *worked*, not just held. Two controls do that:
 
@@ -46,13 +73,16 @@ The register exists to be *worked*, not just held. Two controls do that:
 
 If the next-due dates are calculated, make sure something actually calculates them. A frequency column with a `Days` value *looks* like a working mechanism; confirm it is one, or every date will have been typed by hand and the whole schedule will drift.
 
-## Relationship to other tools
+### Routine
 
-**Every other tool** is a row in this register — including the [WBS](../TSP.1%20WBS%20Register/DF.1%20-%20WBS%20Register.md) and [RAID](../TSP.2%20RAID%20Register/DF.2%20-%20RAID%20Register.md) registers, and this tool itself. Building a tool is not finished until its row exists.
-
-**Governance documents** — the `Doc Aux` flag records whether a tool has one. Whatever authors the document owns the document; this register owns the row. Neither does the other's write.
-
-**Nothing syncs automatically.** Rows change because someone changed them. `audit_tsp.py` is the compensating control: it compares the register against what is actually on disk and reports the drift in both directions.
+1. **Register new tools** as they are built - a tool is not finished until its row exists.
+2. **Regenerate the dashboard** after a batch of edits. Its subtitle carries the
+   generation date, so staleness is at least visible.
+3. **Log structural changes** in the Change Log sheet: created, retired, superseded,
+   governance document rewritten.
+4. **Run the audit** before the annual review, and whenever folders have been
+   reorganised. It reports drift in both directions.
+5. **Before a schema change or bulk rewrite** - copy the register to `PreviousV/` first.
 
 ## Open items
 
