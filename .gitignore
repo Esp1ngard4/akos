@@ -6,9 +6,13 @@ __pycache__/
 Thumbs.db
 
 # Generated dashboards and working registers - the scripts create these.
-# The negations are shipped assets, not generated output: without them a clone
-# gets tools that fail on first run.
+# The negations below are SHIPPED ASSETS, not generated output. Without them a
+# clone gets tools that fail on first run - which has happened once already.
 *.html
 *.xlsx
-!examples/.github/skills/wbs-manager/WBS Template.xlsx
-!examples/.github/skills/tsp-manager/templates/dashboard.html
+!TSP/TSP.1 WBS Register/wbs-manager/WBS Template.xlsx
+!TSP/TSP.3 TSP Register/tsp-manager/templates/dashboard.html
+
+# The catalogue register is the source of truth for REGISTRY.md, so it ships.
+# Its dashboard is a derived view and does not.
+!registry/TSP Register.xlsx

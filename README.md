@@ -46,29 +46,38 @@ Start at [0](method/00-the-unit-is-the-tool.md) if you want the reasoning, or
 
 ## The tools
 
-Three registers, each an `.xlsx` source of truth with a generated HTML dashboard.
-They're ordinary working tools, useful on their own — and they're here because a
-method with no worked example is just an opinion.
+What this repository publishes is listed in **[the registry](registry/REGISTRY.md)** —
+which is itself generated from a TSP register, built with the tool it catalogues.
 
-| Skill | What it manages |
-|---|---|
-| [`tsp-manager`](examples/.github/skills/tsp-manager) | **The register itself** — your inventory of tools, and the recurring controls that keep them alive |
-| [`wbs-manager`](examples/.github/skills/wbs-manager) | Work breakdown / backlog: items, effort, sprint allocation |
-| [`raid-dashboard`](examples/.github/skills/raid-dashboard) | Risks, Actions, Issues, Decisions, Ideas, with a probability × severity heat map |
+Each entry under [`TSP/`](TSP) is a **tool**, not a skill: a folder containing a
+definition document and the skill that operates it. That distinction is the method's
+own rule — a skill with no definition document is an interface onto something nobody
+has described.
 
-`tsp-manager` closes the loop: it's the register that knows which tools exist and
-which have skills, and it reconciles that list against what's actually installed —
-in both directions.
+| | Tool | Skill |
+|---|---|---|
+| TSP.1 | [WBS Register](TSP/TSP.1%20WBS%20Register/) — work breakdown / backlog | `wbs-manager` |
+| TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) — risks, actions, issues, decisions, ideas | `raid-dashboard` |
+| TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) — the inventory of tools itself | `tsp-manager` |
+
+Each is an `.xlsx` source of truth with a generated HTML dashboard. They are ordinary
+working tools, useful on their own — and they are here because a method with no worked
+example is just an opinion.
+
+`registry/` is that worked example running: AKOS uses TSP.3 to catalogue what AKOS
+ships. The register is the source of truth; `REGISTRY.md` is generated from it, so the
+catalogue cannot drift from the thing that defines it.
 
 ## Try it
 
 Skills load from `.github/skills/`, `.claude/skills/` or `.agents/skills/` in GitHub
 Copilot for VS Code, and the same `SKILL.md` format is read by Claude Code, Cursor,
-Codex CLI and others. Copy a folder into your repo and the agent picks it up — no
-registration step.
+Codex CLI and others. **This repository is a catalogue, not a working environment** —
+the skills are not installed here. Copy the one you want into your own repo and your
+agent picks it up with no registration step.
 
 ```bash
-cp -r examples/.github/skills/wbs-manager  <your-repo>/.github/skills/
+cp -r "TSP/TSP.1 WBS Register/wbs-manager"  <your-repo>/.github/skills/
 pip install openpyxl
 ```
 
@@ -79,8 +88,8 @@ the vendor deadline"*, *"what's overdue for review?"* Skills trigger on their
 Every script also runs standalone, with no agent involved:
 
 ```bash
-python .github/skills/wbs-manager/scripts/create_wbs.py  "WBS Atlas.xlsx" "Atlas"
-python .github/skills/wbs-manager/scripts/refresh_wbs.py "WBS Atlas.xlsx" "WBS Dashboard.html" "Atlas"
+python "TSP/TSP.1 WBS Register/wbs-manager/scripts/create_wbs.py"  "WBS Atlas.xlsx" "Atlas"
+python "TSP/TSP.1 WBS Register/wbs-manager/scripts/refresh_wbs.py" "WBS Atlas.xlsx" "WBS Dashboard.html" "Atlas"
 ```
 
 Python 3.9+ and `openpyxl`; every other import is standard library. Dashboards pull
