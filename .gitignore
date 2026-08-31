@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+~$*
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Generated dashboards and working registers - the scripts create these.
+*.html
+*.xlsx
+!examples/.github/skills/wbs-manager/F.XXX WBS Template.xlsx
