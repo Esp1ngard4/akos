@@ -1,0 +1,32 @@
+name: smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # git archive HEAD needs real history, not a shallow tree.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install openpyxl
+
+      # --packaged runs the tools from `git archive HEAD`, so a file that exists
+      # locally but was never committed is absent - which is exactly how a broken
+      # release reaches a user who clones.
+      - name: Smoke test (packaged)
+        run: python tests/smoke_test.py --packaged

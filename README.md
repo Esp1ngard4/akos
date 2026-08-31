@@ -95,6 +95,23 @@ python "TSP/TSP.1 WBS Register/wbs-manager/scripts/refresh_wbs.py" "WBS Atlas.xl
 Python 3.9+ and `openpyxl`; every other import is standard library. Dashboards pull
 Chart.js and Grid.js from a CDN — offline, tables render and charts don't.
 
+## Verifying it works
+
+```bash
+python tests/smoke_test.py              # the working tree
+python tests/smoke_test.py --packaged   # what git actually ships
+```
+
+Every tool is exercised the way a new user would: create a register, render its
+dashboard, check the output is real rather than merely present. Runs in seconds and
+needs nothing beyond `openpyxl`.
+
+`--packaged` is the one that matters. It exports `git archive HEAD` and runs from
+there, so a file sitting untracked on disk is simply absent. That gap once shipped a
+tool whose dashboard template had never been committed, and every clone failed on
+first use while the working tree looked perfectly healthy. CI runs `--packaged` on
+every push, against Python 3.9 and 3.13.
+
 ## Templates
 
 - [`templates/TD-template.md`](templates/TD-template.md) — the governance document structure.
