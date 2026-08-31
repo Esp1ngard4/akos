@@ -95,6 +95,15 @@ def export_head(dest):
     with tarfile.open(archive) as tar:
         tar.extractall(dest)
     os.remove(archive)
+    # install.py addresses versions by commit, so the exported tree has to be a
+    # repository for it to be testable here. -f because the extracted .gitignore
+    # would otherwise drop the shipped .xlsx and .html assets on the way back in.
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    subprocess.check_call(["git", "init", "-q", "."], cwd=dest, **quiet)
+    subprocess.check_call(["git", "add", "-A", "-f", "."], cwd=dest, **quiet)
+    subprocess.check_call(["git", "-c", "user.email=smoke@test",
+                           "-c", "user.name=smoke", "commit", "-qm", "packaged"],
+                          cwd=dest, **quiet)
     return dest
 
 
@@ -147,6 +156,51 @@ def test_tool(tool, root, work):
         check("audit runs clean", ok, out)
 
 
+def test_installer(root, scratch):
+    """Vendor a tool into a throwaway project and drive the drift check.
+
+    The interesting assertion is the last pair: an edited copy must fail
+    `status --check`, and must pass again only once someone has said why.
+    """
+    print("\ninstall.py")
+    installer = os.path.join(root, "install.py")
+    if not check("installer present", os.path.isfile(installer), installer):
+        return
+
+    project = os.path.join(scratch, "consumer")
+    os.makedirs(project, exist_ok=True)
+
+    ok, out = run([installer, "add", "wbs-manager", "--into", project,
+                   "--catalogue", root, "--source", root], root)
+    if not check("add runs", ok, out):
+        return
+    skill = os.path.join(project, ".github", "skills", "wbs-manager", "SKILL.md")
+    check("skill vendored into the project", os.path.isfile(skill), skill)
+    lock = os.path.join(project, "tools.lock.json")
+    if not check("lock written", os.path.isfile(lock), lock):
+        return
+
+    import json
+    rec = json.load(io.open(lock, encoding="utf-8"))["tools"]["wbs-manager"]
+    check("lock records origin and commit",
+          bool(rec.get("commit")) and rec.get("origin", "").startswith("TSP/"),
+          str(rec)[:200])
+
+    ok, out = run([installer, "status", "--project", project, "--check"], root)
+    check("status --check passes on a fresh copy", ok, out)
+
+    with io.open(skill, "a", encoding="utf-8") as fh:
+        fh.write("\nlocal edit\n")
+    ok, out = run([installer, "status", "--project", project, "--check"], root)
+    check("status --check catches an edited copy", not ok, out)
+
+    ok, out = run([installer, "accept", "wbs-manager", "--project", project,
+                   "-m", "smoke test"], root)
+    check("accept records the change", ok, out)
+    ok, out = run([installer, "status", "--project", project, "--check"], root)
+    check("status --check passes once declared", ok, out)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -171,6 +225,7 @@ def main():
 
         for tool in TOOLS:
             test_tool(tool, root, work)
+        test_installer(root, scratch)
 
         print("\n" + "=" * 60)
         if failures:
@@ -178,7 +233,7 @@ def main():
             for f in failures:
                 print("  - %s" % f)
             return 1
-        print("All checks passed (%d tools)." % len(TOOLS))
+        print("All checks passed (%d tools, plus the installer)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

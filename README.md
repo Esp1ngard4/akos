@@ -29,7 +29,7 @@ work of making a tool agent-ready is mostly the work of making it well-governed.
 
 ## The method
 
-Six short pieces. Each came from an actual failure, and each says which — a rule
+Seven short pieces. Each came from an actual failure, and each says which — a rule
 whose reason you can't remember is a rule you will eventually undo.
 
 | | |
@@ -40,6 +40,7 @@ whose reason you can't remember is a rule you will eventually undo.
 | [3. Source of truth](method/03-source-of-truth.md) | Anything in two places will drift. How to make that impossible rather than discouraged |
 | [4. Owned vs. used](method/04-owned-vs-used.md) | You built some, you installed others. Opposite treatment, and getting it wrong loses one |
 | [5. Versioning discipline](method/05-versioning-discipline.md) | Keeping history without the history swallowing the document |
+| [6. Sharing with a team](method/06-sharing-with-a-team.md) | Everything above assumes one person. What changes when it's a team, and which rule breaks |
 
 Start at [0](method/00-the-unit-is-the-tool.md) if you want the reasoning, or
 [1](method/01-registering-your-tools.md) if you'd rather see the mechanism first.
@@ -59,10 +60,17 @@ has described.
 | TSP.1 | [WBS Register](TSP/TSP.1%20WBS%20Register/) — work breakdown / backlog | `wbs-manager` |
 | TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) — risks, actions, issues, decisions, ideas | `raid-dashboard` |
 | TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) — the inventory of tools itself | `tsp-manager` |
+| TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) — vendoring, drift detection, three-way updates | *(none — see below)* |
 
-Each is an `.xlsx` source of truth with a generated HTML dashboard. They are ordinary
-working tools, useful on their own — and they are here because a method with no worked
-example is just an opinion.
+TSP.1–3 are each an `.xlsx` source of truth with a generated HTML dashboard. They are
+ordinary working tools, useful on their own — and they are here because a method with
+no worked example is just an opinion.
+
+TSP.4 has **no skill**, deliberately. It runs a few times in a project's life, at
+moments where a human is deciding something. A tool is not obliged to have a skill;
+the register exists to record tools, and the skill is an optional attribute — which
+is the method's [first claim](method/00-the-unit-is-the-tool.md), demonstrated rather
+than asserted.
 
 `registry/` is that worked example running: AKOS uses TSP.3 to catalogue what AKOS
 ships. The register is the source of truth; `REGISTRY.md` is generated from it, so the
@@ -73,13 +81,33 @@ catalogue cannot drift from the thing that defines it.
 Skills load from `.github/skills/`, `.claude/skills/` or `.agents/skills/` in GitHub
 Copilot for VS Code, and the same `SKILL.md` format is read by Claude Code, Cursor,
 Codex CLI and others. **This repository is a catalogue, not a working environment** —
-the skills are not installed here. Copy the one you want into your own repo and your
-agent picks it up with no registration step.
+the skills are not installed here. Put one in your own repo and your agent picks it
+up with no registration step.
 
 ```bash
-cp -r "TSP/TSP.1 WBS Register/wbs-manager"  <your-repo>/.github/skills/
+git clone https://github.com/Esp1ngard4/akos.git
+python akos/install.py list
+python akos/install.py add wbs-manager --into <your-repo>
 pip install openpyxl
 ```
+
+That copies the skill into `<your-repo>/.github/skills/` and writes
+`tools.lock.json` recording where it came from and at which commit. **Commit both.**
+Everyone who clones your repo then has the tool — no setup step, and a later change
+to it shows up in a pull request like any other.
+
+The lock is what makes the copy maintainable rather than a fork by accident:
+
+```bash
+python akos/install.py status --check   # has our copy drifted? (offline; good for CI)
+python akos/install.py update wbs-manager   # three-way merge upstream changes in
+```
+
+`update` applies upstream changes, keeps yours, and asks about the overlap only.
+[6. Sharing with a team](method/06-sharing-with-a-team.md) explains why it works this
+way; [TD.4](TSP/TSP.4%20Tool%20Installer/TD.4%20-%20Tool%20Installer.md) is the
+reference. A plain `cp -r` of the skill folder also works — you just lose the ability
+to answer "what did we change?" later.
 
 Then ask in plain language — *"create a WBS for project Atlas"*, *"add a risk about
 the vendor deadline"*, *"what's overdue for review?"* Skills trigger on their
@@ -103,8 +131,10 @@ python tests/smoke_test.py --packaged   # what git actually ships
 ```
 
 Every tool is exercised the way a new user would: create a register, render its
-dashboard, check the output is real rather than merely present. Runs in seconds and
-needs nothing beyond `openpyxl`.
+dashboard, check the output is real rather than merely present. The installer gets
+the same treatment — vendor a tool into a throwaway project, confirm `status --check`
+passes clean, edit a file, confirm it now fails, then declare the change and confirm
+it passes again. Runs in seconds and needs nothing beyond `openpyxl`.
 
 `--packaged` is the one that matters. It exports `git archive HEAD` and runs from
 there, so a file sitting untracked on disk is simply absent. That gap once shipped a

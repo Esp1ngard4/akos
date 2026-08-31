@@ -67,6 +67,11 @@ directory is what gets tracked.
 content. That makes it a setup step, so write it down — a fresh clone that silently
 has no skills is a bad first five minutes.
 
+For one person that is an inconvenience. For a team it is disqualifying: everyone
+who clones gets no tools, and asking each of them to run a setup command is the
+"remember to" rule again, wearing a different hat. Teams need the copy — recorded
+rather than forbidden. See [6. Sharing with a team](06-sharing-with-a-team.md).
+
 ## State it explicitly, and verify it
 
 In the governance doc's Components table, say which path is authoritative — in
