@@ -14,6 +14,30 @@ how a whole subsystem works. Some are software. Many aren't.
 A **skill** is one thing a tool can have. It is the interface that lets an agent
 operate the tool. It is not the tool.
 
+## What a tool is made of
+
+One component is mandatory. The rest are optional and vary by tool.
+
+| Component | | |
+|---|---|---|
+| **Definition document** | **required** | What the tool is, why it exists, what it's made of, how it's governed. See [governance docs](02-governance-docs.md) |
+| Data | common | A register, a spreadsheet, a folder of files - whatever the tool actually operates on |
+| Scripts / templates | common | The mechanics |
+| Generated output | common | Dashboards, reports - derived, never authoritative |
+| **Agent skill** | **optional** | The interface that lets an agent operate the tool |
+| Third-party application | sometimes | Where the tool is really "how I use X" |
+
+A tool with a definition document and nothing else is a legitimate tool - a
+documented procedure is exactly that. A tool with a skill but no definition document
+is the broken case: an interface onto something nobody has described, which is how
+an agent ends up confidently doing the wrong thing.
+
+Write the definition first. Add a skill when the tool has earned one.
+
+Components also differ in where they came from - some you authored, some you
+installed - and that determines how each is preserved. See
+[owned vs. used](04-owned-vs-used.md).
+
 ## Why the distinction matters
 
 In the estate this method came from, the register holds **91 tools. Eight have a
