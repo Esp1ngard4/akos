@@ -129,7 +129,7 @@ These are the reason the register exists rather than being a static list:
 
 - **A skill-authoring skill** - if you use one to scaffold and package skills, it is
   externally supplied: name it in the register but do not archive a copy of it. See
-  the method note on owned vs. used skills.
+  the method note on owned vs. used tools.
 - **A governance-doc skill** - if you separate the "why" document from the skill
   itself, that skill owns the document and this one owns the register row. **The
   boundary: it owns the document, this owns the row.** When a tool gains or loses a

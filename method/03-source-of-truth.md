@@ -1,7 +1,11 @@
-# 2. Source of truth
+# 3. Source of truth
 
-**A skill that exists in two places will drift. Make that structurally impossible,
+**Anything that exists in two places will drift. Make that structurally impossible,
 not merely discouraged.**
+
+This applies to every component a tool has — its register, its templates, its
+documentation, its scripts. The worked example below is a skill, because that is
+where the problem bites hardest and has the neatest fix.
 
 Agents load skills from fixed locations — `.github/skills/`, `.claude/skills/`,
 `.agents/skills/`. But that is rarely where the skill *belongs*. A skill is part of

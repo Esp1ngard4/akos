@@ -21,7 +21,7 @@ Everything else the scripts use is standard library. Examples below write `pytho
 
 ```
 WBS/
- F.XXX WBS Template.xlsx <- Template for new projects (copy this)
+ WBS Template.xlsx <- Template for new projects (copy this)
  SKILL.md <- This file
  scripts/
  refresh_wbs.py <- Generates HTML dashboard from any WBS xlsx
@@ -45,7 +45,7 @@ Support material for a WBS item (design notes, research, mockups) always lives i
 
 ## Template Schema
 
-The template (`F.XXX WBS Template.xlsx`) has 3 sheets:
+The template (`WBS Template.xlsx`) has 3 sheets:
 
 ### Sheet: WBS (main backlog)
 Single header row (row 1), data from row 2. Columns:
@@ -94,7 +94,7 @@ These rules exist because the old WBS template (735 columns, merged cells, inlin
 Before any operation, locate the right WBS file:
 
 1. Use `Glob` with patterns `**/F.* WBS*.xlsx` and `**/F.* *.xlsx` across connected folders
-2. Filter out the template (`F.XXX WBS Template.xlsx`)
+2. Filter out the template (`WBS Template.xlsx`)
 3. Single match → use directly
 4. Multiple matches → narrow by project name from user's prompt, or ask
 5. No matches → offer to create a new WBS using `create_wbs.py`

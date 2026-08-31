@@ -1,4 +1,4 @@
-# 4. Versioning discipline
+# 5. Versioning discipline
 
 **Keep the history without letting the history swallow the document.**
 

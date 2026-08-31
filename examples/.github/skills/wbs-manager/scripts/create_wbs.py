@@ -23,7 +23,7 @@ def main():
     output_path = sys.argv[1]
     project_name = sys.argv[2]
 
-    template = TEMPLATE_DIR / "F.XXX WBS Template.xlsx"
+    template = TEMPLATE_DIR / "WBS Template.xlsx"
     if not template.exists():
         print(f"Template not found: {template}")
         sys.exit(1)

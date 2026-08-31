@@ -8,4 +8,4 @@ Thumbs.db
 # Generated dashboards and working registers - the scripts create these.
 *.html
 *.xlsx
-!examples/.github/skills/wbs-manager/F.XXX WBS Template.xlsx
+!examples/.github/skills/wbs-manager/WBS Template.xlsx

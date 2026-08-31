@@ -1,14 +1,21 @@
-# 5. Registering your tools
+# 1. Registering your tools
 
-**"What do I actually have?" should have an answer you can check.**
+**The spine of the method. Every tool is a row; everything else describes what a
+good row points at.**
+
+"What do I actually have?" should have an answer you can check.
 
 Tools accumulate faster than memory. Scripts, skills, spreadsheets, procedures,
 half-finished automations. Some are load-bearing, some were replaced two years ago,
 and from the outside they look identical — a folder with a plausible name.
 
 A register is one row per tool, recording what it is, whether it's still used, and
-when you last looked at it. The `tsp-manager` skill in this repo implements one;
-the idea works with any storage you like.
+when you last looked at it. The `tsp-manager` skill in this repo implements one; the idea works with any
+storage you like — a spreadsheet, a database, a markdown table.
+
+A row is not paperwork. It is what makes a tool findable, reviewable, and — when
+the time comes — automatable. A tool with no row is a tool you will rediscover by
+accident.
 
 ## What a row needs
 

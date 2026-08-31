@@ -1,10 +1,17 @@
-# 1. Skills and governance docs
+# 2. Governance docs
 
-**Every skill needs a second document.**
+**Every tool needs a second document — and if it has a skill, that makes three.**
 
-A `SKILL.md` is loaded into the agent's context every time the skill triggers. That
-makes it expensive real estate: every sentence of backstory is a tax paid on every
-future invocation, whether or not that invocation needed the history.
+A tool's *operating instructions* and a tool's *governance* answer different
+questions for different readers, and merging them serves neither.
+
+For a tool with no agent skill, this is just good documentation hygiene: how to use
+it, kept apart from why it exists and what has changed.
+
+For a tool that has a skill, it becomes a hard constraint. A `SKILL.md` is loaded
+into the agent's context every time the skill triggers, which makes it expensive
+real estate: every sentence of backstory is a tax paid on every future invocation,
+whether or not that invocation needed the history.
 
 But the history matters. Why a rule exists, what was tried and reverted, which
 decision is still open — lose that and the rule looks arbitrary, and an arbitrary
@@ -12,15 +19,17 @@ rule eventually gets "cleaned up" by someone who can't see the reason.
 
 So split them:
 
-| | **SKILL.md** | **Governance doc** |
+| | **Operating instructions** (`SKILL.md`, or a how-to) | **Governance doc** |
 |---|---|---|
 | Answers | What to do, and how | Why it exists, how it's governed |
-| Read by | The agent, every time | A person, occasionally |
+| Read by | Whoever operates it — agent or person | A person, occasionally |
 | Contains | Operational instructions, schemas, durable rules and their *timeless* rationale | Purpose, components, naming, relationships, maintenance, open items, version history |
 | Never contains | Dated narration, changelogs, "we tried X" | Anything the agent needs at runtime |
 
 The governance doc is conventionally named `DF.<n>` here — *Design Foundation* —
-but the name matters far less than the separation.
+but the name matters far less than the separation. One per **tool**, not one per
+skill: a tool with three skills still has one governance doc, and it is the place
+that says where the boundary between those skills sits.
 
 ## The test for a borderline sentence
 
@@ -62,16 +71,16 @@ skipping silently:
 
 1. **Purpose** — what it's for, in a paragraph.
 2. **Components** — a table: component, location, purpose. See
-   [source of truth](02-source-of-truth.md); this is where that gets stated, and
+   [source of truth](03-source-of-truth.md); this is where that gets stated, and
    where it is most often stated wrongly.
-3. **What the SKILL.md covers** — a pointer, so the two documents don't duplicate
+3. **What the operating instructions cover** — a pointer, so the two documents don't duplicate
    and drift.
 4. **Naming conventions** — identifiers, files, folders.
 5. **Relationships** — how data flows to and from sibling tools, and what is
    deliberately *not* automated.
 6. **Maintenance** — the routine, and any recurring controls.
 7. **Open items** — known gaps and deferred decisions.
-8. **Version history** — see [versioning discipline](04-versioning-discipline.md).
+8. **Version history** — see [versioning discipline](05-versioning-discipline.md).
 
 **Open items is the section people skip, and it is the one that makes the document
 trustworthy.** A gap recorded is a decision pending. A gap omitted is a surprise
