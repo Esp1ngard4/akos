@@ -6,6 +6,9 @@ __pycache__/
 Thumbs.db
 
 # Generated dashboards and working registers - the scripts create these.
+# The negations are shipped assets, not generated output: without them a clone
+# gets tools that fail on first run.
 *.html
 *.xlsx
 !examples/.github/skills/wbs-manager/WBS Template.xlsx
+!examples/.github/skills/tsp-manager/templates/dashboard.html

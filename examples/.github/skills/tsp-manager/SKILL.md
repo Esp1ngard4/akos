@@ -94,6 +94,8 @@ python scripts/create_tsp.py "<path>/TSP Register.xlsx" [--vocabulary en|pt]
 
 For standing up a register somewhere other than the personal the system. `--vocabulary pt` reproduces the personal register's historical Portuguese Status/Type/Importance terms; `en` (the default) is the English equivalent for a register starting clean. It refuses to overwrite an existing file unless `--force` is passed.
 
+A new register has no dashboard until you render one — run `refresh_tsp.py` against it (below). `create_tsp.py` prints the exact command when it finishes.
+
 **Never use this to "reset" the live register** — that would destroy the inventory. The live register is only ever edited in place.
 
 ### Refresh the dashboard

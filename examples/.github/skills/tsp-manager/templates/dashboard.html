@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TSP Management Dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/theme/mermaid.min.css" integrity="sha384-chVLcbHAFi4qBVYz3kGPF/TZl/TGBmiPJdSAqtCGmCJEHn5smFMLz6dXfma3wHZ" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/gridjs.umd.js" integrity="sha384-/XXDzxe4FsGiAe50i/u9pY/Vy/uX654MHB1xoc1BJNnH1WXHhqHga9g3q5tF4gj7" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #1a1a2e; padding: 16px; }
+.header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.header h1 { font-size: 22px; font-weight: 700; color: #2F5496; }
+    <div class="subtitle">Tools, Systems &amp; Procedures Register &nbsp;&middot;&nbsp; generated {{GENERATED}}</div>
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e0e0e0; }
+.tab { padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .2s; }
+.tab:hover { color: #2F5496; }
+.tab.active { color: #2F5496; border-bottom-color: #2F5496; }
+.panel { display: none; }
+.panel.active { display: block; }
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); text-align: center; }
+.kpi .value { font-size: 28px; font-weight: 700; color: #2F5496; }
+.kpi .label { font-size: 11px; color: #888; margin-top: 2px; text-transform: uppercase; letter-spacing: .5px; }
+.filters { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.filters select, .filters input { padding: 6px 10px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 12px; background: #fff; }
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.chart-box { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.chart-box h3 { font-size: 13px; color: #444; margin-bottom: 10px; }
+.chart-container { position: relative; height: 220px; }
+.overdue-tag { display: inline-block; background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.ok-tag { display: inline-block; background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.warning-tag { display: inline-block; background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.gridjs-wrapper { font-size: 12px; }
+.gridjs-th { font-size: 11px !important; }
+@media (max-width: 700px) { .chart-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>FSP.18 TSP Management</h1>
+    <div class="subtitle">Tools, Systems & Procedures Register</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('overview')">Overview</div>
+  <div class="tab" onclick="showTab('tools')">Tools Register</div>
+  <div class="tab" onclick="showTab('controls')">Control Activities</div>
+  <div class="tab" onclick="showTab('changelog')">Change Log</div>
+</div>
+
+<div id="overview" class="panel active">
+  <div class="kpi-row" id="kpis"></div>
+  <div class="chart-row">
+    <div class="chart-box">
+      <h3>Tools by Status</h3>
+      <div class="chart-container"><canvas id="statusChart"></canvas></div>
+    </div>
+    <div class="chart-box">
+      <h3>Tools by Relevancy</h3>
+      <div class="chart-container"><canvas id="relevancyChart"></canvas></div>
+    </div>
+  </div>
+  <div class="chart-box" style="margin-bottom:16px">
+    <h3>Overdue Control Activities</h3>
+    <div id="overdueGrid"></div>
+  </div>
+</div>
+
+<div id="tools" class="panel">
+  <div class="filters">
+    <select id="filterStatus"><option value="">All Statuses</option></select>
+    <select id="filterType"><option value="">All Types</option></select>
+    <select id="filterRelevancy"><option value="">All Relevancy</option></select>
+    <input type="text" id="filterSearch" placeholder="Search tools...">
+  </div>
+  <div id="toolsGrid"></div>
+</div>
+
+<div id="controls" class="panel">
+  <div class="filters">
+    <select id="filterFreq"><option value="">All Frequencies</option></select>
+    <select id="filterImportance"><option value="">All Importance</option></select>
+  </div>
+  <div id="controlsGrid"></div>
+</div>
+
+<div id="changelog" class="panel">
+  <div id="changelogGrid"></div>
+</div>
+
+<script>
+const TOOLS = {{TOOLS}};
+const ACTIVITIES = {{ACTIVITIES}};
+const CHANGELOG = {{CHANGELOG}};
+const TODAY = new Date().toISOString().slice(0,10);
+
+function showTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// KPIs
+const total = TOOLS.length;
+const implemented = TOOLS.filter(t => t.Status === 'Implementado').length;
+const inProgress = TOOLS.filter(t => t.Status === 'Em execução').length;
+const obsolete = TOOLS.filter(t => t.Status === 'Absoleto').length;
+const critical = TOOLS.filter(t => t.Relevancy === 'Critical').length;
+const overdueActs = ACTIVITIES.filter(a => a['Next Due'] && a['Next Due'] < TODAY).length;
+const automated = TOOLS.filter(t => t.Skill).length;
+
+document.getElementById('kpis').innerHTML = [
+  {v: total, l: 'Total Tools'},
+  {v: implemented, l: 'Implemented'},
+  {v: inProgress, l: 'In Progress'},
+  {v: obsolete, l: 'Obsolete'},
+  {v: critical, l: 'Critical Tools'},
+  {v: overdueActs, l: 'Overdue Controls'},
+  {v: automated, l: 'With Skill'}
+].map(k => `<div class="kpi"><div class="value">${k.v}</div><div class="label">${k.l}</div></div>`).join('');
+
+// Charts
+function countBy(arr, key) {
+  const counts = {};
+  arr.forEach(item => {
+    const v = item[key] || '(none)';
+    counts[v] = (counts[v] || 0) + 1;
+  });
+  return counts;
+}
+
+const statusColors = {'Implementado':'#22c55e','Em execução':'#3b82f6','Planeado':'#f59e0b','Absoleto':'#94a3b8','(none)':'#d4d4d4'};
+const statusCounts = countBy(TOOLS, 'Status');
+new Chart(document.getElementById('statusChart'), {
+  type: 'doughnut',
+  data: {
+    labels: Object.keys(statusCounts),
+    datasets: [{data: Object.values(statusCounts), backgroundColor: Object.keys(statusCounts).map(k => statusColors[k]||'#666')}]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+});
+
+const relColors = {'Critical':'#dc2626','Often':'#f59e0b','Sometimes':'#3b82f6','Specific - relevant':'#22c55e','Specific - questionable':'#94a3b8','Rarely':'#d4d4d4','Not in the last years':'#e5e5e5','(none)':'#f0f0f0'};
+const relCounts = countBy(TOOLS, 'Relevancy');
+new Chart(document.getElementById('relevancyChart'), {
+  type: 'doughnut',
+  data: {
+    labels: Object.keys(relCounts),
+    datasets: [{data: Object.values(relCounts), backgroundColor: Object.keys(relCounts).map(k => relColors[k]||'#666')}]
+  },
+  options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+});
+
+// Overdue grid
+const overdueData = ACTIVITIES
+  .filter(a => a['Next Due'] && a['Next Due'] < TODAY)
+  .sort((a,b) => a['Next Due'].localeCompare(b['Next Due']))
+  .map(a => {
+    const days = Math.floor((new Date(TODAY) - new Date(a['Next Due'])) / 86400000);
+    return [a['Activity Name'], a.Frequency, a['Linked Tool'], a['Last Done'], a['Next Due'], days + ' days'];
+  });
+
+new gridjs.Grid({
+  columns: ['Activity', 'Frequency', 'Linked Tool', 'Last Done', 'Next Due', 'Overdue By'],
+  data: overdueData,
+  sort: true,
+  pagination: {limit: 10},
+  style: {td: {fontSize:'12px'}, th: {fontSize:'11px'}}
+}).render(document.getElementById('overdueGrid'));
+
+// Tools grid
+const toolStatusEl = document.getElementById('filterStatus');
+const toolTypeEl = document.getElementById('filterType');
+const toolRelEl = document.getElementById('filterRelevancy');
+const toolSearchEl = document.getElementById('filterSearch');
+
+[...new Set(TOOLS.map(t=>t.Status).filter(Boolean))].sort().forEach(s => {
+  toolStatusEl.innerHTML += `<option value="${s}">${s}</option>`;
+});
+[...new Set(TOOLS.map(t=>t.Type).filter(Boolean))].sort().forEach(s => {
+  toolTypeEl.innerHTML += `<option value="${s}">${s}</option>`;
+});
+[...new Set(TOOLS.map(t=>t.Relevancy).filter(Boolean))].sort().forEach(s => {
+  toolRelEl.innerHTML += `<option value="${s}">${s}</option>`;
+});
+
+function getFilteredTools() {
+  const st = toolStatusEl.value, ty = toolTypeEl.value, re = toolRelEl.value, q = toolSearchEl.value.toLowerCase();
+  return TOOLS.filter(t => {
+    if (st && t.Status !== st) return false;
+    if (ty && t.Type !== ty) return false;
+    if (re && t.Relevancy !== re) return false;
+    if (q && !(t['Tool/System Name']||'').toLowerCase().includes(q) && !(t.Description||'').toLowerCase().includes(q) && !(t.Notes||'').toLowerCase().includes(q) && !(t.Skill||'').toLowerCase().includes(q)) return false;
+    return true;
+  }).map(t => [t.ID, t['Tool/System Name'], t.Type||'', t.Status||'', t.Relevancy||'', t['Primary AF']||'', t['Doc Aux'], t.Skill||'', t['Last Reviewed']||'']);
+}
+
+let toolsGrid = new gridjs.Grid({
+  columns: ['ID', 'Tool/System', 'Type', 'Status', 'Relevancy', 'Primary AF', 'Doc', 'Skill', 'Last Review'],
+  data: getFilteredTools(),
+  sort: true,
+  pagination: {limit: 20},
+  search: false,
+  style: {td: {fontSize:'12px'}, th: {fontSize:'11px'}}
+}).render(document.getElementById('toolsGrid'));
+
+[toolStatusEl, toolTypeEl, toolRelEl, toolSearchEl].forEach(el => {
+  el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => {
+    toolsGrid.updateConfig({data: getFilteredTools()}).forceRender();
+  });
+});
+
+// Controls grid
+const freqEl = document.getElementById('filterFreq');
+const impEl = document.getElementById('filterImportance');
+
+[...new Set(ACTIVITIES.map(a=>a.Frequency).filter(Boolean))].sort().forEach(s => {
+  freqEl.innerHTML += `<option value="${s}">${s}</option>`;
+});
+[...new Set(ACTIVITIES.map(a=>a.Importance).filter(Boolean))].sort().forEach(s => {
+  impEl.innerHTML += `<option value="${s}">${s}</option>`;
+});
+
+function getFilteredActivities() {
+  const fr = freqEl.value, im = impEl.value;
+  return ACTIVITIES.filter(a => {
+    if (fr && a.Frequency !== fr) return false;
+    if (im && a.Importance !== im) return false;
+    return true;
+  }).map(a => {
+    const overdue = a['Next Due'] && a['Next Due'] < TODAY;
+    const statusHtml = overdue ? '<span class="overdue-tag">OVERDUE</span>' : (a['Next Due'] ? '<span class="ok-tag">OK</span>' : '<span class="warning-tag">NO DATA</span>');
+    return [a.ID, a['Activity Name'], a.Frequency, a['Duration (min)']||'', a.Importance, a['Linked Tool'], a['Last Done']||'', a['Next Due']||'', gridjs.html(statusHtml)];
+  });
+}
+
+let controlsGrid = new gridjs.Grid({
+  columns: ['ID', 'Activity', 'Frequency', 'Min', 'Importance', 'Linked Tool', 'Last Done', 'Next Due', 'Status'],
+  data: getFilteredActivities(),
+  sort: true,
+  pagination: {limit: 15},
+  style: {td: {fontSize:'12px'}, th: {fontSize:'11px'}}
+}).render(document.getElementById('controlsGrid'));
+
+[freqEl, impEl].forEach(el => {
+  el.addEventListener('change', () => {
+    controlsGrid.updateConfig({data: getFilteredActivities()}).forceRender();
+  });
+});
+
+// Changelog grid
+new gridjs.Grid({
+  columns: ['ID', 'Tool', 'Changed On', 'Description'],
+  data: CHANGELOG.map(c => [c.ID, c.Tool, c['Changed On'], c.Description]),
+  sort: true,
+  style: {td: {fontSize:'12px'}, th: {fontSize:'11px'}}
+}).render(document.getElementById('changelogGrid'));
+</script>
+</body>
+</html>

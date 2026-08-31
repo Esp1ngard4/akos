@@ -74,6 +74,14 @@ def main():
     wb = openpyxl.load_workbook(args.register, data_only=True)
     data = {key: read_sheet(wb, sheet) for key, sheet in SHEETS.items()}
 
+    if not os.path.isfile(TEMPLATE):
+        raise SystemExit(
+            "Dashboard template not found:\n  %s\n\n"
+            "refresh_tsp.py renders the register into this template. It ships with\n"
+            "the skill at <skill>/templates/dashboard.html - if it is missing, the\n"
+            "skill was copied or packaged without it."
+            % os.path.abspath(TEMPLATE))
+
     with open(TEMPLATE, encoding="utf-8") as fh:
         html = fh.read()
 

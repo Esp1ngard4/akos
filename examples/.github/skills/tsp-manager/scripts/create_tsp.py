@@ -142,6 +142,9 @@ def main():
     print("  sheets     %s" % ", ".join([n for n, _ in SHEETS] + ["Lookups"]))
     print("  vocabulary %s" % args.vocabulary)
     print("  data rows  0 - assign the first tool ID 1 and grow from there")
+    print("")
+    print("Next: add rows, then render the dashboard with")
+    print("  python refresh_tsp.py \"%s\"" % args.output)
     return 0
 
 
