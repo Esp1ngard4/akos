@@ -29,7 +29,7 @@ Everything else the scripts use is standard library. Examples below write `pytho
 | `scripts/audit_tsp.py` | Read-only health report: register vs. disk, overdue reviews, lookup violations. |
 | `templates/dashboard.html` | Dashboard shell with `{{TOOLS}}`, `{{ACTIVITIES}}`, `{{CHANGELOG}}`, `{{GENERATED}}` placeholders. |
 
-Governance, history and the reasoning behind the review cadence live in `<your tools folder>/TF.18 - TSP Register.md`, not here.
+Governance, history and the reasoning behind the review cadence live in `<your tools folder>/TD.18 - TSP Register.md`, not here.
 
 ## Register schema
 
@@ -41,13 +41,13 @@ Governance, history and the reasoning behind the review cadence live in `<your t
 |---|---|---|
 | A | ID | Integer. **This is the tool number.** Never reuse or renumber an ID once assigned. |
 | B | Tool/System Name | Should match the `<PREFIX>.<ID> <Name>` folder name where a folder exists. |
-| C | Description | Free text; often a cross-reference to another tool or its TF. |
+| C | Description | Free text; often a cross-reference to another tool or its TD. |
 | D | Type | `Tool` / `Manual` / `Work Instruction` |
 | E | Status | `Planned` / `In Progress` / `Implemented` / `Obsolete` |
 | F | Relevancy | `Critical` / `Often` / `Sometimes` / `Specific - relevant` / `Specific - questionable` / `Rarely` / `Not in the last years` |
 | G | Primary Area | e.g. `<area>` |
 | H | Other Areas | Comma-separated |
-| I | Doc Aux | `Yes`/`No` — does a TF (tool definition) document exist |
+| I | Doc Aux | `Yes`/`No` — does a TD (tool definition) document exist |
 | J | Links | Cross-references |
 | K | Notes | Free text |
 | L | Last Reviewed | Date. Set by the annual review, not by ordinary edits. |
@@ -57,7 +57,7 @@ Governance, history and the reasoning behind the review cadence live in `<your t
 
 **Activity Log** — one row per execution: `ID`, `Activity`, `Done On`, `Planned For`, `Notes`, `Review On`, `Times Postponed`.
 
-**Change Log** — `ID`, `Tool`, `Changed On`, `Description`. Append a row for any structural change to a tool (created, retired, superseded, TF rewritten).
+**Change Log** — `ID`, `Tool`, `Changed On`, `Description`. Append a row for any structural change to a tool (created, retired, superseded, TD rewritten).
 
 **Lookups** — the allowed values for Status, Type, Relevancy, Importance, and Frequency (with a `Days` column). Stacked blocks separated by blank rows. `audit_tsp.py` validates the other sheets against it.
 

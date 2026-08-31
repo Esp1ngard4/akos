@@ -1,4 +1,4 @@
-# TF.`<N>` — `<Tool Name>`
+# TD.`<N>` — `<Tool Name>`
 
 > Template. One of these per tool, kept beside the tool. It holds the *why*;
 > the tool's `SKILL.md` holds the *what and how*. Delete these quoted notes.
@@ -67,7 +67,7 @@ exists only in a document and never runs is worth recording honestly as such.
 ## Version history
 
 > Newest first. **Keep three entries.** Before trimming, copy the whole document to
-> `PreviousV/TF.<N> - <Name> v<version> (YYYY-MM-DD).md` — the full history rides
+> `PreviousV/TD.<N> - <Name> v<version> (YYYY-MM-DD).md` — the full history rides
 > along inside that snapshot, so there is no separate history file to maintain.
 > Then leave a pointer line under the table.
 

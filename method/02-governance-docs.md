@@ -26,7 +26,7 @@ So split them:
 | Contains | Operational instructions, schemas, durable rules and their *timeless* rationale | Purpose, components, naming, relationships, maintenance, open items, version history |
 | Never contains | Dated narration, changelogs, "we tried X" | Anything the agent needs at runtime |
 
-The governance doc is conventionally named `TF.<n>` here — *Tool Foundation* —
+The governance doc is conventionally named `TD.<n>` here — *Tool Definition* —
 but the name matters far less than the separation. One per **tool**, not one per
 skill: a tool with three skills still has one governance doc, and it is the place
 that says where the boundary between those skills sits.

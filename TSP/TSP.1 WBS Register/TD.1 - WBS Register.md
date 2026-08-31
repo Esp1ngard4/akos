@@ -1,4 +1,4 @@
-# TF.1 — WBS Register
+# TD.1 — WBS Register
 
 ## Purpose
 
@@ -34,9 +34,9 @@ This document covers what the skill doesn't: why the register exists, its naming
 
 **Task tracker** — items move from the WBS into a tracker when committed to a sprint. One-way and manual. The WBS is not a task list and degrades into an unusable one if treated as such.
 
-**[RAID register](../TSP.2%20RAID%20Register/TF.2%20-%20RAID%20Register.md)** — different jobs. WBS is the roadmap of intended work; RAID is the live register of risks, issues, decisions and ideas. A RAID Action may correspond to a WBS item, but they are maintained independently and cross-referenced by ID.
+**[RAID register](../TSP.2%20RAID%20Register/TD.2%20-%20RAID%20Register.md)** — different jobs. WBS is the roadmap of intended work; RAID is the live register of risks, issues, decisions and ideas. A RAID Action may correspond to a WBS item, but they are maintained independently and cross-referenced by ID.
 
-**[TSP register](../TSP.3%20TSP%20Register/TF.3%20-%20TSP%20Register.md)** — this tool is itself a registered tool.
+**[TSP register](../TSP.3%20TSP%20Register/TD.3%20-%20TSP%20Register.md)** — this tool is itself a registered tool.
 
 Nothing syncs automatically. The dashboard is a snapshot, not a live view.
 

@@ -1,4 +1,4 @@
-# TF.3 — TSP Register
+# TD.3 — TSP Register
 
 ## Purpose
 
@@ -53,7 +53,7 @@ status alone cannot tell you whether something is worth keeping.
 
 ## Relationship to other tools
 
-**Every other tool** is a row in this register — including the [WBS](../TSP.1%20WBS%20Register/TF.1%20-%20WBS%20Register.md) and [RAID](../TSP.2%20RAID%20Register/TF.2%20-%20RAID%20Register.md) registers, and this tool itself. Building a tool is not finished until its row exists.
+**Every other tool** is a row in this register — including the [WBS](../TSP.1%20WBS%20Register/TD.1%20-%20WBS%20Register.md) and [RAID](../TSP.2%20RAID%20Register/TD.2%20-%20RAID%20Register.md) registers, and this tool itself. Building a tool is not finished until its row exists.
 
 **Governance documents** — the `Doc Aux` flag records whether a tool has one. Whatever authors the document owns the document; this register owns the row. Neither does the other's write.
 
@@ -95,6 +95,6 @@ If the next-due dates are calculated, make sure something actually calculates th
 
 | Version | Date | Changes |
 |---|---|---|
-| v1.2 | 2026-08-31 | `DF` renamed to `TF` (tool definition) throughout, matching the tool-as-unit framing. Removed the last inherited vocabulary: `Primary AF`/`Other AFs` became `Primary Area`/`Other Areas`, Portuguese status values left as a `--vocabulary pt` option rather than the documented default, and `audit_tsp.py` stopped hardcoding a folder prefix - it now matches `<PREFIX>.<number> <Name>` so any estate's naming works. Fixed two real bugs found while sweeping: the dashboard only recognised Portuguese status values, so an English register showed no status colours and an obsolete count of zero; and the subtitle CSS rule had been overwritten by an HTML fragment, so the generation date rendered inside `<style>` where nobody could see it |
+| v1.2 | 2026-08-31 | `DF` renamed to `TD` (tool definition) throughout, matching the tool-as-unit framing. Removed the last inherited vocabulary: `Primary AF`/`Other AFs` became `Primary Area`/`Other Areas`, Portuguese status values left as a `--vocabulary pt` option rather than the documented default, and `audit_tsp.py` stopped hardcoding a folder prefix - it now matches `<PREFIX>.<number> <Name>` so any estate's naming works. Fixed two real bugs found while sweeping: the dashboard only recognised Portuguese status values, so an English register showed no status colours and an obsolete count of zero; and the subtitle CSS rule had been overwritten by an HTML fragment, so the generation date rendered inside `<style>` where nobody could see it |
 | v1.1 | 2026-08-31 | Fixed packaging: `templates/dashboard.html` was excluded by a `*.html` ignore rule intended for generated dashboards, so every clone got a tool that failed on first run. `refresh_tsp.py` now fails with an explanation rather than a traceback, and `create_tsp.py` prints the refresh command as an explicit next step |
 | v1.0 | 2026-08-31 | Initial public version. Generalised from a personal system, and given `create_tsp.py` — the originating register was migrated out of a database rather than created by a script, so until now there was no way to stand up a fresh one. This governance document written; previously the tool shipped as a bare skill with no definition document |

@@ -38,7 +38,7 @@ This is the part that makes the other two safe.
 Before removing entries, copy the entire document:
 
 ```
-PreviousV/TF.37 - WBS Register v2.1 (2026-08-31).md
+PreviousV/TD.37 - WBS Register v2.1 (2026-08-31).md
 ```
 
 The full history rides along **inside the snapshot**. Nothing is lost, and there is
@@ -46,13 +46,13 @@ no separate history file to maintain.
 
 Then leave a pointer under the trimmed table:
 
-> Earlier entries are not kept here. The full history lives inside the TF snapshots
-> in `PreviousV/` — most recently `PreviousV/TF.37 - WBS Register v2.1 (2026-08-31).md`.
+> Earlier entries are not kept here. The full history lives inside the TD snapshots
+> in `PreviousV/` — most recently `PreviousV/TD.37 - WBS Register v2.1 (2026-08-31).md`.
 
 ## What was rejected, and why
 
 **A dedicated version-history document.** The obvious alternative: move old entries
-into `HISTORY.md` and keep the TF lean. It fails on discipline — it is a second file
+into `HISTORY.md` and keep the TD lean. It fails on discipline — it is a second file
 to keep in sync, and the rule ("every trim, append to the archive") is exactly the
 kind of thing that gets skipped once and then rots silently. A snapshot has no such
 failure mode, because it is a whole-file copy you would want before a structural

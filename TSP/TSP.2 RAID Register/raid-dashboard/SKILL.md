@@ -96,7 +96,7 @@ Run `scripts/create_raid.py "<output-path>" "<project-name>"` to generate a fres
 
 ## Excel schema
 
-Row 6 = headers, data starts row 7. Full column list (v2.3 — see `RAID/TF.103 - RAID Register.md` version history):
+Row 6 = headers, data starts row 7. Full column list (v2.3 — see `RAID/TD.103 - RAID Register.md` version history):
 
 | Col | Field | Notes |
 |-----|-------|-------|

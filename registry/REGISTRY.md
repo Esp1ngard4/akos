@@ -12,9 +12,9 @@ document and the skill that operates it. Copy the skill folder into your own
 
 | ID | Tool | Status | Skill | Definition doc |
 |---|---|---|---|---|
-| TSP.1 | **WBS Register** | Implemented | `wbs-manager` | [TF.1](../TSP/TSP.1%20WBS%20Register/TF.1%20-%20WBS%20Register.md) |
-| TSP.2 | **RAID Register** | Implemented | `raid-dashboard` | [TF.2](../TSP/TSP.2%20RAID%20Register/TF.2%20-%20RAID%20Register.md) |
-| TSP.3 | **TSP Register** | Implemented | `tsp-manager` | [TF.3](../TSP/TSP.3%20TSP%20Register/TF.3%20-%20TSP%20Register.md) |
+| TSP.1 | **WBS Register** | Implemented | `wbs-manager` | [TD.1](../TSP/TSP.1%20WBS%20Register/TD.1%20-%20WBS%20Register.md) |
+| TSP.2 | **RAID Register** | Implemented | `raid-dashboard` | [TD.2](../TSP/TSP.2%20RAID%20Register/TD.2%20-%20RAID%20Register.md) |
+| TSP.3 | **TSP Register** | Implemented | `tsp-manager` | [TD.3](../TSP/TSP.3%20TSP%20Register/TD.3%20-%20TSP%20Register.md) |
 
 ## What each is for
 

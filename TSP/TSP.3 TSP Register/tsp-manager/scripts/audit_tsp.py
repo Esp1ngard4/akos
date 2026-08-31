@@ -8,8 +8,8 @@ Usage:
 Reports, in order:
   1. Tool folders with no register row (including unnumbered folders)
   2. Non-obsolete register rows with no tool folder
-  3. Rows overdue for their annual review (TF.18 control 2)
-  4. Overdue control activities (TF.18 control 1)
+  3. Rows overdue for their annual review (TD.18 control 2)
+  4. Overdue control activities (TD.18 control 1)
   5. Values outside the Lookups sheet
   6. Skill column vs. what is actually installed, reconciled both ways
 
