@@ -66,6 +66,19 @@ TOOLS = [
                                "--fsp-root", os.path.dirname(r) or ".",
                                "--skills", os.path.dirname(r) or "."],
     },
+    {
+        "name": "TSP.5 Artifact Register",
+        "skill": "TSP/TSP.5 Artifact Register/artifact-register",
+        "assets": [],
+        "register": "5. Artifact Register, Demo.xlsx",
+        "dashboard": "Artifact Dashboard.html",
+        "sheets": ["Artifacts", "Locations", "Areas of Focus"],
+        "create": lambda s, r, d: [os.path.join(s, "scripts", "create_artifact_register.py"),
+                                   r, "Demo"],
+        "refresh": lambda s, r, d: [os.path.join(s, "scripts", "refresh_artifact_register.py"),
+                                    r, d, "--scope", "Demo"],
+        "audit": lambda s, r: [os.path.join(s, "scripts", "audit_artifact_register.py"), r],
+    },
 ]
 
 MIN_DASHBOARD_BYTES = 5000
@@ -201,6 +214,55 @@ def test_installer(root, scratch):
     check("status --check passes once declared", ok, out)
 
 
+def test_reconciliation(root, scratch):
+    """The artifact register's claim about the disk must actually be checkable.
+
+    Every other tool here can only be checked against itself. This one asserts
+    something about the filesystem, so the test is: break the filing, and confirm
+    the audit notices. A check that cannot fail is not a check.
+    """
+    print("\nTSP.5 reconciliation")
+    skill = os.path.join(root, "TSP", "TSP.5 Artifact Register", "artifact-register")
+    if not check("skill present", os.path.isdir(skill), skill):
+        return
+    scripts = os.path.join(skill, "scripts")
+
+    work = os.path.join(scratch, "filing")
+    os.makedirs(work, exist_ok=True)
+    register = os.path.join(work, "0. Artifact Register, Filing.xlsx")
+
+    ok, out = run([os.path.join(scripts, "create_artifact_register.py"),
+                   register, "Filing"], work)
+    if not check("create runs", ok, out):
+        return
+
+    ok, out = run([os.path.join(scripts, "audit_artifact_register.py"),
+                   register, "--root", work], work)
+    if not check("clean filing passes the disk check", ok, out):
+        return
+
+    # Break it exactly the way real filing breaks: a file arrives without an ID.
+    stray = os.path.join(work, "invoice scan.pdf")
+    io.open(stray, "w", encoding="utf-8").write("x")
+    ok, out = run([os.path.join(scripts, "audit_artifact_register.py"),
+                   register, "--root", work], work)
+    check("unfiled document is caught", not ok, out)
+    check("and named in the output", "invoice scan.pdf" in out, out)
+
+    # Filing it properly must both register it and rename it.
+    ok, out = run([os.path.join(scripts, "artifact.py"), "add", register, stray,
+                   "--name", "Invoice Scan", "--type", "Document",
+                   "--parent-digital", "Main", "--root", work], work)
+    check("add runs", ok, out)
+    check("file was renamed to carry its ID",
+          any(f.startswith("1. Invoice Scan") for f in os.listdir(work)),
+          str(os.listdir(work)))
+
+    ok, out = run([os.path.join(scripts, "audit_artifact_register.py"),
+                   register, "--root", work], work)
+    check("disk check passes once filed", ok, out)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -226,6 +288,7 @@ def main():
         for tool in TOOLS:
             test_tool(tool, root, work)
         test_installer(root, scratch)
+        test_reconciliation(root, scratch)
 
         print("\n" + "=" * 60)
         if failures:
@@ -233,7 +296,8 @@ def main():
             for f in failures:
                 print("  - %s" % f)
             return 1
-        print("All checks passed (%d tools, plus the installer)." % len(TOOLS))
+        print("All checks passed (%d tools, plus the installer and the "
+              "reconciliation case)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

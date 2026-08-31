@@ -9,7 +9,7 @@ a rule exists, whether a tool is still used, and where something came from if yo
 have to reinstall it. Those questions don't matter on day one. They matter at tool
 number thirty, when you no longer remember building the first ten.
 
-AKOS is the set of conventions that answer them, plus three working tools that
+AKOS is the set of conventions that answer them, plus five working tools that
 demonstrate the conventions on something real.
 
 ## The idea in one paragraph
@@ -61,9 +61,10 @@ has described.
 | TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) — risks, actions, issues, decisions, ideas | `raid-dashboard` |
 | TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) — the inventory of tools itself | `tsp-manager` |
 | TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) — vendoring, drift detection, three-way updates | *(none — see below)* |
+| TSP.5 | [Artifact Register](TSP/TSP.5%20Artifact%20Register/) — what you have, where it lives, who governs it | `artifact-register` |
 
-TSP.1–3 are each an `.xlsx` source of truth with a generated HTML dashboard. They are
-ordinary working tools, useful on their own — and they are here because a method with
+TSP.1–3 and TSP.5 are each an `.xlsx` source of truth with a generated HTML dashboard.
+They are ordinary working tools, useful on their own — and they are here because a method with
 no worked example is just an opinion.
 
 TSP.4 has **no skill**, deliberately. It runs a few times in a project's life, at
@@ -135,6 +136,12 @@ dashboard, check the output is real rather than merely present. The installer ge
 the same treatment — vendor a tool into a throwaway project, confirm `status --check`
 passes clean, edit a file, confirm it now fails, then declare the change and confirm
 it passes again. Runs in seconds and needs nothing beyond `openpyxl`.
+
+TSP.5 gets an extra case of its own. It is the only tool here that asserts something
+about the world rather than about itself — the ID it assigns is written onto the file,
+so the register can be wrong in a way a script can detect. The test breaks the filing
+on purpose and confirms the audit notices, because a check that cannot fail is not a
+check.
 
 `--packaged` is the one that matters. It exports `git archive HEAD` and runs from
 there, so a file sitting untracked on disk is simply absent. That gap once shipped a

@@ -23,6 +23,7 @@ python install.py add <skill> --into <your-project>
 | TSP.2 | **RAID Register** | Implemented | `raid-dashboard` | [TD.2](../TSP/TSP.2%20RAID%20Register/TD.2%20-%20RAID%20Register.md) |
 | TSP.3 | **TSP Register** | Implemented | `tsp-manager` | [TD.3](../TSP/TSP.3%20TSP%20Register/TD.3%20-%20TSP%20Register.md) |
 | TSP.4 | **Tool Installer** | Implemented | _none_ | [TD.4](../TSP/TSP.4%20Tool%20Installer/TD.4%20-%20Tool%20Installer.md) |
+| TSP.5 | **Artifact Register** | Implemented | `artifact-register` | [TD.5](../TSP/TSP.5%20Artifact%20Register/TD.5%20-%20Artifact%20Register.md) |
 
 ## What each is for
 
@@ -33,6 +34,8 @@ python install.py add <skill> --into <your-project>
 **TSP.3 TSP Register** — The inventory of tools, systems and procedures, plus the recurring controls that keep them alive. The spine of the method - this register is an instance of it.
 
 **TSP.4 Tool Installer** — Vendors a tool from this catalogue into a project, records where the copy came from, and keeps it reconcilable with upstream: drift detection and three-way updates.
+
+**TSP.5 Artifact Register** — Inventory of the artifacts belonging to a scope - documents, folders, tools and physical items - recording what each is, where it lives digitally and physically, what contains it, and which tool governs its contents. The register assigns an ID that is written onto the artifact itself, so its claims about the filesystem can be checked.
 
 ## Status meanings
 
