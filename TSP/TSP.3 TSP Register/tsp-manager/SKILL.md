@@ -5,7 +5,7 @@ description: Maintains a TSP Register - the inventory of every Tool, System and 
 
 # TSP Manager
 
-The TSP Register is the single inventory of every Tool, System and Procedure in your system. Every `FSP.<N>` folder under `<your tools folder>/` should have exactly one row in it, and the row is what makes the FSP number meaningful — the folder is just storage.
+The TSP Register is the single inventory of every Tool, System and Procedure in your system. Every `<PREFIX>.<N>` tool folder under `<your tools folder>/` should have exactly one row in it, and the row is what makes the number meaningful — the folder is just storage.
 
 ## Requirements
 
@@ -23,13 +23,13 @@ Everything else the scripts use is standard library. Examples below write `pytho
 |---|---|
 | `<your tools folder>/TSP Register.xlsx` | **Source of truth.** All edits go here. |
 | `<your tools folder>/TSP Dashboard.html` | Generated static snapshot. Never edit by hand — it is overwritten on every refresh. |
-| `<your tools folder>/PreviousV/` | Superseded register copies and the pre-2026 DF. |
+| `<your tools folder>/PreviousV/` | Superseded register copies and superseded tool definitions. |
 | `scripts/create_tsp.py` | Creates a new, empty register (five sheets, headers, vocabularies, no data). |
 | `scripts/refresh_tsp.py` | Rebuilds the dashboard from the register. |
 | `scripts/audit_tsp.py` | Read-only health report: register vs. disk, overdue reviews, lookup violations. |
 | `templates/dashboard.html` | Dashboard shell with `{{TOOLS}}`, `{{ACTIVITIES}}`, `{{CHANGELOG}}`, `{{GENERATED}}` placeholders. |
 
-Governance, history and the reasoning behind the review cadence live in `<your tools folder>/DF.18 - TSP Register.md`, not here.
+Governance, history and the reasoning behind the review cadence live in `<your tools folder>/TF.18 - TSP Register.md`, not here.
 
 ## Register schema
 
@@ -39,15 +39,15 @@ Governance, history and the reasoning behind the review cadence live in `<your t
 
 | Col | Field | Notes |
 |---|---|---|
-| A | ID | Integer. **This is the FSP number.** Never reuse or renumber an ID once assigned. |
-| B | Tool/System Name | Should match the `FSP.<ID> <Name>` folder name where a folder exists. |
-| C | Description | Free text; often a cross-reference to another FSP/DF. |
-| D | Type | `Ferramenta` / `Manual` / `Instrução de trabalho` |
-| E | Status | `Planeado` / `Em execução` / `Implementado` / `Absoleto` |
+| A | ID | Integer. **This is the tool number.** Never reuse or renumber an ID once assigned. |
+| B | Tool/System Name | Should match the `<PREFIX>.<ID> <Name>` folder name where a folder exists. |
+| C | Description | Free text; often a cross-reference to another tool or its TF. |
+| D | Type | `Tool` / `Manual` / `Work Instruction` |
+| E | Status | `Planned` / `In Progress` / `Implemented` / `Obsolete` |
 | F | Relevancy | `Critical` / `Often` / `Sometimes` / `Specific - relevant` / `Specific - questionable` / `Rarely` / `Not in the last years` |
-| G | Primary AF | e.g. `<area>` |
-| H | Other AFs | Comma-separated |
-| I | Doc Aux | `Yes`/`No` — does a DF document exist |
+| G | Primary Area | e.g. `<area>` |
+| H | Other Areas | Comma-separated |
+| I | Doc Aux | `Yes`/`No` — does a TF (tool definition) document exist |
 | J | Links | Cross-references |
 | K | Notes | Free text |
 | L | Last Reviewed | Date. Set by the annual review, not by ordinary edits. |
@@ -57,13 +57,13 @@ Governance, history and the reasoning behind the review cadence live in `<your t
 
 **Activity Log** — one row per execution: `ID`, `Activity`, `Done On`, `Planned For`, `Notes`, `Review On`, `Times Postponed`.
 
-**Change Log** — `ID`, `Tool`, `Changed On`, `Description`. Append a row for any structural change to a tool (created, retired, superseded, DF rewritten).
+**Change Log** — `ID`, `Tool`, `Changed On`, `Description`. Append a row for any structural change to a tool (created, retired, superseded, TF rewritten).
 
 **Lookups** — the allowed values for Status, Type, Relevancy, Importance, and Frequency (with a `Days` column). Stacked blocks separated by blank rows. `audit_tsp.py` validates the other sheets against it.
 
 Frequency values and their `Days`: `Daily` 1, `Weekly` 7, `Monthly` 31, `6 weeks` 42, `2 months` 60, `Quarterly` 90, `4 months` 120, `Semi-annual` 180, `Annual` 365, `2-2 Years` 730, `5-5 Years` 1825.
 
-Field values are a mix of Portuguese and English — this is historical and deliberate. Match the existing vocabulary in the column you are writing; do not translate or normalise values as a side effect of an unrelated edit.
+The values above are the defaults `create_tsp.py --vocabulary en` produces. The vocabulary is per-estate: whatever your register was created with is authoritative for it. Match the existing values in the column you are writing; never translate or normalise them as a side effect of an unrelated edit, because `audit_tsp.py` validates against the register's own Lookups sheet.
 
 ## Operations
 
@@ -73,14 +73,14 @@ Edit the workbook with `openpyxl` (`data_only=True` for reads; plain `load_workb
 
 1. Check it isn't already there — search Tools Register column B *and* column C for the name and any alias. Duplicate registration is the most common error.
 2. Assign `ID = max(existing IDs) + 1`. Gaps in the sequence are retired IDs; never fill them.
-3. Append the row with at minimum ID, Name, Description, Type, Status, Relevancy, Primary AF, Doc Aux — plus `Skill` if the tool is automated.
-4. Create `<your tools folder>/FSP.<ID> <Name>/` if the tool needs a folder.
+3. Append the row with at minimum ID, Name, Description, Type, Status, Relevancy, Primary Area, Doc Aux — plus `Skill` if the tool is automated.
+4. Create `<your tools folder>/<PREFIX>.<ID> <Name>/` if the tool needs a folder.
 5. Append a Change Log row.
 6. Refresh the dashboard.
 
 ### Retire a tool
 
-Set Status to `Absoleto` and append a Change Log row naming what replaced it. **Do not delete the row and do not move the FSP folder unless the user asks** — a tool's number and history stay in the register permanently, and old file formats sometimes still hold data worth recovering.
+Set Status to `Obsolete` and append a Change Log row naming what replaced it. **Do not delete the row and do not move the tool's folder unless the user asks** — a tool's number and history stay in the register permanently, and old file formats sometimes still hold data worth recovering.
 
 ### Record a review
 
@@ -112,9 +112,9 @@ The dashboard is a static snapshot with the generation date in its subtitle — 
 python scripts/audit_tsp.py "<your tools folder>/TSP Register.xlsx"
 ```
 
-Read-only. Run it before the annual review, and whenever the register and the FSP folders may have drifted.
+Read-only. Run it before the annual review, and whenever the register and the tool folders may have drifted.
 
-Skill roots are auto-discovered: the repo-root `.claude/skills` plus any `.claude/skills` inside an FSP folder (and ship their own). Project-scoped skills under `<your tools folder>/` are deliberately not scanned — they belong to projects, not TSPs. Pass `--skills DIR` (repeatable) to override.
+Skill roots are auto-discovered: the repo-root `.claude/skills` plus any `.claude/skills` inside a tool folder (some tools ship their own). Project-scoped skills under `<your tools folder>/` are deliberately not scanned — they belong to projects, not TSPs. Pass `--skills DIR` (repeatable) to override.
 
 ### Back up before a structural change
 

@@ -33,7 +33,7 @@ Project folder/
  1. Execution/WP.<ID> <Title>/ <- Support material (see "Support Material" below)
 ```
 
-`WBS/` is a reference archive of the current + previous packaged versions, not where edits happen — the installed skill (wherever this file actually lives, e.g. `.claude/skills/wbs-manager/`) is the source of truth. See DF.37 for the full lifecycle model.
+`WBS/` is a reference archive of the current + previous packaged versions, not where edits happen — the installed skill (wherever this file actually lives, e.g. `.claude/skills/wbs-manager/`) is the source of truth. See TF.37 for the full lifecycle model.
 
 ## Support Material — Execution Folder
 

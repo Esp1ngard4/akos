@@ -32,7 +32,7 @@ HEADER_FONT = Font(bold=True, color="FFFFFF")
 SHEETS = [
     ("Tools Register", [
         ("ID", 6), ("Tool/System Name", 30), ("Description", 40), ("Type", 18),
-        ("Status", 15), ("Relevancy", 18), ("Primary AF", 12), ("Other AFs", 14),
+        ("Status", 15), ("Relevancy", 18), ("Primary Area", 14), ("Other Areas", 16),
         ("Doc Aux", 10), ("Links", 30), ("Notes", 30), ("Last Reviewed", 14),
         ("Skill", 46),
     ]),

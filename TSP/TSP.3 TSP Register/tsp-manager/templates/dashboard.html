@@ -13,7 +13,7 @@
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #1a1a2e; padding: 16px; }
 .header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .header h1 { font-size: 22px; font-weight: 700; color: #2F5496; }
-    <div class="subtitle">Tools, Systems &amp; Procedures Register &nbsp;&middot;&nbsp; generated {{GENERATED}}</div>
+.header .subtitle { color: #666; font-size: 13px; }
 .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e0e0e0; }
 .tab { padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .2s; }
 .tab:hover { color: #2F5496; }
@@ -42,8 +42,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 <div class="header">
   <div>
-    <h1>FSP.18 TSP Management</h1>
-    <div class="subtitle">Tools, Systems & Procedures Register</div>
+    <h1>TSP Register</h1>
+    <div class="subtitle">Tools, Systems &amp; Procedures Register &nbsp;&middot;&nbsp; generated {{GENERATED}}</div>
   </div>
 </div>
 
@@ -111,7 +111,9 @@ function showTab(id) {
 const total = TOOLS.length;
 const implemented = TOOLS.filter(t => t.Status === 'Implementado').length;
 const inProgress = TOOLS.filter(t => t.Status === 'Em execução').length;
-const obsolete = TOOLS.filter(t => t.Status === 'Absoleto').length;
+// Status vocabulary is per-estate; accept either the English or Portuguese set.
+const OBSOLETE = ['Obsolete', 'Absoleto', 'Obsoleto'];
+const obsolete = TOOLS.filter(t => OBSOLETE.includes(t.Status)).length;
 const critical = TOOLS.filter(t => t.Relevancy === 'Critical').length;
 const overdueActs = ACTIVITIES.filter(a => a['Next Due'] && a['Next Due'] < TODAY).length;
 const automated = TOOLS.filter(t => t.Skill).length;
@@ -136,7 +138,9 @@ function countBy(arr, key) {
   return counts;
 }
 
-const statusColors = {'Implementado':'#22c55e','Em execução':'#3b82f6','Planeado':'#f59e0b','Absoleto':'#94a3b8','(none)':'#d4d4d4'};
+const statusColors = {'Implemented':'#22c55e','In Progress':'#3b82f6','Planned':'#f59e0b','Obsolete':'#94a3b8',
+                      'Implementado':'#22c55e','Em execução':'#3b82f6','Planeado':'#f59e0b','Absoleto':'#94a3b8',
+                      '(none)':'#d4d4d4'};
 const statusCounts = countBy(TOOLS, 'Status');
 new Chart(document.getElementById('statusChart'), {
   type: 'doughnut',
@@ -199,11 +203,11 @@ function getFilteredTools() {
     if (re && t.Relevancy !== re) return false;
     if (q && !(t['Tool/System Name']||'').toLowerCase().includes(q) && !(t.Description||'').toLowerCase().includes(q) && !(t.Notes||'').toLowerCase().includes(q) && !(t.Skill||'').toLowerCase().includes(q)) return false;
     return true;
-  }).map(t => [t.ID, t['Tool/System Name'], t.Type||'', t.Status||'', t.Relevancy||'', t['Primary AF']||'', t['Doc Aux'], t.Skill||'', t['Last Reviewed']||'']);
+  }).map(t => [t.ID, t['Tool/System Name'], t.Type||'', t.Status||'', t.Relevancy||'', t['Primary Area']||'', t['Doc Aux'], t.Skill||'', t['Last Reviewed']||'']);
 }
 
 let toolsGrid = new gridjs.Grid({
-  columns: ['ID', 'Tool/System', 'Type', 'Status', 'Relevancy', 'Primary AF', 'Doc', 'Skill', 'Last Review'],
+  columns: ['ID', 'Tool/System', 'Type', 'Status', 'Relevancy', 'Primary Area', 'Doc', 'Skill', 'Last Review'],
   data: getFilteredTools(),
   sort: true,
   pagination: {limit: 20},

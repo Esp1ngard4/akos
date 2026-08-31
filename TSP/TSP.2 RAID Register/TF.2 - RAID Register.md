@@ -1,4 +1,4 @@
-# DF.2 — RAID Register
+# TF.2 — RAID Register
 
 ## Purpose
 
@@ -50,7 +50,7 @@ This document covers the rest: why the register exists, its types, naming, relat
 
 If you want real task creation, delegate it to a skill that owns your tracker's conventions rather than building tracker-specific logic in here.
 
-**[WBS register](../TSP.1%20WBS%20Register/DF.1%20-%20WBS%20Register.md)** — the roadmap of intended work. A RAID Action may correspond to a WBS item; they are maintained independently and cross-referenced by ID.
+**[WBS register](../TSP.1%20WBS%20Register/TF.1%20-%20WBS%20Register.md)** — the roadmap of intended work. A RAID Action may correspond to a WBS item; they are maintained independently and cross-referenced by ID.
 
 **Calendar** — review dates are managed manually. The dashboard's review view flags overdue entries; nothing schedules them for you.
 

@@ -6,10 +6,10 @@ Usage:
                                                       [--skills "<dir>" ...]
 
 Reports, in order:
-  1. FSP folders with no register row (including unnumbered folders)
-  2. Non-obsolete register rows with no FSP folder
-  3. Rows overdue for their annual review (DF.18 control 2)
-  4. Overdue control activities (DF.18 control 1)
+  1. Tool folders with no register row (including unnumbered folders)
+  2. Non-obsolete register rows with no tool folder
+  3. Rows overdue for their annual review (TF.18 control 2)
+  4. Overdue control activities (TF.18 control 1)
   5. Values outside the Lookups sheet
   6. Skill column vs. what is actually installed, reconciled both ways
 
@@ -25,7 +25,9 @@ import sys
 import openpyxl
 
 OBSOLETE = {"absoleto", "obsoleto", "obsolete"}
-FOLDER_RE = re.compile(r"^FSP\.(\d+)\s+(.*)$")
+# Tool folders are "<PREFIX>.<number> <Name>". The prefix is whatever your estate
+# uses - TSP, FSP, T, or anything else - so it is matched rather than assumed.
+FOLDER_RE = re.compile(r"^([A-Za-z]+)\.(\d+)\s+(.*)$")
 ANNUAL_DAYS = 365
 
 
@@ -120,8 +122,8 @@ def scan_folders(fsp_root):
             continue
         match = FOLDER_RE.match(name)
         if match:
-            numbered[int(match.group(1))] = name
-        elif name.startswith("FSP"):
+            numbered[int(match.group(2))] = name
+        elif "." in name and name.split(".")[0].isalpha():
             unnumbered.append(name)
     return numbered, unnumbered
 
@@ -157,14 +159,14 @@ def main():
             continue
 
     print("Register: %s" % register)
-    print("FSP root: %s" % fsp_root)
-    print("%d register rows, %d numbered FSP folders" % (len(by_id), len(numbered)))
+    print("Tools root: %s" % fsp_root)
+    print("%d register rows, %d numbered tool folders" % (len(by_id), len(numbered)))
 
-    section("FSP folders with no register row", [
+    section("Tool folders with no register row", [
         "%s" % name for fsp_id, name in sorted(numbered.items()) if fsp_id not in by_id
     ] + ["%s  (unnumbered)" % name for name in unnumbered])
 
-    section("Non-obsolete register rows with no FSP folder", [
+    section("Non-obsolete register rows with no tool folder", [
         "%-4s %-40s %s" % (fsp_id, by_id[fsp_id].get("Tool/System Name"),
                            by_id[fsp_id].get("Status"))
         for fsp_id in sorted(by_id)
@@ -230,7 +232,7 @@ def main():
         print("  %s" % root)
 
     section("Skills named in the register but not installed", [
-        "%-34s claimed by FSP.%s" % (name, ", FSP.".join(str(i) for i in ids))
+        "%-34s claimed by tool %s" % (name, ", ".join(str(i) for i in ids))
         for name, ids in sorted(claimed.items()) if name not in installed])
 
     section("Skills installed but claimed by no register row", [
@@ -239,7 +241,7 @@ def main():
 
     automated = [fsp_id for fsp_id in sorted(by_id) if by_id[fsp_id].get("Skill")]
     section("Tool-to-skill map (%d tools)" % len(automated), [
-        "FSP.%-4s %-34s %s" % (fsp_id, str(by_id[fsp_id].get("Tool/System Name"))[:34],
+        "%-5s %-34s %s" % (fsp_id, str(by_id[fsp_id].get("Tool/System Name"))[:34],
                                by_id[fsp_id].get("Skill"))
         for fsp_id in automated])
 

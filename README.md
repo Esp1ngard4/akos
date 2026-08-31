@@ -97,7 +97,7 @@ Chart.js and Grid.js from a CDN — offline, tables render and charts don't.
 
 ## Templates
 
-- [`templates/DF-template.md`](templates/DF-template.md) — the governance document structure.
+- [`templates/TF-template.md`](templates/TF-template.md) — the governance document structure.
 - [`templates/SKILL-template.md`](templates/SKILL-template.md) — a skill skeleton, with notes on writing a `description` that actually triggers. Under-triggering is the common failure: a skill described in your own private vocabulary never matches anything you type.
 
 ## Where this came from
