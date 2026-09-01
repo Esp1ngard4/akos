@@ -5,17 +5,13 @@ description: Manages a RAID register - Risks, Actions, Issues, Decisions and Ide
 
 # RAID Dashboard Manager
 
-This skill exists because RAID registers are one of the user's most-used project tools, tracking risks, actions, issues, decisions, and ideas across multiple projects. The Excel file is the source of truth (editable by humans and by Claude via openpyxl), and the Cowork artifact provides the rich visual analytics layer on top.
+This skill exists because RAID registers are one of the user's most-used project tools, tracking risks, actions, issues, decisions, and ideas across multiple projects. The Excel file is the source of truth (editable by humans and by Claude via the register), and the Cowork artifact provides the rich visual analytics layer on top.
 
 ## Requirements
 
-Python 3 with `openpyxl`. Install once per machine from this skill's folder:
+Python 3. **No dependencies** - standard library only.
 
-```
-pip install -r requirements.txt
-```
-
-Everything else the scripts use is standard library. Examples below write `python`, which is correct on Windows; on macOS/Linux use `python3`.
+Examples below write `python`, which is correct on Windows; on macOS/Linux use `python3`.
 
 ## Architecture
 
@@ -23,7 +19,7 @@ Everything else the scripts use is standard library. Examples below write `pytho
 <Project folder>/
  0. PrjMgm/
  RAID/
- RAID <Project>.xlsx <- source of truth (human + Claude editable)
+ RAID <Project>.json <- source of truth (human + Claude editable)
  RAID Dashboard.html <- generated dashboard (visual, regenerated on demand)
  AuxMat/ <- per-item supporting documents
  R5-vendor-risk-analysis/ <- subfolder per item needing working docs
@@ -42,7 +38,7 @@ Everything else the scripts use is standard library. Examples below write `pytho
 
 The user has RAID registers across many projects and areas of focus. Before any operation, locate the right file:
 
-1. Use `Glob` with pattern `**/RAID*.xlsx` across all connected folders.
+1. Use `Glob` with pattern `**/RAID*.json` across all connected folders.
 2. **Single match** → use it directly.
 3. **Multiple matches** → try to narrow down:
  - If the user named a project in their prompt (e.g. "refresh the Casa Lx RAID"), match against the filename or parent folder name (case-insensitive, fuzzy is fine).
@@ -66,7 +62,7 @@ When the user says "refresh the RAID dashboard" or similar:
 
 ### 2. Add/edit RAID items
 
-1. Read the xlsx with openpyxl
+1. Read the xlsx with the register
 2. New items: next ID = max existing + 1, append row with priority formula
 3. Edits: find row by RAID ID, update cells
 4. Save xlsx, then auto-refresh dashboard (operation 1)
@@ -154,6 +150,6 @@ Inserted right after Feasibility because it's a deeper, risk-specific extension 
 - **Risk heat map**: Probability x Severity scatter with a green/amber/red zone background (green <6, amber 6-14, red >=15 on Probability x Severity). Only renders when >=3 open risk items have both fields scored.
 - **Reviews tab**: flags items never reviewed or last reviewed >30/>90 days ago.
 
-## openpyxl preservation note
+## the register preservation note
 
-openpyxl strips conditional formatting and images on save. This is fine -- the xlsx is the data store, the artifact is the visual layer. Don't try to preserve Excel formatting; invest that energy in the artifact instead.
+the register strips conditional formatting and images on save. This is fine -- the xlsx is the data store, the artifact is the visual layer. Don't try to preserve Excel formatting; invest that energy in the artifact instead.

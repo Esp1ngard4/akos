@@ -10,9 +10,9 @@ Thumbs.db
 # clone gets tools that fail on first run - which has happened once already.
 *.html
 *.xlsx
-!TSP/TSP.1 WBS Register/wbs-manager/WBS Template.xlsx
 !TSP/TSP.3 TSP Register/tsp-manager/templates/dashboard.html
 
-# The catalogue register is the source of truth for REGISTRY.md, so it ships.
-# Its dashboard is a derived view and does not.
-!registry/TSP Register.xlsx
+# Registers are JSON now, and JSON is not ignored - so there is no longer a list
+# of shipped-asset exceptions to keep in step with the tools. The one remaining
+# negation is the dashboard template, the last asset any tool has to ship.
+PreviousV/

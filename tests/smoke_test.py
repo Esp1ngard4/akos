@@ -34,10 +34,10 @@ TOOLS = [
     {
         "name": "TSP.1 WBS Register",
         "skill": "TSP/TSP.1 WBS Register/wbs-manager",
-        "assets": ["WBS Template.xlsx"],
-        "register": "WBS Demo.xlsx",
+        "assets": [],
+        "register": "WBS Demo.json",
         "dashboard": "WBS Dashboard.html",
-        "sheets": ["WBS", "Key Deliverables"],
+        "collections": ["items", "key_deliverables"],
         "create": lambda s, r, d: [os.path.join(s, "scripts", "create_wbs.py"), r, "Demo"],
         "refresh": lambda s, r, d: [os.path.join(s, "scripts", "refresh_wbs.py"), r, d, "Demo"],
     },
@@ -45,9 +45,9 @@ TOOLS = [
         "name": "TSP.2 RAID Register",
         "skill": "TSP/TSP.2 RAID Register/raid-dashboard",
         "assets": [],
-        "register": "RAID Demo.xlsx",
+        "register": "RAID Demo.json",
         "dashboard": "RAID Dashboard.html",
-        "sheets": ["Ticket Tracker"],
+        "collections": ["entries"],
         "create": lambda s, r, d: [os.path.join(s, "scripts", "create_raid.py"), r, "Demo"],
         "refresh": lambda s, r, d: [os.path.join(s, "scripts", "refresh_raid.py"), r, d, "Demo"],
     },
@@ -55,24 +55,24 @@ TOOLS = [
         "name": "TSP.3 TSP Register",
         "skill": "TSP/TSP.3 TSP Register/tsp-manager",
         "assets": [os.path.join("templates", "dashboard.html")],
-        "register": "TSP Register.xlsx",
+        "register": "TSP Register.json",
         "dashboard": "TSP Dashboard.html",
-        "sheets": ["Tools Register", "Control Activities", "Activity Log",
-                   "Change Log", "Lookups"],
+        "collections": ["tools", "control_activities", "activity_log",
+                        "change_log"],
         "create": lambda s, r, d: [os.path.join(s, "scripts", "create_tsp.py"), r],
         "refresh": lambda s, r, d: [os.path.join(s, "scripts", "refresh_tsp.py"), r,
                                     "--out", d],
         "audit": lambda s, r: [os.path.join(s, "scripts", "audit_tsp.py"), r,
-                               "--fsp-root", os.path.dirname(r) or ".",
+                               "--tools-root", os.path.dirname(r) or ".",
                                "--skills", os.path.dirname(r) or "."],
     },
     {
         "name": "TSP.5 Artifact Register",
         "skill": "TSP/TSP.5 Artifact Register/artifact-register",
         "assets": [],
-        "register": "05. Artifact Register, Demo.xlsx",
+        "register": "05. Artifact Register, Demo.json",
         "dashboard": "Artifact Dashboard.html",
-        "sheets": ["Artifacts", "Locations", "Areas of Focus"],
+        "collections": ["artifacts", "locations", "areas_of_focus"],
         "create": lambda s, r, d: [os.path.join(s, "scripts", "create_artifact_register.py"),
                                    r, "Demo"],
         "refresh": lambda s, r, d: [os.path.join(s, "scripts", "refresh_artifact_register.py"),
@@ -140,13 +140,15 @@ def test_tool(tool, root, work):
         return
 
     try:
-        import openpyxl
-        names = openpyxl.load_workbook(register).sheetnames
-        missing = [s for s in tool["sheets"] if s not in names]
-        check("expected sheets present", not missing,
-              "missing %s; found %s" % (missing, names))
+        import json
+        data = json.load(io.open(register, encoding="utf-8"))
+        missing = [c for c in tool["collections"] if c not in data]
+        check("expected collections present", not missing,
+              "missing %s; found %s" % (missing, sorted(data)))
+        check("register carries a values_hash",
+              bool(data.get("meta", {}).get("values_hash")), str(data.get("meta")))
     except Exception as exc:                                  # noqa: BLE001
-        check("register opens as a workbook", False, str(exc))
+        check("register parses as JSON", False, str(exc))
         return
 
     dashboard = os.path.join(work, tool["dashboard"])

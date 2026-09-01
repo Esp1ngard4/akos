@@ -5,30 +5,26 @@ description: Manages a work breakdown structure stored as an Excel register and 
 
 # WBS Manager 
 
-Manages Work Breakdown Structure registers stored in Excel (.xlsx) files and generates interactive HTML dashboards. This is the AI-first replacement for the legacy WBS template. Formerly named `wbs-ai-first`.
+Manages Work Breakdown Structure registers stored as JSON and generates interactive HTML dashboards. This is the AI-first replacement for the legacy WBS template. Formerly named `wbs-ai-first`.
 
 ## Requirements
 
-Python 3 with `openpyxl`. Install once per machine from this skill's folder:
+Python 3. **No dependencies** - standard library only.
 
-```
-pip install -r requirements.txt
-```
-
-Everything else the scripts use is standard library. Examples below write `python`, which is correct on Windows; on macOS/Linux use `python3`.
+Examples below write `python`, which is correct on Windows; on macOS/Linux use `python3`.
 
 ## Architecture
 
 ```
 WBS/
- WBS Template.xlsx <- Template for new projects (copy this)
+ WBS Template.json <- Template for new projects (copy this)
  SKILL.md <- This file
  scripts/
  refresh_wbs.py <- Generates HTML dashboard from any WBS xlsx
  create_wbs.py <- Creates a new WBS from the template
 
 Project folder/
- F.XX <ProjectName>.xlsx <- Project WBS (data, source of truth)
+ F.XX <ProjectName>.json <- Project WBS (data, source of truth)
  WBS Dashboard.html <- Generated dashboard (visual, regenerated on demand)
  1. Execution/WP.<ID> <Title>/ <- Support material (see "Support Material" below)
 ```
@@ -45,7 +41,7 @@ Support material for a WBS item (design notes, research, mockups) always lives i
 
 ## Template Schema
 
-The template (`WBS Template.xlsx`) has 3 sheets:
+The template (`WBS Template.json`) has 3 sheets:
 
 ### Sheet: WBS (main backlog)
 Single header row (row 1), data from row 2. Columns:
@@ -93,8 +89,8 @@ These rules exist because the old WBS template (735 columns, merged cells, inlin
 
 Before any operation, locate the right WBS file:
 
-1. Use `Glob` with patterns `**/F.* WBS*.xlsx` and `**/F.* *.xlsx` across connected folders
-2. Filter out the template (`WBS Template.xlsx`)
+1. Use `Glob` with patterns `**/F.* WBS*.json` and `**/F.* *.json` across connected folders
+2. Filter out the template (`WBS Template.json`)
 3. Single match → use directly
 4. Multiple matches → narrow by project name from user's prompt, or ask
 5. No matches → offer to create a new WBS using `create_wbs.py`
@@ -103,8 +99,8 @@ Before any operation, locate the right WBS file:
 
 ### 1. Read / overview
 ```python
-import openpyxl
-wb = openpyxl.load_workbook(path, data_only=True)
+import the register
+wb = the register.load_workbook(path, data_only=True)
 # Find the main data sheet: named 'WBS', or containing 'Implement', or first sheet
 # Build column map from row 1 headers
 # Extract items from row 2 onwards

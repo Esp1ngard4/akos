@@ -7,9 +7,11 @@ Usage:
     python refresh_wbs.py "<xlsx-path>" "<output-html-path>" "<project-name>"
 """
 
+import os
 import sys
 import json
-import openpyxl
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import registry as R
 from pathlib import Path
 from datetime import datetime
 
@@ -312,25 +314,23 @@ render();
 
 def main():
     if len(sys.argv) < 4:
-        print("Usage: refresh_wbs.py <xlsx-path> <output-html-path> <project-name>")
+        print("Usage: refresh_wbs.py <register.json> <output-html-path> <project-name>")
         sys.exit(1)
 
     xlsx_path = sys.argv[1]
     html_path = sys.argv[2]
     project_name = sys.argv[3]
 
-    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
-
-    ws = None
-    for name in wb.sheetnames:
-        if name == 'WBS' or 'Implement' in name:
-            ws = wb[name]
-            break
-    if ws is None:
-        ws = wb[wb.sheetnames[0]]
-
-    col_map = discover_schema(ws)
-    items = extract_items(ws, col_map)
+    register = R.load(xlsx_path)
+    # JSON rows omit their empty fields; the dashboard wants a rectangular table.
+    rows = R.rows(register, "items")
+    fields = []
+    for row in rows:
+        for name in row:
+            if name not in fields:
+                fields.append(name)
+    items = [dict((f, row[f]) for f in fields if row.get(f) is not None)
+             for row in rows]
     stats = compute_stats(items)
     html = generate_html(project_name, items, stats)
 

@@ -82,4 +82,5 @@ If you want real task creation, delegate it to a skill that owns your tracker's 
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-09-01 | **The register is JSON.** Every write went through a script anyway, and a spreadsheet cost a subprocess to read, a dependency to install, and a file lock whenever the application or a sync client held it. The dropdowns a spreadsheet gave back are enforced more strictly by the commands - argparse refuses an invalid value where a dropdown only warns and paste bypasses entirely. Priority and Target Residual Risk are computed at render time rather than stored, so a stored copy can no longer disagree with the scores beside it. The tool now has **no runtime dependencies at all** |
 | v1.0 | 2026-08-31 | Initial public version. Generalised from a personal system: a vendor-specific tracking column renamed to `Tracked Externally` across schema, dashboard and documentation, and this governance document written — previously the tool shipped as a bare skill with no definition document |

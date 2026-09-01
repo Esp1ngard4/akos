@@ -9,19 +9,15 @@ The TSP Register is the single inventory of every Tool, System and Procedure in 
 
 ## Requirements
 
-Python 3 with `openpyxl`. Install once per machine from this skill's folder:
+Python 3. **No dependencies** - standard library only.
 
-```
-pip install -r requirements.txt
-```
-
-Everything else the scripts use is standard library. Examples below write `python`, which is correct on Windows; on macOS/Linux use `python3`.
+Examples below write `python`, which is correct on Windows; on macOS/Linux use `python3`.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `<your tools folder>/TSP Register.xlsx` | **Source of truth.** All edits go here. |
+| `<your tools folder>/TSP Register.json` | **Source of truth.** All edits go here. |
 | `<your tools folder>/TSP Dashboard.html` | Generated static snapshot. Never edit by hand — it is overwritten on every refresh. |
 | `<your tools folder>/PreviousV/` | Superseded register copies and superseded tool definitions. |
 | `scripts/create_tsp.py` | Creates a new, empty register (five sheets, headers, vocabularies, no data). |
@@ -33,7 +29,7 @@ Governance, history and the reasoning behind the review cadence live in `<your t
 
 ## Register schema
 
-`TSP Register.xlsx` has five sheets. Headers are always row 1; data starts row 2. A row with a blank `ID` is not a record.
+`TSP Register.json` has five sheets. Headers are always row 1; data starts row 2. A row with a blank `ID` is not a record.
 
 **Tools Register** — one row per TSP.
 
@@ -67,7 +63,7 @@ The values above are the defaults `create_tsp.py --vocabulary en` produces. The 
 
 ## Operations
 
-Edit the workbook with `openpyxl` (`data_only=True` for reads; plain `load_workbook` when writing so formulas survive). Always **read the sheet first** to find the real last row and the current max ID — never assume.
+Edit the workbook with `the register` (`data_only=True` for reads; plain `load_workbook` when writing so formulas survive). Always **read the sheet first** to find the real last row and the current max ID — never assume.
 
 ### Register a new tool
 
@@ -89,7 +85,7 @@ Set `Last Reviewed` on the Tools Register row. For a control activity: append to
 ### Create a new register
 
 ```
-python scripts/create_tsp.py "<path>/TSP Register.xlsx" [--vocabulary en|pt]
+python scripts/create_tsp.py "<path>/TSP Register.json" [--vocabulary en|pt]
 ```
 
 For standing up a register somewhere other than the personal the system. `--vocabulary pt` reproduces the personal register's historical Portuguese Status/Type/Importance terms; `en` (the default) is the English equivalent for a register starting clean. It refuses to overwrite an existing file unless `--force` is passed.
@@ -101,7 +97,7 @@ A new register has no dashboard until you render one — run `refresh_tsp.py` ag
 ### Refresh the dashboard
 
 ```
-python scripts/refresh_tsp.py "<your tools folder>/TSP Register.xlsx"
+python scripts/refresh_tsp.py "<your tools folder>/TSP Register.json"
 ```
 
 The dashboard is a static snapshot with the generation date in its subtitle — **rerun it after every batch of register edits**, or the user reads stale numbers.
@@ -109,7 +105,7 @@ The dashboard is a static snapshot with the generation date in its subtitle — 
 ### Audit
 
 ```
-python scripts/audit_tsp.py "<your tools folder>/TSP Register.xlsx"
+python scripts/audit_tsp.py "<your tools folder>/TSP Register.json"
 ```
 
 Read-only. Run it before the annual review, and whenever the register and the tool folders may have drifted.
@@ -118,7 +114,7 @@ Skill roots are auto-discovered: the repo-root `.claude/skills` plus any `.claud
 
 ### Back up before a structural change
 
-Before changing the schema or doing a bulk rewrite, copy the register to `PreviousV/TSP Register (<what changed> YYYY-MM-DD).xlsx`.
+Before changing the schema or doing a bulk rewrite, copy the register to `PreviousV/TSP Register (<what changed> YYYY-MM-DD).json`.
 
 ## The two controls
 

@@ -3,63 +3,67 @@
 Read a RAID .xlsx file and generate a self-contained HTML dashboard.
 Usage: python refresh_raid.py <xlsx_path> <output_html_path> [project_name]
 """
-import sys, json, os
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import registry as R, json, os
 from datetime import datetime, date
 
-def read_raid_xlsx(xlsx_path):
-    import openpyxl
-    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
-    ws = wb["Ticket Tracker"]
+# The register's field names, mapped to the keys the dashboard already uses.
+# Written out rather than inferred: the dashboard's JavaScript reads these exact
+# names, so a clever transformation here would break it silently.
+FIELDS = {
+    "RAID.ID": "id", "Detail": "detail", "Type": "type", "DRI": "dri",
+    "Urgency (1-5)": "urgency", "Consequences (1-5)": "consequences",
+    "Feasibility": "feasibility",
+    "Probability of Occurrence (1-5)": "probability", "Severity (1-5)": "severity",
+    "Response Strategy": "responseStrategy", "Mitigation Target %": "mitigationTarget",
+    "Residual Risk Score": "residualRisk", "MoSCoW": "moscow", "Status": "status",
+    "Last Review": "lastReview", "Review On": "reviewOn",
+    "Next Review On": "nextReviewOn", "Description": "description",
+    "Action Plan": "actionPlan", "Acceptance Criteria": "acceptanceCriteria",
+    "Action Log": "actionLog", "Category": "category",
+    "Tracked Externally": "trackedExternally", "Tracked in Todoist": "trackedExternally",
+    "Opened On": "openedOn", "Requested By": "requestedBy", "Involve": "involve",
+    "Has AuxMat": "hasAuxMat", "Estimated Effort": "estimatedEffort",
+    "ETC": "etc", "ETC Renegotiated": "etcRenegotiated",
+    "Closed On": "closedOn", "Closed By": "closedBy",
+}
 
-    # Find header row (row 6 by default, but scan for "RAID.ID")
-    header_row = 6
-    for r in range(1, 10):
-        if ws.cell(row=r, column=2).value == "RAID.ID":
-            header_row = r
-            break
 
-    # Find last data row
-    last_row = header_row + 1
-    while ws.cell(row=last_row, column=2).value is not None:
-        last_row += 1
-    last_row -= 1
+def read_raid(register_path):
+    """Read entries from a RAID register.
 
+    Priority and Target Residual Risk are derived here rather than stored: they
+    are functions of the scores beside them, and a stored copy would disagree
+    the moment someone edited a score without recomputing.
+    """
+    register = R.load(register_path)
     entries = []
-    for row in range(header_row + 1, last_row + 1):
-        def val(col):
-            v = ws.cell(row=row, column=col).value
-            if isinstance(v, (datetime, date)):
-                return v.strftime("%Y-%m-%d")
-            return v
+    for row in R.rows(register, "entries"):
+        entry = {}
+        for name, value in row.items():
+            key = FIELDS.get(name)
+            if key and value is not None:
+                entry[key] = value
 
-        urgency = val(7) or 0
-        consequences = val(8) or 0
-        priority = round((urgency * 1.5 + consequences) / 12.5 * 100, 1) if (urgency or consequences) else 0
+        urgency = entry.get("urgency") or 0
+        consequences = entry.get("consequences") or 0
+        entry["urgency"], entry["consequences"] = urgency, consequences
+        entry["priority"] = (round((urgency * 1.5 + consequences) / 12.5 * 100, 1)
+                             if (urgency or consequences) else 0)
 
-        probability = val(10) or 0
-        severity = val(11) or 0
-        mitigation_target = val(13)
-        target_residual = round(probability * severity * (1 - mitigation_target / 100), 1) if (probability and severity and mitigation_target not in (None, "")) else None
+        probability = entry.get("probability") or 0
+        severity = entry.get("severity") or 0
+        target = entry.get("mitigationTarget")
+        if probability and severity and target not in (None, ""):
+            entry["targetResidualRisk"] = round(
+                probability * severity * (1 - target / 100), 1)
 
-        entry = {
-            "id": val(2), "detail": val(3), "type": val(4), "dri": val(5),
-            "priority": priority, "urgency": urgency, "consequences": consequences,
-            "feasibility": val(9),
-            "probability": val(10), "severity": val(11), "responseStrategy": val(12),
-            "mitigationTarget": val(13), "targetResidualRisk": target_residual, "residualRisk": val(15),
-            "moscow": val(16), "status": val(17),
-            "lastReview": val(18), "reviewOn": val(19), "nextReviewOn": val(20),
-            "description": val(21), "actionPlan": val(22),
-            "acceptanceCriteria": val(23), "actionLog": val(24),
-            "category": val(25), "trackedExternally": val(26), "openedOn": val(27), "requestedBy": val(28),
-            "involve": val(29), "hasAuxMat": val(30),
-            "estimatedEffort": val(31), "etc": val(32), "etcRenegotiated": val(33),
-            "closedOn": val(34), "closedBy": val(35),
-        }
-        entries.append({k: v for k, v in entry.items() if v is not None})
-
-    wb.close()
+        entries.append(dict((k, v) for k, v in entry.items() if v is not None))
     return entries
+
 
 def detect_types(entries):
     """Detect which RAID types are present to adapt visuals."""
@@ -205,7 +209,7 @@ tr:hover td {{ background: #f8fafc; }}
       <thead><tr>
         <th data-sort="id">ID</th><th data-sort="detail">Detail</th><th data-sort="type">Type</th>
         <th data-sort="priority">Priority</th><th data-sort="moscow">MoSCoW</th>
-        <th data-sort="status">Status</th><th data-sort="trackedExternally">Tracked</th><th data-sort="hasAuxMat">AuxMat</th><th data-sort="lastReview">Last Review</th>
+        <th data-sort="status">Status</th><th data-sort="trackedInTodoist">Todoist</th><th data-sort="hasAuxMat">AuxMat</th><th data-sort="lastReview">Last Review</th>
       </tr></thead>
       <tbody id="tableBody"></tbody>
     </table>
@@ -270,8 +274,8 @@ function renderFilters() {{
     dris.forEach(d => html += '<button class="filter-btn" data-filter="dri" data-val="'+d+'">'+d+'</button>');
   }}
   html += '<span style="color:#ddd">|</span>';
-  html += '<button class="filter-btn" data-filter="trackedExternally" data-val="Y">Tracked ✓</button>';
-  html += '<button class="filter-btn" data-filter="trackedExternally" data-val="N">Tracked ✗</button>';
+  html += '<button class="filter-btn" data-filter="trackedInTodoist" data-val="Y">Todoist ✓</button>';
+  html += '<button class="filter-btn" data-filter="trackedInTodoist" data-val="N">Todoist ✗</button>';
   const activeCount = Object.values(activeFilters).filter(Boolean).length;
   html += '<span style="color:#ddd">|</span>';
   html += '<button class="filter-btn" style="font-style:italic" onclick="clearFilters()">Clear all</button>';
@@ -303,7 +307,7 @@ function renderTable() {{
     const pColor = e.priority >= 80 ? '#dc2626' : e.priority >= 60 ? '#d97706' : '#16a34a';
     const typeClass = 'badge-'+(e.type||'').toLowerCase();
     const statusClass = 'status-'+(e.status||'').toLowerCase();
-    return '<tr><td><strong>R.'+e.id+'</strong></td><td><a class="detail-link" onclick="showDetail('+e.id+')">'+e.detail+'</a></td><td><span class="badge '+typeClass+'">'+(e.type||'—')+'</span></td><td><div class="priority-bar"><div class="priority-fill" style="width:'+e.priority+'%;background:'+pColor+'"></div></div>'+e.priority+'%</td><td>'+(e.moscow||'—').replace(/^\\d\\./,'')+'</td><td><span class="'+statusClass+'">'+(e.status||'—')+'</span></td><td style="text-align:center">'+(e.trackedExternally==='Y'?'✓':'—')+'</td><td style="text-align:center">'+(e.hasAuxMat==='Y'?'📁':'—')+'</td><td>'+(e.lastReview||'—')+'</td></tr>';
+    return '<tr><td><strong>R.'+e.id+'</strong></td><td><a class="detail-link" onclick="showDetail('+e.id+')">'+e.detail+'</a></td><td><span class="badge '+typeClass+'">'+(e.type||'—')+'</span></td><td><div class="priority-bar"><div class="priority-fill" style="width:'+e.priority+'%;background:'+pColor+'"></div></div>'+e.priority+'%</td><td>'+(e.moscow||'—').replace(/^\\d\\./,'')+'</td><td><span class="'+statusClass+'">'+(e.status||'—')+'</span></td><td style="text-align:center">'+(e.trackedInTodoist==='Y'?'✓':'—')+'</td><td style="text-align:center">'+(e.hasAuxMat==='Y'?'📁':'—')+'</td><td>'+(e.lastReview||'—')+'</td></tr>';
   }}).join('');
 }}
 
@@ -317,7 +321,7 @@ document.querySelector('thead').addEventListener('click', e => {{
 function showDetail(id) {{
   const e = DATA.entries.find(x => x.id === id); if (!e) return;
   const riskFields = e.type === 'Risk' ? [['Probability',e.probability],['Severity',e.severity],['Response Strategy',e.responseStrategy],['Mitigation Target',e.mitigationTarget!=null?e.mitigationTarget+'%':null],['Target Residual Risk',e.targetResidualRisk],['Residual Risk Score',e.residualRisk]] : [];
-  const fields = [['Type',e.type],['DRI',e.dri],['Priority',e.priority+'%'],['Urgency',e.urgency],['Consequences',e.consequences],['Feasibility',e.feasibility],...riskFields,['MoSCoW',e.moscow],['Status',e.status],['Tracked Externally',e.trackedExternally==='Y'?'Yes':'No'],['Description',e.description],['Action Plan',e.actionPlan],['Acceptance Criteria',e.acceptanceCriteria],['Action Log',e.actionLog],['Opened',e.openedOn],['Last Review',e.lastReview],['Review On',e.reviewOn],['Next Review On',e.nextReviewOn],['Closed On',e.closedOn],['Closed By',e.closedBy],['Requested By',e.requestedBy],['Estimated Effort',e.estimatedEffort],['ETC',e.etc],['ETC Renegotiated',e.etcRenegotiated],['Has AuxMat',e.hasAuxMat==='Y'?'Yes':'No']].filter(([,v])=>v!=null);
+  const fields = [['Type',e.type],['DRI',e.dri],['Priority',e.priority+'%'],['Urgency',e.urgency],['Consequences',e.consequences],['Feasibility',e.feasibility],...riskFields,['MoSCoW',e.moscow],['Status',e.status],['Tracked in Todoist',e.trackedInTodoist==='Y'?'Yes':'No'],['Description',e.description],['Action Plan',e.actionPlan],['Acceptance Criteria',e.acceptanceCriteria],['Action Log',e.actionLog],['Opened',e.openedOn],['Last Review',e.lastReview],['Review On',e.reviewOn],['Next Review On',e.nextReviewOn],['Closed On',e.closedOn],['Closed By',e.closedBy],['Requested By',e.requestedBy],['Estimated Effort',e.estimatedEffort],['ETC',e.etc],['ETC Renegotiated',e.etcRenegotiated],['Has AuxMat',e.hasAuxMat==='Y'?'Yes':'No']].filter(([,v])=>v!=null);
   document.getElementById('modalContent').innerHTML = '<button class="close-btn" onclick="closeModal()">x</button><h2>R.'+e.id+' — '+e.detail+'</h2>'+fields.map(([l,v])=>'<div class="field"><div class="field-label">'+l+'</div><div class="field-value">'+String(v).replace(/\\n/g,'<br>')+'</div></div>').join('')+'<button class="edit-btn" onclick="requestEdit('+e.id+')">Request Edit via Chat</button>';
   document.getElementById('modalOverlay').classList.add('open');
 }}
@@ -395,7 +399,7 @@ def main():
     output_path = sys.argv[2]
     project_name = sys.argv[3] if len(sys.argv) > 3 else os.path.basename(xlsx_path).replace("RAID ", "").replace(".xlsx", "")
 
-    entries = read_raid_xlsx(xlsx_path)
+    entries = read_raid(xlsx_path)
     type_info = detect_types(entries)
     html = generate_html(entries, project_name, type_info)
 

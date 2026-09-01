@@ -63,7 +63,7 @@ has described.
 | TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) — vendoring, drift detection, three-way updates | *(none — see below)* |
 | TSP.5 | [Artifact Register](TSP/TSP.5%20Artifact%20Register/) — what you have, where it lives, who governs it | `artifact-register` |
 
-TSP.1–3 and TSP.5 are each an `.xlsx` source of truth with a generated HTML dashboard.
+TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with
 no worked example is just an opinion.
 
@@ -77,6 +77,12 @@ than asserted.
 ships. The register is the source of truth; `REGISTRY.md` is generated from it, so the
 catalogue cannot drift from the thing that defines it.
 
+**Registers are JSON.** Every write went through a script anyway, and a spreadsheet
+cost a subprocess to read, a dependency to install, and a file lock whenever the
+application or a sync client held it. What a spreadsheet gave back — validated
+dropdowns while typing — the commands enforce more strictly, since argparse refuses
+an invalid value where a dropdown only warns and paste bypasses entirely.
+
 ## Try it
 
 Skills load from `.github/skills/`, `.claude/skills/` or `.agents/skills/` in GitHub
@@ -89,7 +95,6 @@ up with no registration step.
 git clone https://github.com/Esp1ngard4/akos.git
 python akos/install.py list
 python akos/install.py add wbs-manager --into <your-repo>
-pip install openpyxl
 ```
 
 That copies the skill into `<your-repo>/.github/skills/` and writes
@@ -117,12 +122,13 @@ the vendor deadline"*, *"what's overdue for review?"* Skills trigger on their
 Every script also runs standalone, with no agent involved:
 
 ```bash
-python "TSP/TSP.1 WBS Register/wbs-manager/scripts/create_wbs.py"  "WBS Atlas.xlsx" "Atlas"
-python "TSP/TSP.1 WBS Register/wbs-manager/scripts/refresh_wbs.py" "WBS Atlas.xlsx" "WBS Dashboard.html" "Atlas"
+python "TSP/TSP.1 WBS Register/wbs-manager/scripts/create_wbs.py"  "WBS Atlas.json" "Atlas"
+python "TSP/TSP.1 WBS Register/wbs-manager/scripts/refresh_wbs.py" "WBS Atlas.json" "WBS Dashboard.html" "Atlas"
 ```
 
-Python 3.9+ and `openpyxl`; every other import is standard library. Dashboards pull
-Chart.js and Grid.js from a CDN — offline, tables render and charts don't.
+**Python 3.9+ and nothing else.** No dependencies, so there is no install step —
+registers are JSON and every import is standard library. Dashboards pull Chart.js
+and Grid.js from a CDN; offline, tables render and charts don't.
 
 ## Verifying it works
 
@@ -135,7 +141,7 @@ Every tool is exercised the way a new user would: create a register, render its
 dashboard, check the output is real rather than merely present. The installer gets
 the same treatment — vendor a tool into a throwaway project, confirm `status --check`
 passes clean, edit a file, confirm it now fails, then declare the change and confirm
-it passes again. Runs in seconds and needs nothing beyond `openpyxl`.
+it passes again. Runs in seconds and needs nothing installed at all.
 
 TSP.5 gets an extra case of its own. It is the only tool here that asserts something
 about the world rather than about itself — the ID it assigns is written onto the file,

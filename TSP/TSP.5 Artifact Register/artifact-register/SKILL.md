@@ -14,7 +14,7 @@ operation.
 
 ## Requirements
 
-`openpyxl`. Everything else is standard library. Commands below write `python`,
+**No dependencies.** Standard library only. Commands below write `python`,
 correct on Windows; use `python3` on macOS/Linux.
 
 ## The rule that makes this tool work
@@ -24,7 +24,7 @@ follows ID.**
 
 ```
 00.Admin/                            artifact 0
-  07. Artifact Register, Atlas.xlsx  artifact 7 - the register, listing itself
+  07. Artifact Register, Atlas.json  artifact 7 - the register, listing itself
 04.Reference/                        artifact 4
   08. Site Survey.pdf                artifact 8,  Parent Digital = 4
   15. Floor Plan.pdf                artifact 15, Parent Digital = 4
@@ -86,7 +86,7 @@ The filename should carry the ID the register holds in its own scope; it seeds
 itself as that artifact.
 
 ```
-python create_artifact_register.py "7. Artifact Register, Atlas.xlsx" "Atlas" \
+python create_artifact_register.py "7. Artifact Register, Atlas.json" "Atlas" \
     --location "Physical:Office" --location "Digital:Cloud drive" \
     --area "5:Operations"
 ```
@@ -143,8 +143,8 @@ Derived output — overwritten in full, never edited by hand. Tabs: overview,
 artifacts (filterable), containment trees, review queue, findings.
 
 ```
-python refresh_artifact_register.py "<register>.xlsx" "Artifact Dashboard.html" \
-    --scope "Atlas" --root "<folder it describes>" --tsp-register "<tool register>.xlsx"
+python refresh_artifact_register.py "<register>.json" "Artifact Dashboard.html" \
+    --scope "Atlas" --root "<folder it describes>" --tsp-register "<tool register>.json"
 ```
 
 `--root` and `--tsp-register` are optional and take the same values as `audit`.
@@ -159,8 +159,8 @@ the field is empty — which is how you find artifacts still missing a `Type`.
 ## Audit
 
 ```
-python audit_artifact_register.py "<register>.xlsx" \
-    --root "<folder it describes>" --tsp-register "<tool register>.xlsx"
+python audit_artifact_register.py "<register>.json" \
+    --root "<folder it describes>" --tsp-register "<tool register>.json"
 ```
 
 Exits non-zero on errors. Every finding is listed; `--summary` gives class names

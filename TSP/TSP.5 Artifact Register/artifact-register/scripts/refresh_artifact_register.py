@@ -16,11 +16,9 @@ import json
 import os
 import sys
 
-import openpyxl
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import checks                                                   # noqa: E402
-import schema as S                                              # noqa: E402
+import registry as R                                            # noqa: E402
 
 STALE_YEARS = 2
 
@@ -30,6 +28,7 @@ TEMPLATE = u"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Artifact Register - {{SCOPE}}</title>
+<meta name="generator" content="artifact-register" data-values-hash="{{HASH}}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/theme/mermaid.min.css" crossorigin="anonymous">
 <script src="https://cdn.jsdelivr.net/npm/gridjs@5.0.2/dist/gridjs.umd.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" crossorigin="anonymous"></script>
@@ -374,39 +373,29 @@ def main():
     p.add_argument("--scope", help="name shown in the title (default: from the register)")
     p.add_argument("--root", help="folder this register describes; enables the disk "
                                   "reconciliation on the Findings tab")
-    p.add_argument("--tsp-register", help="the TSP register; enables the "
-                                          "delegation check on the Findings tab")
+    p.add_argument("--tool-register", help="tool register; enables the "
+                                       "delegation check on the Findings tab")
     args = p.parse_args()
 
-    wb = openpyxl.load_workbook(args.register, data_only=True)
-    ws = wb[S.SHEET] if S.SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
-    hrow, cols = S.find_header(ws)
-    rows = S.read_rows(ws, hrow, cols)
+    data = R.load(args.register)
+    rows = R.rows(data, "artifacts")
+    scope = args.scope or data["meta"].get("scope") or "Register"
 
-    scope = args.scope
-    if not scope:
-        title = ws.cell(S.TITLE_ROW, 1).value or ws.cell(S.TITLE_ROW, 2).value
-        scope = str(title).replace("Artifact Register - ", "").strip() if title else "Global"
-
-    data = []
-    for rec in rows:
-        clean = {}
-        for key, value in rec.items():
-            if key == "_row":
-                continue
-            if isinstance(value, dt.datetime):
-                clean[key] = value.date().isoformat()
-            elif value is None:
-                clean[key] = ""
-            else:
-                clean[key] = str(value).strip()
-        data.append(clean)
+    # Every field any row uses, in schema order first so the grid is stable.
+    import schema as S
+    seen = set()
+    for row in rows:
+        seen.update(row)
+    fields = [f for f in S.FIELDS if f in seen] + sorted(seen - set(S.FIELDS))
+    data_rows = []
+    for row in rows:
+        data_rows.append(dict((f, "" if row.get(f) is None else str(row[f]))
+                              for f in fields))
 
     # Same checks the audit runs - one definition, so the dashboard and the
     # command line can never report different findings.
     errors, warnings, stats = checks.run(
-        rows, root=args.root, tools=checks.load_tools(args.tsp_register),
-        width=S.id_width(wb))
+        data, root=args.root, tools=checks.load_tools(args.tool_register))
     findings = {
         "errors": errors,
         "warnings": warnings,
@@ -422,20 +411,22 @@ def main():
 
     html = (TEMPLATE
             .replace("{{SCOPE}}", scope)
-            .replace("{{COUNT}}", str(len(data)))
+            .replace("{{COUNT}}", str(len(data_rows)))
             .replace("{{GENERATED}}", dt.datetime.now().strftime("%Y-%m-%d %H:%M"))
             .replace("{{STALE}}", str(STALE_YEARS))
             .replace("{{FINDING_BADGE}}", badge)
             .replace("{{FINDINGS}}", json.dumps(findings, ensure_ascii=False))
-            .replace("{{DATA}}", json.dumps(data, ensure_ascii=False)))
+            .replace("{{HASH}}", data["meta"].get("values_hash", ""))
+            .replace("{{DATA}}", json.dumps(data_rows, ensure_ascii=False)))
 
     with io.open(args.output, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(html)
 
-    active = sum(1 for d in data if d.get("Status") == "Active")
+    active = sum(1 for d in data_rows if d.get("Status") == "Active")
     print("Dashboard generated: %s" % args.output)
     print("  Scope: %s | Artifacts: %d | Active: %d | Delegated: %d"
-          % (scope, len(data), active, sum(1 for d in data if d.get("Managed By"))))
+          % (scope, len(data_rows), active,
+             sum(1 for d in data_rows if d.get("Managed By"))))
     print("  Findings: %d error(s), %d warning(s) in %d class(es)"
           % (len(errors), warning_count, len(warnings)))
 

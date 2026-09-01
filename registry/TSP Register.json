@@ -1,0 +1,146 @@
+{
+  "activity_log": [],
+  "change_log": [
+    {
+      "Changed On": "2026-08-31",
+      "Description": "Register created for the AKOS catalogue. Seeded with the three tools published in this repository. This register is itself an instance of TSP.3.",
+      "ID": 1,
+      "Tool": "TSP Register"
+    },
+    {
+      "Changed On": "2026-08-31",
+      "Description": "TSP.4 Tool Installer registered. First entry with no skill - recorded to show the register handles tools whose value is not an agent interface.",
+      "ID": 2,
+      "Tool": "TSP Register"
+    },
+    {
+      "Changed On": "2026-08-31",
+      "Description": "TSP.5 registered. Generalised from a personal reference-material system and a per-project document control list that turned out to be one tool at two scopes.",
+      "ID": 3,
+      "Tool": "Artifact Register"
+    }
+  ],
+  "control_activities": [],
+  "meta": {
+    "kind": "tsp-register",
+    "scope": "AKOS",
+    "settings": {
+      "vocabularies": {
+        "frequency": {
+          "2 months": 60,
+          "2-2 Years": 730,
+          "4 months": 120,
+          "5-5 Years": 1825,
+          "6 weeks": 42,
+          "Annual": 365,
+          "Daily": 1,
+          "Monthly": 31,
+          "Quarterly": 90,
+          "Semi-annual": 180,
+          "Weekly": 7
+        },
+        "importance": [
+          "Critical",
+          "Important",
+          "Optional",
+          "Not needed",
+          "Obsolete"
+        ],
+        "relevancy": [
+          "Critical",
+          "Often",
+          "Sometimes",
+          "Specific - relevant",
+          "Specific - questionable",
+          "Rarely",
+          "Not in the last years"
+        ],
+        "status": [
+          "Planned",
+          "In Progress",
+          "Implemented",
+          "Obsolete"
+        ],
+        "type": [
+          "Manual",
+          "Work instruction",
+          "Tool"
+        ]
+      }
+    },
+    "updated": "2026-09-01T11:26:18",
+    "values_hash": "sha256:cd8809996a794b604a3a7b8f6cfe2e66473f180e703047e1ac1a189bfd11318b",
+    "version": 1
+  },
+  "tools": [
+    {
+      "Description": "Work breakdown / backlog register per project: decomposition, effort, acceptance criteria, sprint allocation, with a generated dashboard.",
+      "Doc Aux": "Yes",
+      "ID": 1,
+      "Last Reviewed": "2026-08-31",
+      "Links": "TSP/TSP.1 WBS Register/TD.1 - WBS Register.md",
+      "Notes": "Ready to adopt. Template ships inside the skill folder.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "wbs-manager",
+      "Status": "Implemented",
+      "Tool/System Name": "WBS Register",
+      "Type": "Tool"
+    },
+    {
+      "Description": "Risks, Actions, Issues, Decisions and Ideas per project, with a probability x severity heat map and a generated dashboard.",
+      "Doc Aux": "Yes",
+      "ID": 2,
+      "Last Reviewed": "2026-08-31",
+      "Links": "TSP/TSP.2 RAID Register/TD.2 - RAID Register.md",
+      "Notes": "Ready to adopt. Register is built programmatically; no template file.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "raid-dashboard",
+      "Status": "Implemented",
+      "Tool/System Name": "RAID Register",
+      "Type": "Tool"
+    },
+    {
+      "Description": "The inventory of tools, systems and procedures, plus the recurring controls that keep them alive. The spine of the method - this register is an instance of it.",
+      "Doc Aux": "Yes",
+      "ID": 3,
+      "Last Reviewed": "2026-08-31",
+      "Links": "TSP/TSP.3 TSP Register/TD.3 - TSP Register.md",
+      "Notes": "Ready to adopt. Open item: Primary Area vocabulary resolved.",
+      "Primary Area": "Tool management",
+      "Relevancy": "Critical",
+      "Skill": "tsp-manager",
+      "Status": "Implemented",
+      "Tool/System Name": "TSP Register",
+      "Type": "Tool"
+    },
+    {
+      "Description": "Vendors a tool from this catalogue into a project, records where the copy came from, and keeps it reconcilable with upstream: drift detection and three-way updates.",
+      "Doc Aux": "Yes",
+      "ID": 4,
+      "Last Reviewed": "2026-08-31",
+      "Links": "TSP/TSP.4 Tool Installer/TD.4 - Tool Installer.md",
+      "Notes": "Ready to adopt. No skill by design - it runs at moments where a human decides.",
+      "Primary Area": "Tool management",
+      "Relevancy": "Often",
+      "Status": "Implemented",
+      "Tool/System Name": "Tool Installer",
+      "Type": "Tool"
+    },
+    {
+      "Description": "Inventory of the artifacts belonging to a scope - documents, folders, tools and physical items - recording what each is, where it lives digitally and physically, what contains it, and which tool governs its contents. The register assigns an ID that is written onto the artifact itself, so its claims about the filesystem can be checked.",
+      "Doc Aux": "Yes",
+      "ID": 5,
+      "Last Reviewed": "2026-08-31",
+      "Links": "TSP/TSP.5 Artifact Register/TD.5 - Artifact Register.md",
+      "Notes": "Ready to adopt. The only tool here that reconciles against reality rather than itself.",
+      "Primary Area": "Reference management",
+      "Relevancy": "Often",
+      "Skill": "artifact-register",
+      "Status": "Implemented",
+      "Tool/System Name": "Artifact Register",
+      "Type": "Tool"
+    }
+  ]
+}
