@@ -12,22 +12,22 @@ Format: [`_shared/contracts/ideas-inbox-format.md`](../_shared/contracts/ideas-i
 
 ## Capture
 
-One exchange. Take the author's words, append a row to `content-system/ideas.md`, confirm in one line, stop.
+One exchange. Take the author's words, append an entry to `content-system/ideas.md`, confirm in one line, stop.
 
 - **Record the idea in the author's own words.** Do not sharpen it, expand it, retitle it, or make it sound better. A capture that comes back polished is a capture the author has to check.
 - **Scope is optional.** Offer the scopes that have a strategy file — walk `content-system/strategies/` — and accept "none" instantly. Never block on it. Most sparks arrive before anyone knows where they belong.
 - **ID is `YYYY-MM-DD-<letter>`**, the letter incrementing within the day. It exists so the author can say "the second one" while the idea waits.
 - **Several ideas in one message is one capture, not several.** Append them all in one write, letters incrementing across the batch, and confirm in one line. Turning a batch into five exchanges is the same failure as interviewing — it makes the fastest action in the system the slowest.
 - **A scope the author has just named may be applied to the whole batch, provided you say so.** *"All five under `areaOfFocus/product-craft` — tell me if any of those belong elsewhere."* An announced scope is corrected in seconds; a scope question per row is the interview this skill exists to avoid. Say nothing and it is an inference, which is a different thing entirely.
-- **If the author volunteers why an idea matters, record it — in the same write, verbatim.** It becomes a `### <ID>` block under `## Context`. This is the one part of a capture that can run to a paragraph, and it is the part that decays fastest: a line that names a topic and promises a payoff reads fine today and is unrecoverable in a week.
+- **If the author volunteers why an idea matters, record it — in the same write, verbatim.** It goes in the entry's own body, under its heading. This is the one part of a capture that can run to a paragraph, and it is the part that decays fastest: a line that names a topic and promises a payoff reads fine today and is unrecoverable in a week.
 
 ### Context is accepted, never requested
 
-**Never ask for it.** Not "would you like to add why?", not a follow-up after the confirmation, not a nudge on the ones that look thin. Asking on every capture costs the ten-second promise for the minority of ideas that carry a block, and it is the interview under another name.
+**Never ask for it.** Not "would you like to add why?", not a follow-up after the confirmation, not a nudge on the entries that look thin. Asking on every capture costs the ten-second promise for the minority of ideas that carry any, and it is the interview under another name.
 
-**Never write one yourself.** If the author did not say why it matters, there is no block. An inferred reason is a fabricated one, and it is worse than nothing here because it will later be read as the author's own thinking.
+**Never write it yourself.** If the author did not say why it matters, the entry has no body. An inferred reason is a fabricated one, and it is worse than nothing here because it will later be read as the author's own thinking.
 
-A capture with no context is **complete, not unfinished**. Never render it as missing, never list which ideas lack one.
+An entry with no context is **complete, not unfinished** - a heading and a meta line is the ordinary case. Never render it as missing, never list which ideas lack one.
 
 ### The one hard rule
 
@@ -39,13 +39,15 @@ No angle. No "what's the most important point?". No audience. No persona. Those 
 
 ## What's waiting
 
-Read `content-system/ideas.md` and show the table as it stands. **The count is the row count** — no filtering, no status to interpret. That is the whole reason the file holds waiting items only.
+Read `content-system/ideas.md` and render a compact list - ID, idea, scope - one line each. **The count is the number of entries** - no filtering, no status to interpret. That is the whole reason the file holds waiting items only.
+
+**That list is a view, never written back.** The file holds the entries; a stored summary would be a second representation of the same ideas, and two representations drift. Show context only when asked for a specific idea, or the compact list stops being compact.
 
 ## Promotion — an idea that is becoming a piece
 
 Promotion is for an idea you have started **turning into something**: an angle forming, an outline, notes that are about the writing rather than about the idea. It is not the place to record why an idea matters — that is `## Context`, and it does not move the idea out of the inbox.
 
-Move the row out of the inbox and create a bundle folder:
+Remove the entry from the inbox and create a bundle folder:
 
 ```
 content-system/posts/YYYY-MM-DD-slug/backbone.md
@@ -53,7 +55,7 @@ content-system/posts/YYYY-MM-DD-slug/backbone.md
 
 with frontmatter carrying `from-idea:` (the ID and the original text) and `scope:` if known, then `## Idea` — the capture, verbatim — and `## Notes`.
 
-**If the idea has a `### <ID>` context block, it becomes the opening `## Notes` and is deleted from `ideas.md`.** It travels with the row; leaving it behind orphans it, and copying it leaves two versions to disagree. With no block, `## Notes` starts empty as before.
+**If the entry has context, it becomes the opening `## Notes`.** It travels with the idea and leaves `ideas.md` with it - copying it would leave two versions to disagree. With no context, `## Notes` starts empty as before.
 
 **No angle is required. No plan. No commitment to finish.** This is the point of promotion: an idea being actively worked is neither waiting nor written, and without a place to sit it would have to stay in the inbox pretending to be untouched. The bundle folder is where refinement happens — notes now, angle when it settles, and the rest as `content-post-writer` fills it in.
 
@@ -69,7 +71,7 @@ with frontmatter carrying `from-idea:` (the ID and the original text) and `scope
 
 ## Dropping
 
-Move the row to `## Dropped` with the date and a one-line reason. Its `### <ID>` context block, if any, goes with it and may be pruned. Ideas are allowed to die — an inbox that only accumulates stops being an inbox and becomes a guilt pile.
+Move the idea to the `## Dropped` table with the date and a one-line reason. Its context, if any, goes with it and may be pruned. Ideas are allowed to die — an inbox that only accumulates stops being an inbox and becomes a guilt pile.
 
 That section is prunable at any time and nothing reads it.
 
@@ -79,13 +81,14 @@ Works with **nothing else present** — no strategy, no plan, no posts, no prior
 
 ## Verify
 
-After appending, moving, or removing a row, re-read the file and confirm the table still parses — header intact, one row per waiting idea, nothing left in two places, and every `### <ID>` block still matching a row in the table. An orphaned block is context that was supposed to travel with its row and did not. Correct once; on a second failure say so plainly. A malformed table silently miscounts the pipeline's front stage, which is the one thing this file exists to make countable.
+After appending, moving, or removing an entry, re-read the file and confirm it still parses — one `###` heading per waiting idea, each with a `Captured` meta line, nothing left in two places, and the `## Dropped` table intact. Correct once; on a second failure say so plainly. A malformed table silently miscounts the pipeline's front stage, which is the one thing this file exists to make countable.
 
 ## What this must never become
 
 - An interview.
 - A tagging, priority, or scoring system. `## Context` holds the author's reason, never a rating of it.
-- A format that asks for context, marks a capture without it as incomplete, or reports which ideas lack one.
+- A format that asks for context, marks an entry without it as incomplete, or reports which ideas lack one.
+- A stored summary table of waiting ideas. Render one on request; writing it into the file makes a second copy that drifts.
 - A place where ideas get developed rather than parked.
 - A second inbox alongside the outer workspace's `_editorial/_ideas/` — this one reads nothing outside `content-system/`.
 - A router into `.specify/assessments/`.

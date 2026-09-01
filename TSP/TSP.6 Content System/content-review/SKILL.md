@@ -71,7 +71,7 @@ Three, mutually exclusive, every item in exactly one:
 
 | Stage | Counted from |
 |---|---|
-| Captured, not started | rows in `content-system/ideas.md` - the row count, never adjusted for whether a row has a `## Context` block |
+| Captured, not started | `###` entries in `content-system/ideas.md` - the entry count, never adjusted for whether an entry carries context |
 | Started, not locked | bundle folders in `content-system/posts/` with no index row |
 | Locked | rows in `content-system/posts/index.md` |
 

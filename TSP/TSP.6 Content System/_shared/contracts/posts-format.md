@@ -33,7 +33,7 @@ Thin YAML frontmatter, then phase-ordered body sections.
 ```markdown
 ---
 scope: areaOfFocus/product-craft    # optional until known
-from-idea: 2026-08-11-a          # optional; the inbox row this came from, with its text
+from-idea: 2026-08-11-a          # optional; the inbox entry this came from, with its text
 commitments:                      # optional; one line per artifact credited to a plan row
   - areaOfFocus/product-craft/Lab in the open/2026-09-02
 ---
