@@ -35,6 +35,7 @@ import tempfile
 LOCK_NAME = "tools.lock.json"
 DEFAULT_DEST = ".github/skills"
 SKIP = {".git", "__pycache__", ".pytest_cache", ".DS_Store"}
+SHARED_NAME = "_shared"
 CATALOGUE = os.path.dirname(os.path.abspath(__file__))
 CONFLICT_MARKER = "<" * 7 + " ours"
 
@@ -143,6 +144,11 @@ def read_catalogue(root):
     A tool folder is `TSP/TSP.<n> <Name>/`; its skill is the directory inside
     holding a SKILL.md. Tools with no skill do not appear here - they are still
     tools, they just have nothing to install.
+
+    A tool with several skills may also ship `_shared/` - material the skills
+    read rather than duplicate. It has no SKILL.md, so it is never offered for
+    installation on its own; it travels with whichever skill needs it, and each
+    entry below records where to find it.
     """
     found = {}
     tsp = os.path.join(root, "TSP")
@@ -152,6 +158,7 @@ def read_catalogue(root):
         tool_dir = os.path.join(tsp, tool)
         if not os.path.isdir(tool_dir):
             continue
+        has_shared = os.path.isdir(os.path.join(tool_dir, SHARED_NAME))
         for entry in sorted(os.listdir(tool_dir)):
             skill_dir = os.path.join(tool_dir, entry)
             if os.path.isfile(os.path.join(skill_dir, "SKILL.md")):
@@ -160,6 +167,8 @@ def read_catalogue(root):
                     "tool": tool,
                     "tsp": tool.split(" ")[0],
                     "origin": "TSP/%s/%s" % (tool, entry),
+                    "shared": ("TSP/%s/%s" % (tool, SHARED_NAME)
+                               if has_shared else None),
                 }
     return found
 
@@ -202,6 +211,66 @@ def cmd_list(args):
     return 0
 
 
+def shared_key(tsp):
+    return "%s%s" % (tsp, SHARED_NAME)
+
+
+def install_shared(entry, lock, project, dest_parent, dest_parent_rel, catalogue):
+    """Place a tool's `_shared/` beside the skill that needs it.
+
+    The skills address it as `../_shared/`, so it has to be a sibling of the
+    skill folder rather than live inside it. That makes it shared in the
+    destination too: two skills from the same tool install one copy between
+    them, which is the point - the contracts have a single owner here and must
+    keep one there.
+
+    It is recorded as an ordinary lock entry, so `status`, `diff`, `update` and
+    `accept` all operate on it with no special case. It is never offered by
+    `list`: it has no SKILL.md, and installing it alone would install nothing
+    that runs.
+    """
+    key = shared_key(entry["tsp"])
+    dest = os.path.join(dest_parent, SHARED_NAME)
+    dest_rel = "%s/%s" % (dest_parent_rel.rstrip("/"), SHARED_NAME)
+
+    clash = [n for n, r in lock["tools"].items()
+             if r.get("path") == dest_rel and r.get("origin") != entry["shared"]]
+    if clash:
+        sys.exit("%s is already occupied by %s.\n"
+                 "Two tools cannot both ship _shared into the same folder. "
+                 "Install this skill with a different --dest."
+                 % (dest_rel, ", ".join(sorted(clash))))
+
+    commit = git(["rev-parse", "HEAD"], cwd=catalogue)
+    existing = lock["tools"].get(key)
+    if existing and os.path.isdir(dest):
+        missing, added, modified = compare(existing["files"], dest)
+        if missing or added or modified:
+            print("  %s is present and locally modified - left as it is."
+                  % SHARED_NAME)
+            print("    'status' shows the differences; 'accept' declares them")
+            return key, "kept"
+        if existing.get("commit") == commit:
+            # The usual case: a second skill from the same tool. One copy
+            # serves both, and it is already the right one - do not touch it.
+            return key, "reused"
+        shutil.rmtree(dest)
+
+    shutil.copytree(os.path.join(catalogue, entry["shared"].replace("/", os.sep)),
+                    dest, ignore=shutil.ignore_patterns(*SKIP))
+    lock["tools"][key] = {
+        "tsp": entry["tsp"],
+        "tool": entry["tool"],
+        "origin": entry["shared"],
+        "path": dest_rel,
+        "commit": commit,
+        "installed": dt.date.today().isoformat(),
+        "shared_for": entry["tool"],
+        "files": hashes(dest),
+    }
+    return key, ("refreshed" if existing else "installed")
+
+
 def cmd_add(args):
     cat = read_catalogue(args.catalogue)
     if args.skill not in cat:
@@ -226,7 +295,6 @@ def cmd_add(args):
     parent = os.path.dirname(dest)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    shutil.copytree(entry["path"], dest, ignore=shutil.ignore_patterns(*SKIP))
 
     lock = load_lock(project)
     if not lock.get("source"):
@@ -234,6 +302,18 @@ def cmd_add(args):
                           or git(["remote", "get-url", "origin"],
                                  cwd=args.catalogue, check=False)
                           or os.path.abspath(args.catalogue))
+
+    # Shared material first. It is the step that can fail on an occupied or
+    # locked folder, and failing before the skill is copied leaves nothing
+    # half-installed for the lock to disagree with.
+    shared = shared_action = None
+    if entry.get("shared"):
+        shared, shared_action = install_shared(
+            entry, lock, project, parent or project,
+            os.path.dirname(dest_rel) or ".", args.catalogue)
+
+    shutil.copytree(entry["path"], dest, ignore=shutil.ignore_patterns(*SKIP))
+
     lock["tools"][args.skill] = {
         "tsp": entry["tsp"],
         "tool": entry["tool"],
@@ -249,6 +329,10 @@ def cmd_add(args):
     print("Installed %s (%s) -> %s" % (args.skill, entry["tsp"], dest_rel))
     print("  from %s @ %s" % (lock["source"], rec["commit"][:7]))
     print("  %d files recorded in %s" % (len(rec["files"]), LOCK_NAME))
+    if shared and shared in lock["tools"]:
+        srec = lock["tools"][shared]
+        print("  + %s %s -> %s (%d files, shared by this tool's skills)"
+              % (SHARED_NAME, shared_action, srec["path"], len(srec["files"])))
     print("\nCommit the skill folder and %s together, so the team gets both on "
           "clone." % LOCK_NAME)
     return 0

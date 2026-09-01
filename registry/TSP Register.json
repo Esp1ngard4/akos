@@ -24,6 +24,12 @@
       "Description": "td-author added as TSP.3's second skill. The catalogue published the TD template and the reasoning behind it, but nothing that operationalised either - the boundary between a TD and a SKILL.md, and where history goes inside a TD, were documented as method and enforced nowhere.",
       "ID": 4,
       "Tool": "TSP Register"
+    },
+    {
+      "Changed On": "2026-09-01",
+      "Description": "Registered as TSP.6. First tool published with no code and with shared material: its skills read contracts from _shared/, which install.py now copies beside the skill.",
+      "ID": 5,
+      "Tool": "Content System"
     }
   ],
   "control_activities": [],
@@ -74,8 +80,8 @@
         ]
       }
     },
-    "updated": "2026-09-01T11:39:04",
-    "values_hash": "sha256:e769ba91a2758c9fe4bb8337766185a3197ca75bc90b38b31f4eab1872d1f490",
+    "updated": "2026-09-01T13:54:55",
+    "values_hash": "sha256:fb2ccb645b7bb617ea2a7c978b6d1efc7e913fb47cb44d51960d17ae70bb47c9",
     "version": 1
   },
   "tools": [
@@ -146,6 +152,20 @@
       "Relevancy": "Often",
       "Skill": "artifact-register",
       "Status": "Implemented",
+      "Type": "Tool"
+    },
+    {
+      "Description": "Turns thinking into finished, publish-ready pieces through interview rather than one-shot generation. Holds a position per scope, plans that commit it to dated or rate-based work, an inbox for sparks, an interview-led writer, and a review that reports delivery against what was promised. It is deliberately not a publisher: it stops at the finished piece and transmits to no platform.",
+      "Doc Aux": "Yes",
+      "ID": 6,
+      "Last Reviewed": "2026-09-01",
+      "Links": "TSP/TSP.6 Content System/TD.6 - Content System.md",
+      "Name": "Content System",
+      "Notes": "Usable, and the only tool here that ships no code. Its 27 quickstart scenarios have never been run and no full month has been reviewed against a plan - see TD.6, What is not proven.",
+      "Primary Area": "Writing and publishing",
+      "Relevancy": "Often",
+      "Skill": "content-idea-capture, content-plan-author, content-post-writer, content-review, content-strategy-author",
+      "Status": "In Progress",
       "Type": "Tool"
     }
   ]

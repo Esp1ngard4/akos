@@ -21,6 +21,7 @@ Exits non-zero on the first failure, with the command and its output.
 import argparse
 import io
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -82,6 +83,7 @@ TOOLS = [
 ]
 
 MIN_DASHBOARD_BYTES = 5000
+SKIP_DIRS = {".git", "__pycache__", ".pytest_cache"}
 failures = []
 
 
@@ -340,6 +342,111 @@ def test_reconciliation(root, scratch):
     check("disk check passes once filed", ok, out)
 
 
+CONTENT_TOOL = "TSP.6 Content System"
+CONTENT_SKILLS = ["content-idea-capture", "content-plan-author",
+                  "content-post-writer", "content-review",
+                  "content-strategy-author"]
+
+LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+
+
+def broken_links(root):
+    """Relative markdown links under root that point at nothing."""
+    out = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for name in filenames:
+            if not name.endswith(".md"):
+                continue
+            path = os.path.join(dirpath, name)
+            text = io.open(path, encoding="utf-8", errors="replace").read()
+            for match in LINK_RE.finditer(text):
+                target = match.group(1)
+                if target.startswith(("http", "#", "mailto")):
+                    continue
+                resolved = os.path.normpath(
+                    os.path.join(dirpath, target.split("#")[0]))
+                if not os.path.exists(resolved):
+                    out.append("%s -> %s" % (
+                        os.path.relpath(path, root).replace(os.sep, "/"), target))
+    return out
+
+
+def test_content_system(root, scratch):
+    """TSP.6 ships no code, so what can rot is its cross-references.
+
+    Every skill defers its formats to a contract in `_shared/`, and install.py
+    places `_shared` beside the skill rather than inside it. Two things follow,
+    and both are asserted: the references must resolve in the catalogue, and
+    they must still resolve after installation, which is a different layout.
+
+    The last check breaks a link on purpose. A link checker that has never
+    failed is indistinguishable from one that always passes.
+    """
+    print("\nTSP.6 Content System")
+    tool = os.path.join(root, "TSP", CONTENT_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+
+    for skill in CONTENT_SKILLS:
+        path = os.path.join(tool, skill, "SKILL.md")
+        if not check("%s has SKILL.md" % skill, os.path.isfile(path), path):
+            continue
+        head = io.open(path, encoding="utf-8").read()[:600]
+        check("%s declares name and description" % skill,
+              "name:" in head and "description:" in head, head[:120])
+
+    shared = os.path.join(tool, "_shared")
+    contracts = os.path.join(shared, "contracts")
+    check("_shared ships the contracts", os.path.isdir(contracts), contracts)
+
+    # A contract nothing reads is either dead or a reference someone dropped.
+    text = ""
+    for skill in CONTENT_SKILLS:
+        path = os.path.join(tool, skill)
+        for dirpath, _, filenames in os.walk(path):
+            for name in filenames:
+                if name.endswith(".md"):
+                    text += io.open(os.path.join(dirpath, name),
+                                    encoding="utf-8", errors="replace").read()
+    orphans = [c for c in sorted(os.listdir(contracts)) if c not in text]
+    check("every contract is referenced by a skill", not orphans,
+          "unreferenced: %s" % ", ".join(orphans))
+
+    check("links resolve in the catalogue", not broken_links(tool),
+          "; ".join(broken_links(tool)[:5]))
+
+    # Installed layout: _shared becomes a sibling of the skill, so every
+    # ../_shared/ reference crosses a directory boundary that does not exist
+    # in the catalogue. This is the check that would have caught the port.
+    project = os.path.join(scratch, "content-project")
+    os.makedirs(project, exist_ok=True)
+    ok, out = run([os.path.join(root, "install.py"), "add", "content-post-writer",
+                   "--into", project, "--catalogue", root], root)
+    if not check("install.py add brings the skill in", ok, out):
+        return
+    skills_root = os.path.join(project, ".github", "skills")
+    check("_shared installed beside the skill",
+          os.path.isdir(os.path.join(skills_root, "_shared")),
+          "\n".join(sorted(os.listdir(skills_root))) if os.path.isdir(skills_root) else "")
+    installed_bad = broken_links(skills_root)
+    check("links still resolve once installed", not installed_bad,
+          "; ".join(installed_bad[:5]))
+
+    # A second skill from the same tool must reuse the one copy, not a second.
+    ok, out = run([os.path.join(root, "install.py"), "add", "content-review",
+                   "--into", project, "--catalogue", root], root)
+    check("a second skill reuses the shared copy",
+          ok and "reused" in out, out)
+
+    # Negative case: the checker must be able to fail.
+    canary = os.path.join(skills_root, "_canary.md")
+    io.open(canary, "w", encoding="utf-8").write("[x](./nothing-here.md)\n")
+    check("a broken link is actually detected", bool(broken_links(skills_root)),
+          "the link checker passed a file it should have failed")
+    os.remove(canary)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -367,6 +474,7 @@ def main():
         test_installer(root, scratch)
         test_reconciliation(root, scratch)
         test_catalogue(root, scratch)
+        test_content_system(root, scratch)
         test_shared_modules(root, scratch)
 
         print("\n" + "=" * 60)
@@ -376,8 +484,8 @@ def main():
                 print("  - %s" % f)
             return 1
         print("All checks passed (%d tools, plus the installer, the "
-              "reconciliation case, the catalogue and the shared modules)."
-              % len(TOOLS))
+              "reconciliation case, the catalogue, the shared modules and "
+              "the content system)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

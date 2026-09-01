@@ -25,6 +25,7 @@ python install.py add <skill> --into <your-project>
 | TSP.3 | **TSP Register** | Implemented | `tsp-manager`, `td-author` | [TD.3](../TSP/TSP.3%20TSP%20Register/TD.3%20-%20TSP%20Register.md) |
 | TSP.4 | **Tool Installer** | Implemented | _none_ | [TD.4](../TSP/TSP.4%20Tool%20Installer/TD.4%20-%20Tool%20Installer.md) |
 | TSP.5 | **Artifact Register** | Implemented | `artifact-register` | [TD.5](../TSP/TSP.5%20Artifact%20Register/TD.5%20-%20Artifact%20Register.md) |
+| TSP.6 | **Content System** | In Progress | `content-idea-capture`, `content-plan-author`, `content-post-writer`, `content-review`, `content-strategy-author` | [TD.6](../TSP/TSP.6%20Content%20System/TD.6%20-%20Content%20System.md) |
 
 ## What each is for
 
@@ -37,6 +38,8 @@ python install.py add <skill> --into <your-project>
 **TSP.4 Tool Installer** — Vendors a tool from this catalogue into a project, records where the copy came from, and keeps it reconcilable with upstream: drift detection and three-way updates.
 
 **TSP.5 Artifact Register** — Inventory of the artifacts belonging to a scope - documents, folders, tools and physical items - recording what each is, where it lives digitally and physically, what contains it, and which tool governs its contents. The register assigns an ID that is written onto the artifact itself, so its claims about the filesystem can be checked.
+
+**TSP.6 Content System** — Turns thinking into finished, publish-ready pieces through interview rather than one-shot generation. Holds a position per scope, plans that commit it to dated or rate-based work, an inbox for sparks, an interview-led writer, and a review that reports delivery against what was promised. It is deliberately not a publisher: it stops at the finished piece and transmits to no platform.
 
 ## Status meanings
 
