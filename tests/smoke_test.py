@@ -216,6 +216,46 @@ def test_installer(root, scratch):
     check("status --check passes once declared", ok, out)
 
 
+def test_catalogue(root, scratch):
+    """The repo's own registry must describe the repo, and be regenerable.
+
+    REGISTRY.md is a generated view. A generated file whose generator is never
+    run in CI is a file that silently stops matching its source.
+    """
+    print("\ncatalogue")
+    register = os.path.join(root, "registry", "TSP Register.json")
+    if not check("registry present", os.path.isfile(register), register):
+        return
+    import json
+    data = json.load(io.open(register, encoding="utf-8"))
+    tools = data.get("tools", [])
+    check("registry lists tools", bool(tools), str(sorted(data)))
+
+    # Every skill the registry claims must exist beside its tool.
+    missing = []
+    for row in tools:
+        for skill in str(row.get("Skill") or "").split(","):
+            skill = skill.strip()
+            if not skill:
+                continue
+            hits = [d for d in os.listdir(os.path.join(root, "TSP"))
+                    if os.path.isfile(os.path.join(root, "TSP", d, skill, "SKILL.md"))]
+            if not hits:
+                missing.append("TSP.%s -> %s" % (row.get("ID"), skill))
+    check("every claimed skill is present", not missing, "; ".join(missing))
+
+    before = io.open(os.path.join(root, "registry", "REGISTRY.md"),
+                     encoding="utf-8").read()
+    ok, out = run([os.path.join(root, "registry", "build_registry.py")], root)
+    if not check("REGISTRY.md regenerates", ok, out):
+        return
+    after = io.open(os.path.join(root, "registry", "REGISTRY.md"),
+                    encoding="utf-8").read()
+    check("REGISTRY.md was already up to date",
+          before.split("Generated from")[0] == after.split("Generated from")[0],
+          "regenerating changed it - it had drifted from the register")
+
+
 def test_reconciliation(root, scratch):
     """The artifact register's claim about the disk must actually be checkable.
 
@@ -293,6 +333,7 @@ def main():
             test_tool(tool, root, work)
         test_installer(root, scratch)
         test_reconciliation(root, scratch)
+        test_catalogue(root, scratch)
 
         print("\n" + "=" * 60)
         if failures:
@@ -300,8 +341,8 @@ def main():
             for f in failures:
                 print("  - %s" % f)
             return 1
-        print("All checks passed (%d tools, plus the installer and the "
-              "reconciliation case)." % len(TOOLS))
+        print("All checks passed (%d tools, plus the installer, the "
+              "reconciliation case and the catalogue)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

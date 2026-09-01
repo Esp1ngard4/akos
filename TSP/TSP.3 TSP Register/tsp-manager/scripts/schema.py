@@ -119,6 +119,9 @@ def find_skill_roots(repo_root, tools_root):
     top = os.path.join(repo_root, ".claude", "skills")
     if os.path.isdir(top):
         roots.append(top)
+    # A catalogue has no .claude/skills: each skill sits beside its tool.
+    if tools_root and os.path.isdir(tools_root):
+        roots.append(tools_root)
     if tools_root and os.path.isdir(tools_root):
         for dirpath, dirnames, _ in os.walk(tools_root):
             dirnames[:] = [d for d in dirnames if d not in (".git", "__pycache__")]
@@ -129,10 +132,26 @@ def find_skill_roots(repo_root, tools_root):
 
 
 def installed_skills(roots):
-    """{skill name: root it was found in}."""
+    """{skill name: where it was found}.
+
+    A skill is any directory holding a SKILL.md. Two layouts are in use and both
+    are legitimate, so both are searched: a working environment installs skills
+    flat under a skills directory, while a catalogue keeps each skill beside the
+    tool it belongs to. Looking only one level down would silently find nothing
+    in the second case - and an audit that checks nothing reports clean.
+    """
     found = {}
     for root in roots:
+        if not os.path.isdir(root):
+            continue
         for entry in sorted(os.listdir(root)):
-            if os.path.isfile(os.path.join(root, entry, "SKILL.md")):
+            path = os.path.join(root, entry)
+            if not os.path.isdir(path):
+                continue
+            if os.path.isfile(os.path.join(path, "SKILL.md")):
                 found.setdefault(entry, root)
+                continue
+            for nested in sorted(os.listdir(path)):
+                if os.path.isfile(os.path.join(path, nested, "SKILL.md")):
+                    found.setdefault(nested, path)
     return found

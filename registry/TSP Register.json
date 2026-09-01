@@ -18,6 +18,12 @@
       "Description": "TSP.5 registered. Generalised from a personal reference-material system and a per-project document control list that turned out to be one tool at two scopes.",
       "ID": 3,
       "Tool": "Artifact Register"
+    },
+    {
+      "Changed On": "2026-09-01",
+      "Description": "td-author added as TSP.3's second skill. The catalogue published the TD template and the reasoning behind it, but nothing that operationalised either - the boundary between a TD and a SKILL.md, and where history goes inside a TD, were documented as method and enforced nowhere.",
+      "ID": 4,
+      "Tool": "TSP Register"
     }
   ],
   "control_activities": [],
@@ -68,8 +74,8 @@
         ]
       }
     },
-    "updated": "2026-09-01T11:26:18",
-    "values_hash": "sha256:cd8809996a794b604a3a7b8f6cfe2e66473f180e703047e1ac1a189bfd11318b",
+    "updated": "2026-09-01T11:39:04",
+    "values_hash": "sha256:e769ba91a2758c9fe4bb8337766185a3197ca75bc90b38b31f4eab1872d1f490",
     "version": 1
   },
   "tools": [
@@ -79,12 +85,12 @@
       "ID": 1,
       "Last Reviewed": "2026-08-31",
       "Links": "TSP/TSP.1 WBS Register/TD.1 - WBS Register.md",
+      "Name": "WBS Register",
       "Notes": "Ready to adopt. Template ships inside the skill folder.",
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "wbs-manager",
       "Status": "Implemented",
-      "Tool/System Name": "WBS Register",
       "Type": "Tool"
     },
     {
@@ -93,26 +99,26 @@
       "ID": 2,
       "Last Reviewed": "2026-08-31",
       "Links": "TSP/TSP.2 RAID Register/TD.2 - RAID Register.md",
+      "Name": "RAID Register",
       "Notes": "Ready to adopt. Register is built programmatically; no template file.",
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "raid-dashboard",
       "Status": "Implemented",
-      "Tool/System Name": "RAID Register",
       "Type": "Tool"
     },
     {
-      "Description": "The inventory of tools, systems and procedures, plus the recurring controls that keep them alive. The spine of the method - this register is an instance of it.",
+      "Description": "The inventory of tools, systems and procedures, plus the recurring controls that keep them alive. The spine of the method - this register is an instance of it. Automated by two skills: one owns the register row, the other owns the tool definition documents.",
       "Doc Aux": "Yes",
       "ID": 3,
       "Last Reviewed": "2026-08-31",
       "Links": "TSP/TSP.3 TSP Register/TD.3 - TSP Register.md",
+      "Name": "TSP Register",
       "Notes": "Ready to adopt. Open item: Primary Area vocabulary resolved.",
       "Primary Area": "Tool management",
       "Relevancy": "Critical",
-      "Skill": "tsp-manager",
+      "Skill": "tsp-manager, td-author",
       "Status": "Implemented",
-      "Tool/System Name": "TSP Register",
       "Type": "Tool"
     },
     {
@@ -121,11 +127,11 @@
       "ID": 4,
       "Last Reviewed": "2026-08-31",
       "Links": "TSP/TSP.4 Tool Installer/TD.4 - Tool Installer.md",
+      "Name": "Tool Installer",
       "Notes": "Ready to adopt. No skill by design - it runs at moments where a human decides.",
       "Primary Area": "Tool management",
       "Relevancy": "Often",
       "Status": "Implemented",
-      "Tool/System Name": "Tool Installer",
       "Type": "Tool"
     },
     {
@@ -134,12 +140,12 @@
       "ID": 5,
       "Last Reviewed": "2026-08-31",
       "Links": "TSP/TSP.5 Artifact Register/TD.5 - Artifact Register.md",
+      "Name": "Artifact Register",
       "Notes": "Ready to adopt. The only tool here that reconciles against reality rather than itself.",
       "Primary Area": "Reference management",
       "Relevancy": "Often",
       "Skill": "artifact-register",
       "Status": "Implemented",
-      "Tool/System Name": "Artifact Register",
       "Type": "Tool"
     }
   ]

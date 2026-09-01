@@ -59,13 +59,17 @@ has described.
 |---|---|---|
 | TSP.1 | [WBS Register](TSP/TSP.1%20WBS%20Register/) — work breakdown / backlog | `wbs-manager` |
 | TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) — risks, actions, issues, decisions, ideas | `raid-dashboard` |
-| TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) — the inventory of tools itself | `tsp-manager` |
+| TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) — the inventory of tools itself | `tsp-manager`, `td-author` |
 | TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) — vendoring, drift detection, three-way updates | *(none — see below)* |
 | TSP.5 | [Artifact Register](TSP/TSP.5%20Artifact%20Register/) — what you have, where it lives, who governs it | `artifact-register` |
 
 TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with
 no worked example is just an opinion.
+
+TSP.3 has **two** skills, which is the same claim from the other direction: one owns
+the register row, the other owns the tool definition documents, and neither does the
+other's write.
 
 TSP.4 has **no skill**, deliberately. It runs a few times in a project's life, at
 moments where a human is deciding something. A tool is not obliged to have a skill;
@@ -157,7 +161,7 @@ every push, against Python 3.9 and 3.13.
 
 ## Templates
 
-- [`templates/TD-template.md`](templates/TD-template.md) — the governance document structure.
+- [`templates/TD-template.md`](templates/TD-template.md) — the governance document structure. `td-author` (TSP.3's second skill) is what applies and audits it.
 - [`templates/SKILL-template.md`](templates/SKILL-template.md) — a skill skeleton, with notes on writing a `description` that actually triggers. Under-triggering is the common failure: a skill described in your own private vocabulary never matches anything you type.
 
 ## Where this came from

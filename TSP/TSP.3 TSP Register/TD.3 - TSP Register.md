@@ -15,12 +15,20 @@ Unlike the WBS and RAID registers, which are per-project, there is normally **on
 | Component | Provenance | Location | Purpose |
 |---|---|---|---|
 | This document | owned | `TSP.3 TSP Register/` | Governance: purpose, conventions, relationships, history |
-| `tsp-manager` skill | owned | `TSP.3 TSP Register/tsp-manager/` | Operating instructions and scripts |
+| `tsp-manager` skill | owned | `TSP.3 TSP Register/tsp-manager/` | The register half: the row, the dashboard, the audit |
+| `td-author` skill | owned | `TSP.3 TSP Register/td-author/` | The documentation half: authoring and auditing TDs and their paired SKILL.md |
 | `templates/dashboard.html` | owned | inside the skill folder | Shell the dashboard renders into. **Shipped asset, not generated output** |
 | `TSP Register.xlsx` | owned | wherever you keep it | **Source of truth.** Five sheets: Tools Register, Control Activities, Activity Log, Change Log, Lookups |
 | `TSP Dashboard.html` | generated | alongside the register | Derived view, carrying its generation date; overwritten on refresh |
 
-## What the skill covers (and this document doesn't repeat)
+**This tool has two skills, and the boundary between them is the point.**
+`tsp-manager` owns the register row; `td-author` owns the tool definition
+document. When a tool gains or loses a TD, one writes the document and the other
+flips the `Doc Aux` flag - neither does the other's write. A tool is not properly
+in the system until it has both a row and a TD, which is why the tool that
+manages tools needs both halves.
+
+## What the skills cover (and this document doesn't repeat)
 
 `tsp-manager/SKILL.md` is authoritative for the schema of all five sheets, the controlled vocabularies and their `Days` values, ID assignment rules, the register/retire/review procedures, and the create, refresh and audit commands.
 
@@ -95,6 +103,7 @@ If the next-due dates are calculated, make sure something actually calculates th
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-09-01 | Gained a second skill, `td-author`, which owns the tool definition documents while `tsp-manager` owns the register row. The catalogue already published the TD template and the reasoning behind it, but nothing applied either - the boundary between a TD and a SKILL.md, and where history goes inside a TD, were stated as method and enforced nowhere. Skill discovery also learned the catalogue layout: skills here sit beside their tool rather than in a skills directory, so the reconciliation had been finding nothing and reporting clean |
 | v1.1 | 2026-09-01 | **The register is JSON.** Every write went through a script anyway, and a spreadsheet cost a subprocess to read, a dependency to install, and a file lock whenever the application or a sync client held it. The dropdowns a spreadsheet gave back are enforced more strictly by the commands - argparse refuses an invalid value where a dropdown only warns and paste bypasses entirely. The Lookups sheet - five stacked blocks separated by blank rows, a workaround for spreadsheets having no nested structure - is now an ordinary dict, which is what makes the new check that Next Due equals Last Done plus the Frequency's Days possible at all. The tool now has **no runtime dependencies at all** |
 | v1.2 | 2026-08-31 | `DF` renamed to `TD` (tool definition) throughout, matching the tool-as-unit framing. Removed the last inherited vocabulary: `Primary AF`/`Other AFs` became `Primary Area`/`Other Areas`, Portuguese status values left as a `--vocabulary pt` option rather than the documented default, and `audit_tsp.py` stopped hardcoding a folder prefix - it now matches `<PREFIX>.<number> <Name>` so any estate's naming works. Fixed two real bugs found while sweeping: the dashboard only recognised Portuguese status values, so an English register showed no status colours and an obsolete count of zero; and the subtitle CSS rule had been overwritten by an HTML fragment, so the generation date rendered inside `<style>` where nobody could see it |
 | v1.1 | 2026-08-31 | Fixed packaging: `templates/dashboard.html` was excluded by a `*.html` ignore rule intended for generated dashboards, so every clone got a tool that failed on first run. `refresh_tsp.py` now fails with an explanation rather than a traceback, and `create_tsp.py` prints the refresh command as an explicit next step |
