@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 WBS Dashboard Generator (AI-First)
-Reads a WBS xlsx, exports a self-contained HTML dashboard.
+Reads a WBS JSON register, exports a self-contained HTML dashboard.
 
 Usage:
-    python refresh_wbs.py "<xlsx-path>" "<output-html-path>" "<project-name>"
+    python refresh_wbs.py "<register.json>" "<output-html-path>" "<project-name>"
 """
 
 import os
@@ -16,39 +16,12 @@ from pathlib import Path
 from datetime import datetime
 
 
-def discover_schema(ws):
-    """Build column map from header row 1."""
-    col_map = {}
-    for c in range(1, ws.max_column + 1):
-        v = ws.cell(row=1, column=c).value
-        if v and str(v).strip():
-            col_map[str(v).strip()] = c
-    return col_map
-
-
-def extract_items(ws, col_map):
-    """Extract all data rows from a WBS sheet."""
-    items = []
-    for r in range(2, ws.max_row + 1):
-        item = {}
-        has_data = False
-        for name, ci in col_map.items():
-            val = ws.cell(row=r, column=ci).value
-            if val is not None:
-                item[name] = val if isinstance(val, (int, float)) else str(val)
-                if name in ('Code', 'Title') and str(val).strip():
-                    has_data = True
-        if has_data:
-            items.append(item)
-    return items
-
-
 def compute_stats(items):
     """Compute summary statistics."""
     stats = {
         'total': len(items),
         'done': 0, 'implementing': 0, 'not_started': 0,
-        'backlog': 0, 'funnel': 0, 'no_status': 0,
+        'backlog': 0, 'funnel': 0, 'cancelled': 0, 'no_status': 0,
         'total_effort': 0,
         'sprints': {},
         'statuses': {},
@@ -63,6 +36,7 @@ def compute_stats(items):
         elif s == 'Not Started': stats['not_started'] += 1
         elif s == 'Portfolio Backlog': stats['backlog'] += 1
         elif s == 'Funnel': stats['funnel'] += 1
+        elif s == 'Cancelled': stats['cancelled'] += 1
         else: stats['no_status'] += 1
 
         p = str(it.get('Priority', 'None') or 'None')
@@ -109,7 +83,8 @@ def generate_html(project_name, items, stats):
     stats_json = json.dumps({
         'total': stats['total'], 'done': stats['done'],
         'implementing': stats['implementing'], 'not_started': stats['not_started'],
-        'backlog': stats['backlog'], 'funnel': stats['funnel'], 'no_status': stats['no_status'],
+        'backlog': stats['backlog'], 'funnel': stats['funnel'], 'cancelled': stats['cancelled'],
+        'no_status': stats['no_status'],
         'total_effort': stats['total_effort'],
         'statuses': stats['statuses'], 'priorities': stats['priorities'],
         'types': stats['types'],
@@ -146,7 +121,7 @@ tr:hover td{{background:#f0f4ff}}
 .badge{{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}}
 .b-done{{background:#dcfce7;color:#166534}}.b-impl{{background:#dbeafe;color:#1e40af}}
 .b-ns{{background:#f3f4f6;color:#374151}}.b-bl{{background:#fef3c7;color:#92400e}}
-.b-fn{{background:#fce7f3;color:#9d174d}}.b-no{{background:#f9fafb;color:#9ca3af}}
+.b-fn{{background:#fce7f3;color:#9d174d}}.b-cx{{background:#f3f4f6;color:#9ca3af;text-decoration:line-through}}.b-no{{background:#f9fafb;color:#9ca3af}}
 .sprint-section{{margin-bottom:24px}}
 .sprint-header{{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:2px solid #4472C4;margin-bottom:8px}}
 .sprint-name{{font-size:16px;font-weight:700}}
@@ -208,7 +183,7 @@ function unique(key){{
 }}
 
 function badge(s){{
-  const m={{'Done':'b-done','Implementing':'b-impl','Not Started':'b-ns','Portfolio Backlog':'b-bl','Funnel':'b-fn'}};
+  const m={{'Done':'b-done','Implementing':'b-impl','Not Started':'b-ns','Portfolio Backlog':'b-bl','Funnel':'b-fn','Cancelled':'b-cx'}};
   return `<span class="badge ${{m[s]||'b-no'}}">${{s}}</span>`;
 }}
 
@@ -318,11 +293,11 @@ def main():
         print("Usage: refresh_wbs.py <register.json> <output-html-path> <project-name>")
         sys.exit(1)
 
-    xlsx_path = sys.argv[1]
+    register_path = sys.argv[1]
     html_path = sys.argv[2]
     project_name = sys.argv[3]
 
-    register = R.load(xlsx_path)
+    register = R.load(register_path)
     # JSON rows omit their empty fields; the dashboard wants a rectangular table.
     rows = R.rows(register, "items")
     fields = []

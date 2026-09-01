@@ -63,7 +63,7 @@ The values above are the defaults `create_tsp.py --vocabulary en` produces. The 
 
 ## Operations
 
-Edit the workbook with `the register` (`data_only=True` for reads; plain `load_workbook` when writing so formulas survive). Always **read the sheet first** to find the real last row and the current max ID — never assume.
+**Use `tsp.py` for the operations below, not hand-written edits.** These are the edits with rules attached — claiming an ID that is never reused, computing `Next Due` from the Frequency's `Days`, appending to the activity log when a control runs — and reaching for `registry.py` to do them by hand bypasses the rules rather than following them. Everything else is a plain field edit through `registry.py`: `R.load`, change the row, `R.save`.
 
 ### Register a new tool
 

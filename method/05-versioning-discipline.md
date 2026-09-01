@@ -38,7 +38,7 @@ This is the part that makes the other two safe.
 Before removing entries, copy the entire document:
 
 ```
-PreviousV/TD.37 - WBS Register v2.1 (2026-08-31).md
+PreviousV/TD.1 - WBS Register v1.1 (2026-08-31).md
 ```
 
 The full history rides along **inside the snapshot**. Nothing is lost, and there is
@@ -47,7 +47,7 @@ no separate history file to maintain.
 Then leave a pointer under the trimmed table:
 
 > Earlier entries are not kept here. The full history lives inside the TD snapshots
-> in `PreviousV/` — most recently `PreviousV/TD.37 - WBS Register v2.1 (2026-08-31).md`.
+> in `PreviousV/` — most recently `PreviousV/TD.1 - WBS Register v1.1 (2026-08-31).md`.
 
 ## What was rejected, and why
 

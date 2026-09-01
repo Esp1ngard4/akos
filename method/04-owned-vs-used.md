@@ -56,7 +56,7 @@ the tool's parts are already listed:
 | Component | Provenance | Origin | Licence | Recovery |
 |---|---|---|---|---|
 | Definition doc | **owned** | — | — | this repository |
-| `<register>.xlsx` | **owned** | — | — | this repository + `PreviousV/` |
+| `<register>.json` | **owned** | — | — | this repository + `PreviousV/` |
 | `<authored skill>` | **owned** | — | — | this repository |
 | `<installed skill>` | **used** | `github.com/<org>/<repo>`, path `skills/<name>` | Apache 2.0 | `/install <org>/<repo>/<name>` |
 | `<third-party app>` | **used** | vendor, account under `<which email>` | commercial, annual | vendor installer |

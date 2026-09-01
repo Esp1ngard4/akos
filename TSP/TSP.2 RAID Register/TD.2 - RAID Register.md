@@ -14,7 +14,7 @@ Each project gets its own register.
 |---|---|---|---|
 | This document | owned | `TSP.2 RAID Register/` | Governance: purpose, conventions, relationships, history |
 | `raid-dashboard` skill | owned | `TSP.2 RAID Register/raid-dashboard/` | Operating instructions and scripts |
-| `RAID <Project>.xlsx` | owned, per project | wherever you keep project management artefacts | **Source of truth** — one per project |
+| `RAID <Project>.json` | owned, per project | wherever you keep project management artefacts | **Source of truth** — one per project |
 | `RAID Dashboard.html` | generated | alongside the register | Derived view; overwritten on refresh, never hand-edited |
 | `AuxMat/` | owned, per project | alongside the register | Working documents for individual entries; created automatically |
 
@@ -40,7 +40,7 @@ This document covers the rest: why the register exists, its types, naming, relat
 
 ## Naming conventions
 
-- **File**: `RAID <Project>.xlsx`; dashboard `RAID Dashboard.html` alongside.
+- **File**: `RAID <Project>.json`; dashboard `RAID Dashboard.html` alongside.
 - **Entry IDs** are sequential integers within a register, referenced externally as `{type initial}.{id}` — `R.5` for risk 5, `I.3` for issue 3, `A.12` for action 12.
 - **Headers are on row 6**, not row 1 — rows 2 and 3 carry the register title and creation date. Anything reading the sheet must account for this.
 
@@ -82,5 +82,6 @@ If you want real task creation, delegate it to a skill that owns your tracker's 
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-09-01 | **The tracker column finished its rename, and the skill stopped describing a spreadsheet.** The register field was renamed to `Tracked Externally` in Python, but all five JavaScript references still read `trackedInTodoist` - a key the mapping never produces - so the column, its sort, both filter buttons and the modal field had been silently empty since the rename. The visible labels are now tracker-neutral too. SKILL.md still documented an Excel file down to header row 6 and column letters B-AI, and ended with a section headed "the register preservation note", a find-replace artefact of a paragraph about preserving conditional formatting - in a format that has none. Status was documented as Open / In Progress / Resolved / Closed / On Hold where the create script and every register use Open / Closed. Priority and Target Residual Risk documented as computed at render time rather than stored |
 | v1.1 | 2026-09-01 | **The register is JSON.** Every write went through a script anyway, and a spreadsheet cost a subprocess to read, a dependency to install, and a file lock whenever the application or a sync client held it. The dropdowns a spreadsheet gave back are enforced more strictly by the commands - argparse refuses an invalid value where a dropdown only warns and paste bypasses entirely. Priority and Target Residual Risk are computed at render time rather than stored, so a stored copy can no longer disagree with the scores beside it. The tool now has **no runtime dependencies at all** |
 | v1.0 | 2026-08-31 | Initial public version. Generalised from a personal system: a vendor-specific tracking column renamed to `Tracked Externally` across schema, dashboard and documentation, and this governance document written — previously the tool shipped as a bare skill with no definition document |

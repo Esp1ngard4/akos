@@ -17,7 +17,7 @@ documentation of what it registers), say so here.
 
 | Component | Location | Purpose |
 |---|---|---|
-| `<Register>.xlsx` | `<path>` | **Source of truth.** All edits happen here |
+| `<Register>.json` | `<path>` | **Source of truth.** All edits happen here |
 | `<Dashboard>.html` | Same folder | Generated static snapshot; overwritten on every refresh, never hand-edited |
 | Skill / scripts | `<path>` | Automation: create, refresh, audit |
 | `PreviousV/` | `<path>` | Superseded versions, as descriptive subfolders |

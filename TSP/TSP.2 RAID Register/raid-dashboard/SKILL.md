@@ -1,11 +1,11 @@
 ---
 name: raid-dashboard
-description: Manages a RAID register - Risks, Actions, Issues, Decisions and Ideas - stored as an Excel file, and generates an interactive HTML dashboard with analytics and a risk heat map. Use whenever the user mentions "RAID", "risk register", "issue log", "decision log", or asks to add, edit or close a risk, action, issue or decision, or wants a view of project risks and how the project is tracking.
+description: Manages a RAID register - Risks, Actions, Issues, Decisions and Ideas - stored as a JSON register, and generates an interactive HTML dashboard with analytics and a risk heat map. Use whenever the user mentions "RAID", "risk register", "issue log", "decision log", or asks to add, edit or close a risk, action, issue or decision, or wants a view of project risks and how the project is tracking.
 ---
 
 # RAID Dashboard Manager
 
-This skill exists because RAID registers are one of the user's most-used project tools, tracking risks, actions, issues, decisions, and ideas across multiple projects. The Excel file is the source of truth (editable by humans and by Claude via the register), and the Cowork artifact provides the rich visual analytics layer on top.
+A RAID register tracks risks, actions, issues, decisions and ideas for one project. The JSON register is the source of truth; the HTML dashboard is the visual analytics layer generated on top of it.
 
 ## Requirements
 
@@ -39,9 +39,10 @@ Examples below write `python`, which is correct on Windows; on macOS/Linux use `
 The user has RAID registers across many projects and areas of focus. Before any operation, locate the right file:
 
 1. Use `Glob` with pattern `**/RAID*.json` across all connected folders.
+2. Confirm `meta.kind == "raid-register"` — the same folder may hold a WBS or Artifact register.
 2. **Single match** → use it directly.
 3. **Multiple matches** → try to narrow down:
- - If the user named a project in their prompt (e.g. "refresh the Casa Lx RAID"), match against the filename or parent folder name (case-insensitive, fuzzy is fine).
+ - If the user named a project in their prompt (e.g. "refresh the Atlas RAID"), match against the filename or parent folder name (case-insensitive, fuzzy is fine).
  - If still ambiguous, present the matches using `AskUserQuestion` with the filenames/paths as options.
 4. **No matches** → ask if they want to create a new RAID register (operation 3).
 
@@ -53,19 +54,30 @@ This discovery step runs before every operation — don't assume the same file a
 
 When the user says "refresh the RAID dashboard" or similar:
 
-1. Discover the RAID xlsx (see discovery section above).
+1. Discover the register (see discovery section above).
 2. Run `scripts/refresh_raid.py` via bash:
  ```bash
- python <skill-path>/scripts/refresh_raid.py "<xlsx-path>" "<output-html-path>" "<project-name>"
+ python <skill-path>/scripts/refresh_raid.py "<register.json>" "<output-html-path>" "<project-name>"
  ```
 3. Create or update the Cowork artifact (`raid-<project-slug>`) with the generated HTML.
 
 ### 2. Add/edit RAID items
 
-1. Read the xlsx with the register
-2. New items: next ID = max existing + 1, append row with priority formula
-3. Edits: find row by RAID ID, update cells
-4. Save xlsx, then auto-refresh dashboard (operation 1)
+```python
+import sys; sys.path.insert(0, "<skill-path>/scripts")
+import registry as R
+
+data = R.load(path)
+entries = R.rows(data, "entries")
+```
+
+1. New items: `R.next_id(data, "entries", "RAID.ID")`, then append the row.
+2. Edits: find the row by `RAID.ID` — `R.get(data, "entries", "RAID.ID", 5)` — and update only the fields being changed.
+3. Omit fields that have no value rather than writing empty strings.
+4. `R.save(path, data)`, then auto-refresh the dashboard (operation 1).
+
+**Priority % and Target Residual Risk are not fields.** They are computed from the scores when the dashboard renders — Priority as `(Urgency * 1.5 + Consequences) / 12.5 * 100`, Target Residual Risk as `Probability * Severity * (1 - Mitigation Target / 100)`. Never store either: a stored copy goes stale the moment a score changes.
+
 
 ### 2b. External tracking flag
 
@@ -88,60 +100,63 @@ logic into this one.
 
 ### 3. Create new RAID register
 
-Run `scripts/create_raid.py "<output-path>" "<project-name>"` to generate a fresh xlsx with the standard schema, then create the artifact.
+```bash
+python <skill-path>/scripts/create_raid.py "<output-path>.json" "<project-name>"
+```
 
-## Excel schema
+Builds an empty register — schema, field order and vocabularies, zero rows — and creates the `AuxMat/` folder beside it.
 
-Row 6 = headers, data starts row 7. Full column list (v2.3 — see `RAID/TD.103 - RAID Register.md` version history):
+## Register schema
 
-| Col | Field | Notes |
-|-----|-------|-------|
-| B | RAID.ID | Sequential integer |
-| C | Detail | Short title |
-| D | Type | Risk, Action, Issue, Decision, Idea |
-| E | DRI | Person responsible |
-| F | Priority % | Formula: `=(Urgency*1.5 + Consequences)/12.5*100` |
-| G | Urgency (1-5) | General scoring input, drives Priority % |
-| H | Consequences (1-5) | General scoring input, drives Priority % |
-| I | Feasibility | 1-5 |
+One collection, `entries`. `registry.py` owns the `meta` envelope; `create_raid.py` holds the field order and the vocabularies, which are written into `meta.settings`.
 
-### Risk-analysis block (J-O)
+| Field | Notes |
+|-------|-------|
+| RAID.ID | Sequential integer |
+| Detail | Short title |
+| Type | Risk, Action, Issue, Decision, Idea |
+| DRI | Person responsible |
+| Urgency (1-5) | General scoring input, drives Priority % |
+| Consequences (1-5) | General scoring input, drives Priority % |
+| Feasibility | 1-5 |
 
-Inserted right after Feasibility because it's a deeper, risk-specific extension of the same G/H/I scoring triplet — only meaningful for `Type = Risk` rows, but kept adjacent rather than tacked on at the end. Order follows the actual analysis workflow: assess, decide, target, calculate, then record the real outcome.
+### Risk-analysis block
 
-| Col | Field | Notes |
-|-----|-------|-------|
-| J | Probability of Occurrence (1-5) | Risk-specific, distinct from general Urgency (G) |
-| K | Severity (1-5) | Risk-specific, distinct from general Consequences (H) |
-| L | Response Strategy | Dropdown: Avoid, Transfer, Mitigate, Accept, Exploit, Share, Enhance (PMI PMBOK threat + opportunity responses) |
-| M | Mitigation Target % | 0-100, manual input |
-| N | Target Residual Risk | Formula: `=IF(M{r}="","",ROUND(J{r}*K{r}*(1-M{r}/100),1))` — Probability x Severity reduced by the mitigation target |
-| O | Residual Risk Score | Actual/manual, filled in once mitigation plays out — compare against Target Residual Risk (N) |
+Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of the same Urgency/Consequences/Feasibility triplet. Order follows the analysis workflow: assess, decide, target, then record the real outcome.
 
-### Core schema, continued (P-AI)
+| Field | Notes |
+|-------|-------|
+| Probability of Occurrence (1-5) | Risk-specific, distinct from general Urgency |
+| Severity (1-5) | Risk-specific, distinct from general Consequences |
+| Response Strategy | Avoid, Transfer, Mitigate, Accept, Exploit, Share, Enhance (PMBOK threat + opportunity responses) |
+| Mitigation Target % | 0-100, manual input |
+| Residual Risk Score | Actual/manual, filled in once mitigation plays out — compare against the computed Target Residual Risk |
 
-| Col | Field | Notes |
-|-----|-------|-------|
-| P | MoSCoW | 1.Must, 2.Should, 3.Could, 4.Won't |
-| Q | Status | Open, In Progress, Resolved, Closed, On Hold |
-| R | Last Review | Date |
-| S | Review On | Date |
-| T | Next Review On | Fallback review date if Review On isn't filled |
-| U | Description | |
-| V | Action Plan | |
-| W | Acceptance Criteria | |
-| X | Action Log | Running log / closure notes |
-| Y | Category | |
-| Z | Tracked Externally | Y/N flag, see operation 2b below |
-| AA | Opened On | |
-| AB | Requested By | |
-| AC | Involve | Other stakeholders |
-| AD | Has AuxMat | Y/N flag, see AuxMat section above |
-| AE | Estimated Effort | |
-| AF | ETC | Estimated time to complete |
-| AG | ETC Renegotiated | Revised ETC after initial estimate slips |
-| AH | Closed On | |
-| AI | Closed By | |
+### Core schema, continued
+
+| Field | Notes |
+|-------|-------|
+| MoSCoW | 1.Must, 2.Should, 3.Could, 4.Won't |
+| Status | Open, Closed |
+| Last Review | Date |
+| Review On | Date |
+| Next Review On | Fallback review date if Review On isn't filled |
+| Description | |
+| Action Plan | |
+| Acceptance Criteria | |
+| Action Log | Running log / closure notes |
+| Category | |
+| Tracked Externally | Y/N flag, see operation 2b |
+| Opened On | |
+| Requested By | |
+| Involve | Other stakeholders |
+| Has AuxMat | Y/N flag, see AuxMat section above |
+| Estimated Effort | |
+| ETC | Estimated time to complete |
+| ETC Renegotiated | Revised ETC after initial estimate slips |
+| Closed On | |
+| Closed By | |
+
 
 ## Dashboard features
 
@@ -150,6 +165,4 @@ Inserted right after Feasibility because it's a deeper, risk-specific extension 
 - **Risk heat map**: Probability x Severity scatter with a green/amber/red zone background (green <6, amber 6-14, red >=15 on Probability x Severity). Only renders when >=3 open risk items have both fields scored.
 - **Reviews tab**: flags items never reviewed or last reviewed >30/>90 days ago.
 
-## the register preservation note
-
-the register strips conditional formatting and images on save. This is fine -- the xlsx is the data store, the artifact is the visual layer. Don't try to preserve Excel formatting; invest that energy in the artifact instead.
+The dashboard is generated output — overwritten in full on every refresh. Never hand-edit it.

@@ -28,7 +28,8 @@ DELIVERABLE_FIELDS = ["KeyDel.ID", "Key Deliverable", "Description",
                       "Released On", "Key Dependencies",
                       "Planning Considerations", "Comments"]
 
-STATUSES = ["Not Started", "Implementing", "Done", "Backlog", "Funnel"]
+STATUSES = ["Portfolio Backlog", "Funnel", "Not Started", "Implementing",
+            "Done", "Cancelled"]
 PRIORITIES = ["Must", "Should", "Could", "Won't"]
 
 

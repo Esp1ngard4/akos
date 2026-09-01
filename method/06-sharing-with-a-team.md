@@ -68,7 +68,7 @@ scratch helpers can stay local.
 ## The register survives without the tool
 
 Worth checking deliberately: someone without `wbs-manager` can still open
-`WBS Atlas.xlsx`, read it, and edit a row. They lose consistent creation and the
+`WBS Atlas.json`, read it, and edit a row. They lose consistent creation and the
 generated dashboard, not access.
 
 Never build a tool whose artifact is unreadable without the tool. Graceful

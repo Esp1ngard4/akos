@@ -19,7 +19,7 @@ It answers two questions that a folder tree alone cannot:
 |---|---|---|---|
 | This document | owned | `TSP.5 Artifact Register/` | Governance: purpose, mechanism, conventions, history |
 | `artifact-register` skill | owned | `TSP.5 Artifact Register/artifact-register/` | Operating instructions and scripts |
-| `<ID>. Artifact Register, <Scope>.xlsx` | owned, per scope | with the artifacts it describes | **Source of truth** — one per scope |
+| `<ID>. Artifact Register, <Scope>.json` | owned, per scope | with the artifacts it describes | **Source of truth** — one per scope |
 | `Artifact Dashboard.html` | generated | alongside each register | Derived view; overwritten on refresh, never hand-edited |
 
 There is no template file — `create_artifact_register.py` builds the register
@@ -52,7 +52,7 @@ This is the whole idea, and it is easy to skim past.
 
 ```
 00.Admin/                            artifact 0
-  07. Artifact Register, Atlas.xlsx  artifact 7 - the register, listing itself
+  07. Artifact Register, Atlas.json  artifact 7 - the register, listing itself
 04.Reference/                        artifact 4
   08. Site Survey.pdf                artifact 8,  Parent Digital = 4
   15. Floor Plan.pdf                artifact 15, Parent Digital = 4

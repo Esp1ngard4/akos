@@ -14,21 +14,20 @@ Each project gets its own register. There is no central one.
 |---|---|---|---|
 | This document | owned | `TSP.1 WBS Register/` | Governance: purpose, conventions, relationships, history |
 | `wbs-manager` skill | owned | `TSP.1 WBS Register/wbs-manager/` | Operating instructions and scripts |
-| `WBS Template.xlsx` | owned | inside the skill folder | Seed for new registers; `create_wbs.py` copies it |
-| `WBS <Project>.xlsx` | owned, per project | wherever you keep project management artefacts | **Source of truth** — one per project |
+| `WBS <Project>.json` | owned, per project | wherever you keep project management artefacts | **Source of truth** — one per project |
 | `WBS Dashboard.html` | generated | alongside the register | Derived view; overwritten on refresh, never hand-edited |
 
 ## What the skill covers (and this document doesn't repeat)
 
-`wbs-manager/SKILL.md` is authoritative for the column schema of all three sheets, the allowed values, the ID-versus-Code distinction, dashboard features, and the create/refresh commands.
+`wbs-manager/SKILL.md` is authoritative for the schema of both collections, the allowed values, the ID-versus-Code distinction, dashboard features, and the create/refresh commands.
 
 This document covers what the skill doesn't: why the register exists, its naming rules, how it relates to other tools, and version history.
 
 ## Naming conventions
 
-- **File**: `WBS <Project>.xlsx`; dashboard `WBS Dashboard.html` in the same folder.
+- **File**: `WBS <Project>.json`; dashboard `WBS Dashboard.html` in the same folder.
 - **`ID` is permanent; `Code` is not.** This distinction is the one thing most worth understanding. `ID` is a stable integer that never changes — it is what other documents, folders and cross-references point at. `Code` is the hierarchical display position (`1`, `1.1`, `1.2`) and is *expected* to be renumbered whenever the breakdown is reorganised. Anything keyed off `Code` breaks the first time you insert a row; key off `ID`.
-- **Two sheets, two levels**: `Key Deliverables` holds the handful of outcomes the project exists to produce; `WBS` holds the items that build them, each pointing at a deliverable.
+- **Two collections, two levels**: `key_deliverables` holds the handful of outcomes the project exists to produce; `WBS` holds the items that build them, each pointing at a deliverable.
 
 ## Relationship to other tools
 
@@ -64,11 +63,12 @@ Nothing syncs automatically. The dashboard is a snapshot, not a live view.
 | Item | Detail |
 |---|---|
 | Dashboard has no generation timestamp | Unlike the TSP dashboard, nothing on the page says when it was rendered, so staleness is invisible |
-| No bulk import | Items are added one at a time or by editing the xlsx directly; there is no CSV import path |
+| No bulk import | Items are added one at a time or by editing the JSON directly; there is no CSV import path |
 
 ## Version history
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-09-01 | Documentation caught up with the register format. The body still described the spreadsheet two sections above the entry announcing it was gone — a template file that no longer ships, an `.xlsx` source of truth, and sheets rather than collections. `Cancelled` added to the Status vocabulary: there was no state for work abandoned rather than delivered, so a dropped item either lost the record of why or held a status the schema did not recognise, which the dashboard then counted as no status at all. `Key Dependencies` documented as `ID` references — the skill had described them as `Code` references, which is the field explicitly expected to be renumbered. Two defects fixed: `create_wbs.py` wrote the Status vocabulary as `Backlog` where the documentation and the dashboard both say `Portfolio Backlog`, and `refresh_wbs.py` still carried the spreadsheet readers it stopped calling when `main()` moved to JSON |
 | v1.1 | 2026-09-01 | **The register is JSON.** Every write went through a script anyway, and a spreadsheet cost a subprocess to read, a dependency to install, and a file lock whenever the application or a sync client held it. The dropdowns a spreadsheet gave back are enforced more strictly by the commands - argparse refuses an invalid value where a dropdown only warns and paste bypasses entirely. The `.xlsx` template the skill used to ship is gone: `create_wbs.py` builds the register programmatically, so there is no asset left that a copy of the skill can be missing. The tool now has **no runtime dependencies at all** |
 | v1.0 | 2026-08-31 | Initial public version. Generalised from a personal system: local vocabulary removed, template renamed to drop a local prefix, and this governance document written — previously the tool shipped as a bare skill with no definition document, which the method itself identifies as the broken case |

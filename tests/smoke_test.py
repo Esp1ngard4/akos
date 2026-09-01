@@ -251,6 +251,73 @@ def test_shared_modules(root, scratch):
               len(copies) == 1, detail)
 
 
+def test_docs_match_code(root, scratch):
+    """A tool's prose must describe the tool it actually ships.
+
+    Both halves of this have already gone wrong here. Docs drifted behind a
+    format change - a SKILL.md telling the reader to call `load_workbook` on a
+    JSON register, and to save a `.xlsx` that no script writes. And code drifted
+    ahead of docs - a create script whose Status vocabulary said `Backlog` where
+    every document and the dashboard said `Portfolio Backlog`, so a register
+    created from it disagreed with its own documentation on day one.
+
+    Neither is caught by anything else: the scripts run, the links resolve, the
+    registers round-trip. Only reading the two against each other finds it.
+    """
+    print("\ndocs match code")
+
+    # Terms that only mean something for a spreadsheet-backed tool.
+    SPREADSHEET = ("openpyxl", "load_workbook", ".xlsx", "merged cell",
+                   "worksheet", "conditional formatting")
+
+    for tool in TOOLS:
+        skill = os.path.join(root, tool["skill"])
+        folder = os.path.dirname(skill)
+        docs = [os.path.join(skill, "SKILL.md")]
+        docs += [os.path.join(folder, n) for n in sorted(os.listdir(folder))
+                 if n.startswith("TD.") and n.endswith(".md")]
+
+        scripts_dir = os.path.join(skill, "scripts")
+        code = ""
+        if os.path.isdir(scripts_dir):
+            for n in sorted(os.listdir(scripts_dir)):
+                if n.endswith(".py"):
+                    code += io.open(os.path.join(scripts_dir, n),
+                                    encoding="utf-8").read()
+
+        prose = ""
+        for d in docs:
+            if os.path.exists(d):
+                prose += io.open(d, encoding="utf-8").read()
+
+        # The version history is where a format change is *supposed* to be
+        # narrated, so it is exempt - only the body has to describe today.
+        body = prose.split("## Version history")[0]
+
+        stale = [w for w in SPREADSHEET
+                 if w.lower() in body.lower() and w.lower() not in code.lower()]
+        check("%s: prose describes the format the scripts implement" % tool["name"],
+              not stale, "no script uses: %s" % ", ".join(stale) if stale else "")
+
+        # Vocabularies defined in code must be documented.
+        create = [n for n in os.listdir(scripts_dir)] if os.path.isdir(scripts_dir) else []
+        create = [n for n in create if n.startswith("create_") and n.endswith(".py")]
+        missing = []
+        for n in create:
+            src = io.open(os.path.join(scripts_dir, n), encoding="utf-8").read()
+            for match in re.finditer(
+                    r"^([A-Z][A-Z_]+)\s*=\s*\[([^\]]*)\]", src, re.M):
+                name, blob = match.group(1), match.group(2)
+                if name.endswith("FIELDS") or name.startswith("DEFAULT_"):
+                    continue          # field names and seed rows, not vocabularies
+                values = re.findall(r'"([^"]+)"', blob)
+                for v in values:
+                    if len(v) > 2 and v not in prose:
+                        missing.append("%s: %r" % (name, v))
+        check("%s: every vocabulary value is documented" % tool["name"],
+              not missing, "; ".join(missing))
+
+
 def test_catalogue(root, scratch):
     """The repo's own registry must describe the repo, and be regenerable.
 
@@ -476,6 +543,7 @@ def main():
         test_catalogue(root, scratch)
         test_content_system(root, scratch)
         test_shared_modules(root, scratch)
+        test_docs_match_code(root, scratch)
 
         print("\n" + "=" * 60)
         if failures:
@@ -484,7 +552,8 @@ def main():
                 print("  - %s" % f)
             return 1
         print("All checks passed (%d tools, plus the installer, the "
-              "reconciliation case, the catalogue, the shared modules and "
+              "reconciliation case, the catalogue, the shared modules, the "
+              "docs-versus-code pass and "
               "the content system)." % len(TOOLS))
         return 0
     finally:
