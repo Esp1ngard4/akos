@@ -49,6 +49,8 @@ def finish(args, data, note):
         return 0
     R.save(args.register, data)
     errors, warnings, _ = checks.run(data)
+    for name, _reason in R.stale_views(args.register):
+        warnings.setdefault("generated view is stale", []).append(name)
     print("\n  check   %d error(s), %d warning class(es)"
           % (len(errors), len(warnings)))
     for msg in errors[:5]:

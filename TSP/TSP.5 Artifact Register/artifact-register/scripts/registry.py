@@ -24,9 +24,10 @@ lock whenever the sync client or the application had it open. What the
 spreadsheet gave back - validated dropdowns at the point of typing - is now the
 audit's job, which catches the same errors slightly later.
 
-`values_hash` fingerprints the rows, not the file. It is what lets a derived view
-know it has gone stale, and it ignores formatting so that reordering columns or
-reindenting the file does not read as a data change.
+`values_hash` fingerprints the rows, not the file. A generated view records the
+hash it was built from, so it can say it has gone stale rather than quietly
+showing old numbers. It ignores formatting, so reindenting the file is not a
+data change.
 
 This module is intentionally standard-library only, so a tool that uses it has
 no install step at all.
@@ -97,28 +98,40 @@ def values_hash(data):
     return "sha256:" + hashlib.sha256(blob).hexdigest()
 
 
-def is_stale(data, path):
-    """True if the file on disk holds different rows than `data`."""
-    if not os.path.isfile(path):
-        return True
-    return load(path).get("meta", {}).get("values_hash") != values_hash(data)
+# --- generated views --------------------------------------------------------
+
+VIEW_MARKER = 'data-values-hash="'
 
 
-def derived_is_stale(register_path, derived_path):
-    """Whether a generated view still matches the register it came from.
+def stale_views(register_path):
+    """Generated views beside the register that no longer match it.
 
-    Cheap: a generated view records the hash it was built from, so this is a
-    read of two small files rather than a recomputation.
+    Returns [(filename, reason)]. A view stamps the hash it was built from, so
+    this is a read of two small files - cheap enough to run after every edit,
+    which is when it matters: the commands change the register and do not
+    regenerate anything, so a dashboard is stale the moment you use one.
     """
-    if not os.path.isfile(derived_path):
-        return True
-    stamp = None
-    with io.open(derived_path, encoding="utf-8", errors="replace") as fh:
-        head = fh.read(4096)
-    marker = "values_hash="
-    if marker in head:
-        stamp = head.split(marker, 1)[1].split()[0].strip('">,')
-    return stamp != load(register_path)["meta"].get("values_hash")
+    folder = os.path.dirname(os.path.abspath(register_path)) or "."
+    try:
+        current = load(register_path)["meta"].get("values_hash")
+    except SystemExit:
+        return []
+    stale = []
+    for name in sorted(os.listdir(folder)):
+        if not name.lower().endswith(".html"):
+            continue
+        path = os.path.join(folder, name)
+        try:
+            with io.open(path, encoding="utf-8", errors="replace") as fh:
+                head = fh.read(8192)
+        except OSError:
+            continue
+        if VIEW_MARKER not in head:
+            continue
+        built_from = head.split(VIEW_MARKER, 1)[1].split('"', 1)[0]
+        if built_from != current:
+            stale.append((name, "built from different data - regenerate it"))
+    return stale
 
 
 # --- collection helpers -----------------------------------------------------

@@ -55,6 +55,10 @@ def main():
     print("  %d tool(s) overdue an annual review, %d control activity(ies) overdue"
           % (stats["overdue_reviews"], stats["controls_due"]))
 
+    for name, reason in R.stale_views(args.register):
+        warnings.setdefault("generated view is stale", []).append(
+            "%s %s" % (name, reason))
+
     print()
     for msg in errors:
         print("  ERROR    %s" % msg)

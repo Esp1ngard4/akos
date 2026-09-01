@@ -120,6 +120,7 @@ def generate_html(project_name, items, stats):
     return f'''<!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="generator" content="register" data-values-hash="__HASH__">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{project_name} — WBS Dashboard</title>
@@ -334,6 +335,7 @@ def main():
     stats = compute_stats(items)
     html = generate_html(project_name, items, stats)
 
+    html = html.replace('__HASH__', register['meta'].get('values_hash',''))
     Path(html_path).write_text(html, encoding='utf-8')
     print(f"Dashboard generated: {html_path}")
     print(f"  Items: {stats['total']}, Done: {stats['done']}, Sprints: {len(stats['sprints'])}")

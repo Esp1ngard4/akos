@@ -32,7 +32,6 @@ def main():
     p.add_argument("register")
     p.add_argument("--root", help="folder this register describes, for the disk check")
     p.add_argument("--tool-register", help="tool register, for the Managed By check")
-    p.add_argument("--dashboard", help="check this dashboard is not stale")
     p.add_argument("--summary", action="store_true",
                    help="class names and counts only, without the individual rows")
     args = p.parse_args()
@@ -53,14 +52,9 @@ def main():
         d = stats["disk"]
         print("  disk: %d prefixed entries, %d without an ID prefix, %d boundaries "
               "not descended into" % (d["prefixed"], d["bare"], d["boundaries"]))
-    if args.dashboard:
-        stale = checks.dashboard_stale(args.register, args.dashboard)
-        if stale is True:
-            warnings.setdefault("dashboard is stale", []).append(
-                "%s was built from different data - regenerate it"
-                % os.path.basename(args.dashboard))
-        elif stale is None:
-            print("  dashboard: not found, or built before staleness was recorded")
+    for name, reason in R.stale_views(args.register):
+        warnings.setdefault("generated view is stale", []).append(
+            "%s %s" % (name, reason))
 
     print()
     for msg in errors:

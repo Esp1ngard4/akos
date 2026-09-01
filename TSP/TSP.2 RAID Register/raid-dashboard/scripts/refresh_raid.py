@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Read a RAID .xlsx file and generate a self-contained HTML dashboard.
-Usage: python refresh_raid.py <xlsx_path> <output_html_path> [project_name]
+Usage: python refresh_raid.py <register_path> <output_html_path> [project_name]
 """
 import os
 import sys
@@ -122,6 +122,7 @@ def generate_html(entries, project_name, type_info):
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="generator" content="register" data-values-hash="__HASH__">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RAID Dashboard — {project_name}</title>
@@ -392,17 +393,19 @@ renderKPIs(); renderFilters(); renderTable();
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python refresh_raid.py <xlsx_path> <output_html_path> [project_name]")
+        print("Usage: python refresh_raid.py <register_path> <output_html_path> [project_name]")
         sys.exit(1)
 
-    xlsx_path = sys.argv[1]
+    register_path = sys.argv[1]
     output_path = sys.argv[2]
-    project_name = sys.argv[3] if len(sys.argv) > 3 else os.path.basename(xlsx_path).replace("RAID ", "").replace(".xlsx", "")
+    project_name = sys.argv[3] if len(sys.argv) > 3 else os.path.basename(register_path).replace("RAID ", "").replace(".json", "")
 
-    entries = read_raid(xlsx_path)
+    entries = read_raid(register_path)
     type_info = detect_types(entries)
     html = generate_html(entries, project_name, type_info)
 
+    html = html.replace('__HASH__',
+                        R.load(register_path)['meta'].get('values_hash', ''))
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
 

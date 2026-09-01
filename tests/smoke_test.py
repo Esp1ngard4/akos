@@ -159,6 +159,11 @@ def test_tool(tool, root, work):
         return
 
     html = io.open(dashboard, encoding="utf-8").read()
+    # The view must record which data it was built from, or nothing can tell
+    # that it has gone stale - and the edit commands do not regenerate it.
+    check("dashboard stamps the register hash it was built from",
+          'data-values-hash="sha256:' in html,
+          html[:400])
     check("dashboard is non-trivial (>%dB)" % MIN_DASHBOARD_BYTES,
           len(html) > MIN_DASHBOARD_BYTES, "got %d bytes" % len(html))
     # A template that loads but never substitutes still produces a file. It would

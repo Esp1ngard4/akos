@@ -99,6 +99,8 @@ def report(register, root, tool_register):
     """Re-check after the edit, so a half-done operation says so now."""
     errors, warnings, _ = checks.run(R.load(register), root=root,
                                      tools=checks.load_tools(tool_register))
+    for name, _reason in R.stale_views(register):
+        warnings.setdefault("generated view is stale", []).append(name)
     print("\n  check   %d error(s), %d warning(s)"
           % (len(errors), sum(len(v) for v in warnings.values())))
     for msg in errors[:5]:
