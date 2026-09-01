@@ -28,6 +28,19 @@ flips the `Doc Aux` flag - neither does the other's write. A tool is not properl
 in the system until it has both a row and a TD, which is why the tool that
 manages tools needs both halves.
 
+## Shared code is copied, not imported
+
+`registry.py` — the JSON register format — is identical in all four tools that
+use it. It is **copied into each skill folder rather than imported from one
+place**, because a skill has to be self-contained: the installer vendors a single
+skill folder, and a shared library sitting outside it would not come along.
+
+That is the same trade as vendoring a tool into a project: one directory would be
+cleaner, and it would not survive being installed. So the guard is a test rather
+than a structure — the smoke test asserts every copy is byte-identical, because
+an edit applied to three of four copies leaves one tool quietly behaving
+differently, and nothing else would say so.
+
 ## What the skills cover (and this document doesn't repeat)
 
 `tsp-manager/SKILL.md` is authoritative for the schema of all five sheets, the controlled vocabularies and their `Days` values, ID assignment rules, the register/retire/review procedures, and the create, refresh and audit commands.

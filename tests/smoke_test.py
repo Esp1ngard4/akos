@@ -221,6 +221,34 @@ def test_installer(root, scratch):
     check("status --check passes once declared", ok, out)
 
 
+def test_shared_modules(root, scratch):
+    """Modules copied into every skill folder must be identical.
+
+    A skill has to be self-contained to be installable, so the shared code is
+    duplicated rather than imported from one place. That is a deliberate trade,
+    and it makes silent divergence the thing to guard: an edit applied to three
+    of four copies leaves one tool quietly behaving differently.
+    """
+    print("\nshared modules")
+    import hashlib
+    for name in ("registry.py",):
+        copies = {}
+        for dirpath, dirnames, filenames in os.walk(os.path.join(root, "TSP")):
+            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+            if name in filenames:
+                blob = io.open(os.path.join(dirpath, name), "rb").read()
+                normalised = blob.replace(bytes([13, 10]), bytes([10]))
+                digest = hashlib.sha256(normalised).hexdigest()[:12]
+                copies.setdefault(digest, []).append(
+                    os.path.relpath(dirpath, root))
+        if not check("%s found in the tools" % name, bool(copies)):
+            continue
+        detail = "; ".join("%s: %s" % (d, ", ".join(v)) for d, v in copies.items())
+        check("every copy of %s is identical (%d copies)"
+              % (name, sum(len(v) for v in copies.values())),
+              len(copies) == 1, detail)
+
+
 def test_catalogue(root, scratch):
     """The repo's own registry must describe the repo, and be regenerable.
 
@@ -339,6 +367,7 @@ def main():
         test_installer(root, scratch)
         test_reconciliation(root, scratch)
         test_catalogue(root, scratch)
+        test_shared_modules(root, scratch)
 
         print("\n" + "=" * 60)
         if failures:
@@ -347,7 +376,8 @@ def main():
                 print("  - %s" % f)
             return 1
         print("All checks passed (%d tools, plus the installer, the "
-              "reconciliation case and the catalogue)." % len(TOOLS))
+              "reconciliation case, the catalogue and the shared modules)."
+              % len(TOOLS))
         return 0
     finally:
         if args.keep:
