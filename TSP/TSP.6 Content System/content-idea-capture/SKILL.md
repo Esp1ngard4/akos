@@ -19,6 +19,15 @@ One exchange. Take the author's words, append a row to `content-system/ideas.md`
 - **ID is `YYYY-MM-DD-<letter>`**, the letter incrementing within the day. It exists so the author can say "the second one" while the idea waits.
 - **Several ideas in one message is one capture, not several.** Append them all in one write, letters incrementing across the batch, and confirm in one line. Turning a batch into five exchanges is the same failure as interviewing — it makes the fastest action in the system the slowest.
 - **A scope the author has just named may be applied to the whole batch, provided you say so.** *"All five under `areaOfFocus/product-craft` — tell me if any of those belong elsewhere."* An announced scope is corrected in seconds; a scope question per row is the interview this skill exists to avoid. Say nothing and it is an inference, which is a different thing entirely.
+- **If the author volunteers why an idea matters, record it — in the same write, verbatim.** It becomes a `### <ID>` block under `## Context`. This is the one part of a capture that can run to a paragraph, and it is the part that decays fastest: a line that names a topic and promises a payoff reads fine today and is unrecoverable in a week.
+
+### Context is accepted, never requested
+
+**Never ask for it.** Not "would you like to add why?", not a follow-up after the confirmation, not a nudge on the ones that look thin. Asking on every capture costs the ten-second promise for the minority of ideas that carry a block, and it is the interview under another name.
+
+**Never write one yourself.** If the author did not say why it matters, there is no block. An inferred reason is a fabricated one, and it is worse than nothing here because it will later be read as the author's own thinking.
+
+A capture with no context is **complete, not unfinished**. Never render it as missing, never list which ideas lack one.
 
 ### The one hard rule
 
@@ -32,7 +41,9 @@ No angle. No "what's the most important point?". No audience. No persona. Those 
 
 Read `content-system/ideas.md` and show the table as it stands. **The count is the row count** — no filtering, no status to interpret. That is the whole reason the file holds waiting items only.
 
-## Promotion — start working an idea
+## Promotion — an idea that is becoming a piece
+
+Promotion is for an idea you have started **turning into something**: an angle forming, an outline, notes that are about the writing rather than about the idea. It is not the place to record why an idea matters — that is `## Context`, and it does not move the idea out of the inbox.
 
 Move the row out of the inbox and create a bundle folder:
 
@@ -40,7 +51,9 @@ Move the row out of the inbox and create a bundle folder:
 content-system/posts/YYYY-MM-DD-slug/backbone.md
 ```
 
-with frontmatter carrying `from-idea:` (the ID and the original text) and `scope:` if known, then `## Idea` — the capture, verbatim — and an empty `## Notes`.
+with frontmatter carrying `from-idea:` (the ID and the original text) and `scope:` if known, then `## Idea` — the capture, verbatim — and `## Notes`.
+
+**If the idea has a `### <ID>` context block, it becomes the opening `## Notes` and is deleted from `ideas.md`.** It travels with the row; leaving it behind orphans it, and copying it leaves two versions to disagree. With no block, `## Notes` starts empty as before.
 
 **No angle is required. No plan. No commitment to finish.** This is the point of promotion: an idea being actively worked is neither waiting nor written, and without a place to sit it would have to stay in the inbox pretending to be untouched. The bundle folder is where refinement happens — notes now, angle when it settles, and the rest as `content-post-writer` fills it in.
 
@@ -56,7 +69,7 @@ with frontmatter carrying `from-idea:` (the ID and the original text) and `scope
 
 ## Dropping
 
-Move the row to `## Dropped` with the date and a one-line reason. Ideas are allowed to die — an inbox that only accumulates stops being an inbox and becomes a guilt pile.
+Move the row to `## Dropped` with the date and a one-line reason. Its `### <ID>` context block, if any, goes with it and may be pruned. Ideas are allowed to die — an inbox that only accumulates stops being an inbox and becomes a guilt pile.
 
 That section is prunable at any time and nothing reads it.
 
@@ -66,12 +79,13 @@ Works with **nothing else present** — no strategy, no plan, no posts, no prior
 
 ## Verify
 
-After appending, moving, or removing a row, re-read the file and confirm the table still parses — header intact, one row per waiting idea, nothing left in two places. Correct once; on a second failure say so plainly. A malformed table silently miscounts the pipeline's front stage, which is the one thing this file exists to make countable.
+After appending, moving, or removing a row, re-read the file and confirm the table still parses — header intact, one row per waiting idea, nothing left in two places, and every `### <ID>` block still matching a row in the table. An orphaned block is context that was supposed to travel with its row and did not. Correct once; on a second failure say so plainly. A malformed table silently miscounts the pipeline's front stage, which is the one thing this file exists to make countable.
 
 ## What this must never become
 
 - An interview.
-- A tagging, priority, or scoring system.
+- A tagging, priority, or scoring system. `## Context` holds the author's reason, never a rating of it.
+- A format that asks for context, marks a capture without it as incomplete, or reports which ideas lack one.
 - A place where ideas get developed rather than parked.
 - A second inbox alongside the outer workspace's `_editorial/_ideas/` — this one reads nothing outside `content-system/`.
 - A router into `.specify/assessments/`.

@@ -135,6 +135,7 @@ content-system/posts/YYYY-MM-DD-slug/
 ```
 
 - **Folder**: today's date and a short kebab-case slug. Created once the angle is set, or earlier when an idea is promoted from `content-system/ideas.md` — a folder holding only `## Idea` and `## Notes` is a valid, expected state.
+- **Promoting an idea that carries a `### <ID>` context block**: the block becomes the backbone's opening `## Notes`, and is **removed from `ideas.md`** in the same write. It travels with the row - left behind it is orphaned, copied it becomes two versions that disagree.
 - **`backbone.md`**: thin YAML frontmatter (`scope`, optional `from-idea`, optional `commitments`), then sections accruing in order as work progresses — `## Idea`, `## Notes`, `## Angle`, `## Audience`, `## Artifacts`, `## Persona`, `## Six Questions`, `## Outline`, `## Claims`. Absent sections are omitted, never left empty.
 - **Artifacts**: `<channel>-<type>.md`. Both dimensions, always, including in a single-artifact bundle — two LinkedIn artifacts of different types, or one type across two channels, are ordinary cases that either half alone cannot distinguish.
 

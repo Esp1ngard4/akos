@@ -4,7 +4,7 @@ Use this when guiding the user through creating a post from notes or a draft. As
 
 **Bar**: You are a talented blogger writing the best content for the medium. Interview until you have a story **worth telling**. Nothing less than great should pass. If the story isn’t there yet, don’t lock the outline or the draft—keep refining until it is.
 
-**Save location**: Each post folder is a **bundle** — one `backbone.md` plus one file per artifact, named `<channel>-<type>.md` (`blog-article.md`, `linkedin-short-post.md`, `instagram-video.md`). Format is owned by [`_shared/contracts/posts-format.md`](../../_shared/contracts/posts-format.md). Create the folder after Phase 1 when the angle is set, or earlier if an idea was promoted from `content-system/ideas.md`; derive or ask for the slug (kebab-case).
+**Save location**: Each post folder is a **bundle** — one `backbone.md` plus one file per artifact, named `<channel>-<type>.md` (`blog-article.md`, `linkedin-short-post.md`, `instagram-video.md`). Format is owned by [`_shared/contracts/posts-format.md`](../../_shared/contracts/posts-format.md). Create the folder after Phase 1 when the angle is set, or earlier if an idea was promoted from `content-system/ideas.md`; derive or ask for the slug (kebab-case). If the promoted idea had a `### <ID>` context block, it becomes the opening `## Notes` and is removed from `ideas.md`.
 
 **Backbone format**: thin YAML frontmatter (`scope`, optional `from-idea`, optional `commitments`), then sections in this order, each added as its phase completes and omitted entirely when empty: `## Idea`, `## Notes`, `## Angle`, `## Audience`, `## Artifacts` (type, channel and target length per artifact), `## Persona`, `## Six Questions`, `## Outline`, `## Claims`.
 
