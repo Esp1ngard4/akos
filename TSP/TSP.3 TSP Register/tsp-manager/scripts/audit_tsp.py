@@ -38,15 +38,19 @@ def main():
     args = p.parse_args()
 
     data = R.load(args.register)
-    roots = args.skills or S.find_skill_roots(args.repo_root, args.tools_root)
+    root = args.tools_root or S.infer_root(args.register)
+    roots = args.skills or S.find_skill_roots(args.repo_root, root)
 
     print("TSP Register audit - %s" % os.path.basename(args.register))
-    errors, warnings, stats = checks.run(data, tools_root=args.tools_root,
+    errors, warnings, stats = checks.run(data, tools_root=root,
                                          skill_roots=roots)
     print("  %d tools, %d control activities%s"
           % (stats["tools"], stats["controls"],
              ", %d tool folders on disk" % stats["folders"]
              if stats["folders"] is not None else ""))
+    if stats["folders"] is None:
+        print("  no tool root found - folder and skill checks skipped. "
+              "Pass --tools-root to run them.")
     if roots:
         print("  skills: %d installed, %d claimed by a tool"
               % (stats["skills_installed"], stats["skills_claimed"]))

@@ -131,6 +131,30 @@ def find_skill_roots(repo_root, tools_root):
     return roots
 
 
+def infer_root(register_path):
+    """The folder holding the tool directories, derived from the register.
+
+    The register lives inside one of those directories, so its grandparent is
+    the root in every normal layout. Derived rather than required because the
+    obvious command - point the audit at a register - otherwise runs with the
+    folder and skill checks silently switched off.
+    """
+    here = os.path.dirname(os.path.abspath(register_path))
+    for _ in range(4):
+        parent = os.path.dirname(here)
+        if not parent or parent == here:
+            return None
+        try:
+            names = os.listdir(parent)
+        except OSError:
+            return None
+        if any(FOLDER.match(n) and os.path.isdir(os.path.join(parent, n))
+               for n in names):
+            return parent
+        here = parent
+    return None
+
+
 def installed_skills(roots):
     """{skill name: where it was found}.
 

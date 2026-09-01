@@ -110,6 +110,8 @@ python scripts/audit_tsp.py "<your tools folder>/TSP Register.json"
 
 Read-only. Run it before the annual review, and whenever the register and the tool folders may have drifted.
 
+The tools root is derived from where the register sits, so the command above covers the folder and skill checks without further arguments. Pass `--tools-root` explicitly for a register kept outside its tool folder; the audit says so rather than quietly skipping those checks.
+
 Skill roots are auto-discovered: the repo-root `.claude/skills` plus any `.claude/skills` inside a tool folder (some tools ship their own). Project-scoped skills under `<your tools folder>/` are deliberately not scanned — they belong to projects, not TSPs. Pass `--skills DIR` (repeatable) to override.
 
 ### Back up before a structural change
