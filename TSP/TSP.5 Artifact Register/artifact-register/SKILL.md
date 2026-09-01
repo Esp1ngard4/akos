@@ -23,16 +23,26 @@ correct on Windows; use `python3` on macOS/Linux.
 follows ID.**
 
 ```
-0.Admin/                            artifact 0
-  7. Artifact Register, Atlas.xlsx  artifact 7 - the register, listing itself
-4.Reference/                        artifact 4
-  8. Site Survey.pdf                artifact 8,  Parent Digital = 4
+00.Admin/                            artifact 0
+  07. Artifact Register, Atlas.xlsx  artifact 7 - the register, listing itself
+04.Reference/                        artifact 4
+  08. Site Survey.pdf                artifact 8,  Parent Digital = 4
   15. Floor Plan.pdf                artifact 15, Parent Digital = 4
 ```
 
-Filename prefixes are `<ID>. <Name>` or `<ID>.<Name>`. Because the ID is on the
-artifact, the register makes a falsifiable claim about the disk — which is what
-`audit` checks. A file with no prefix is visibly unregistered.
+Filename prefixes are `<ID>. <Name>` or `<ID>.<Name>`, with the ID **zero-padded**
+to the register's width — `07.` not `7.`. Padding matters because sorting differs
+by platform: Windows Explorer sorts naturally (1, 2, 10) while web clients, macOS
+and `ls` sort lexicographically (1, 10, 2). Padded, the folder reads the same
+everywhere.
+
+The width lives on the register's `Settings` sheet as `ID width`, default 2.
+Registers over 99 artifacts need 3. It is stored rather than derived, so adding
+artifact 100 never silently re-pads everything beneath it.
+
+Because the ID is on the artifact, the register makes a falsifiable claim about
+the disk — which is what `audit` checks. A file with no prefix is visibly
+unregistered, and one padded to the wrong width is a warning.
 
 **Never reuse an ID**, including a retired one. A prefix on an old file or an old
 email would then point at the wrong row.
@@ -83,7 +93,7 @@ python create_artifact_register.py "7. Artifact Register, Atlas.xlsx" "Atlas" \
 
 ## Editing artifacts
 
-`artifact.py` handles the four operations where the register and the disk must
+`artifact.py` handles the operations where the register and the disk must
 change together, because `Name` and the parent columns are encoded into the
 filesystem. Editing those in the spreadsheet alone leaves the two disagreeing in
 a way nothing detects — the audit matches on ID, not on name.
@@ -95,6 +105,7 @@ python artifact.py add    <register> <path> --id 22 --root <folder>
 python artifact.py rename <register> --id 22 --name "New Name" --root <folder>
 python artifact.py move   <register> --id 22 --parent-digital 12 --root <folder>
 python artifact.py retire <register> --id 22 --root <folder> --archive ./Archive --yes
+python artifact.py repad  <register> --root <folder> [--width 3]
 ```
 
 - **`add`** takes the next unused ID — never a gap left by a retirement — writes
@@ -108,7 +119,13 @@ python artifact.py retire <register> --id 22 --root <folder> --archive ./Archive
   artifact to `--archive` if you give one and **deletes it otherwise**. The row
   stays and the ID stays spent forever, so an old reference still resolves.
 
-`add`, `rename` and `move` accept `--dry-run`. `retire` does nothing without
+- **`repad`** brings every filename up to the register's ID width. Needed once
+  when a register adopts padding, and again if the width is raised. **Only the
+  number changes** — name, separator and extension are left exactly as they are,
+  because rebuilding names from the register would quietly rewrite filenames that
+  have legitimately drifted from it, which is a different decision.
+
+`add`, `rename`, `move` and `repad` accept `--dry-run`. `retire` does nothing without
 `--yes`, and **refuses to retire a container that still holds active artifacts** —
 disposing of it would take registered children with it and leave rows pointing at
 nothing. Retire the contents first.

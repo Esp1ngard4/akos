@@ -70,7 +70,7 @@ TOOLS = [
         "name": "TSP.5 Artifact Register",
         "skill": "TSP/TSP.5 Artifact Register/artifact-register",
         "assets": [],
-        "register": "5. Artifact Register, Demo.xlsx",
+        "register": "05. Artifact Register, Demo.xlsx",
         "dashboard": "Artifact Dashboard.html",
         "sheets": ["Artifacts", "Locations", "Areas of Focus"],
         "create": lambda s, r, d: [os.path.join(s, "scripts", "create_artifact_register.py"),
@@ -229,7 +229,7 @@ def test_reconciliation(root, scratch):
 
     work = os.path.join(scratch, "filing")
     os.makedirs(work, exist_ok=True)
-    register = os.path.join(work, "0. Artifact Register, Filing.xlsx")
+    register = os.path.join(work, "00. Artifact Register, Filing.xlsx")
 
     ok, out = run([os.path.join(scripts, "create_artifact_register.py"),
                    register, "Filing"], work)
@@ -254,8 +254,10 @@ def test_reconciliation(root, scratch):
                    "--name", "Invoice Scan", "--type", "Document",
                    "--parent-digital", "Main", "--root", work], work)
     check("add runs", ok, out)
-    check("file was renamed to carry its ID",
-          any(f.startswith("1. Invoice Scan") for f in os.listdir(work)),
+    # 01. not 1. - lexicographic and numeric order only agree when padded, and
+    # they disagree by platform, so this is a real regression to guard.
+    check("file was renamed to carry its zero-padded ID",
+          any(f.startswith("01. Invoice Scan") for f in os.listdir(work)),
           str(os.listdir(work)))
 
     ok, out = run([os.path.join(scripts, "audit_artifact_register.py"),

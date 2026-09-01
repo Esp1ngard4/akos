@@ -405,7 +405,8 @@ def main():
     # Same checks the audit runs - one definition, so the dashboard and the
     # command line can never report different findings.
     errors, warnings, stats = checks.run(
-        rows, root=args.root, tools=checks.load_tools(args.tsp_register))
+        rows, root=args.root, tools=checks.load_tools(args.tsp_register),
+        width=S.id_width(wb))
     findings = {
         "errors": errors,
         "warnings": warnings,

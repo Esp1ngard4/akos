@@ -36,7 +36,7 @@ DEFAULT_LOCATIONS = [("Physical", "Home"), ("Physical", "Office"),
                      ("Digital", "Cloud drive"), ("Digital", "Local disk")]
 
 
-def build(path, scope, locations, areas, force):
+def build(path, scope, locations, areas, force, width):
     if os.path.exists(path) and not force:
         raise SystemExit("%s already exists. Pass --force to overwrite." % path)
 
@@ -71,6 +71,15 @@ def build(path, scope, locations, areas, force):
     if locations:
         dropdown("Location", [n for _, n in locations])
 
+    settings = wb.create_sheet(S.SHEET_SETTINGS)
+    for i, name in enumerate(["Setting", "Value", "Notes"], start=1):
+        cell = settings.cell(1, i, name); cell.fill, cell.font = HEAD_FILL, HEAD_FONT
+    settings.cell(2, 1, "ID width"); settings.cell(2, 2, width)
+    settings.cell(2, 3, "Digits the ID is padded to on filenames, so lexicographic "
+                        "order matches numeric order on every platform.")
+    settings.column_dimensions["A"].width = 16
+    settings.column_dimensions["C"].width = 70
+
     loc = wb.create_sheet(S.LOOKUP_LOCATIONS)
     for i, name in enumerate(["ID", "Location", "Active", "Kind"], start=1):
         c = loc.cell(2, i, name); c.fill, c.font = HEAD_FILL, HEAD_FONT
@@ -90,10 +99,14 @@ def build(path, scope, locations, areas, force):
     # anything else. Its ID comes from the prefix on its own filename, which is
     # the convention this tool exists to enforce - stated by demonstration.
     match = S.ID_PREFIX.match(os.path.basename(path))
-    seed = match.group(1) if match else "0"
+    seed = S.format_id(int(match.group(1)) if match else 0, width)
     first = S.HEADER_ROW + 1
     ws.cell(first, cols["ID"], int(seed))
-    ws.cell(first, cols["Name"], os.path.splitext(os.path.basename(path))[0])
+    # Name excludes the ID prefix; the prefix is rebuilt from the ID whenever a
+    # filename is generated. Storing it in both places is how you get "00. 00. x".
+    stem = os.path.splitext(os.path.basename(path))[0]
+    prefix = S.ID_PREFIX.match(stem)
+    ws.cell(first, cols["Name"], stem[prefix.end():].strip() if prefix else stem)
     ws.cell(first, cols["Description"], "This register.")
     ws.cell(first, cols["Type"], "Document")
     ws.cell(first, cols["Parent Digital"], S.ROOT_PARENT)
@@ -116,6 +129,10 @@ def main():
                                              "(repeatable; defaults are used if omitted)")
     p.add_argument("--area", action="append", default=[], metavar="ID:Name",
                    help="seed an Area of Focus, e.g. 5:Financial Freedom (repeatable)")
+    p.add_argument("--id-width", type=int, default=S.ID_WIDTH_DEFAULT, metavar="N",
+                   help="digits to pad IDs to on filenames (default: %d). Two suits a "
+                        "register under 100 artifacts; raise it for a bigger one."
+                        % S.ID_WIDTH_DEFAULT)
     p.add_argument("--force", action="store_true", help="overwrite an existing file")
     args = p.parse_args()
 
@@ -133,11 +150,17 @@ def main():
         areas.append((aid.strip(), name.strip()))
 
     n, seed = build(args.output, args.scope, locations or DEFAULT_LOCATIONS,
-                    areas, args.force)
+                    areas, args.force, args.id_width)
     print("Created %s" % args.output)
     print("  scope: %s | %d columns | %d locations | %d areas"
           % (args.scope, n, len(locations or DEFAULT_LOCATIONS), len(areas)))
-    print("  seeded with itself as artifact %s" % seed)
+    print("  seeded with itself as artifact %s (IDs padded to %d digits)"
+          % (seed, args.id_width))
+    expected = "%s. %s" % (seed, os.path.splitext(os.path.basename(args.output))[0]
+                           .split(". ", 1)[-1])
+    if not os.path.basename(args.output).startswith(seed + "."):
+        print("  note: rename this file to \"%s.xlsx\" so its own prefix is padded too"
+              % expected)
     print("\nNext: add artifacts, then")
     print("  python refresh_artifact_register.py \"%s\" \"Artifact Dashboard.html\"" % args.output)
 

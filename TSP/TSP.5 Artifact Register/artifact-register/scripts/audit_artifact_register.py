@@ -48,7 +48,8 @@ def main():
     print("  %d rows, header on row %d" % (len(rows), hrow))
 
     errors, warnings, stats = checks.run(
-        rows, root=args.root, tools=checks.load_tools(args.tsp_register))
+        rows, root=args.root, tools=checks.load_tools(args.tsp_register),
+        width=S.id_width(wb))
 
     if stats.get("delegations_resolved") is not None:
         print("  delegations: %d checked against the TSP register, %d resolved"

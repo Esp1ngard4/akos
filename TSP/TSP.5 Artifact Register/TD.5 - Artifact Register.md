@@ -45,17 +45,26 @@ This is the whole idea, and it is easy to skim past.
 
 1. The register assigns an **ID**, unique within that register and never reused.
 2. The ID is written onto the artifact itself — a filename prefix for digital
-   things, a label for physical ones: `<ID>. <Name>`.
+   things, a label for physical ones: `<ID>. <Name>`, **zero-padded** to the
+   register's width.
 3. Position follows ID. Inside a folder or a physical binder, artifacts sit in ID
    order.
 
 ```
-0.Admin/                            artifact 0
-  7. Artifact Register, Atlas.xlsx  artifact 7 - the register, listing itself
-4.Reference/                        artifact 4
-  8. Site Survey.pdf                artifact 8,  Parent Digital = 4
+00.Admin/                            artifact 0
+  07. Artifact Register, Atlas.xlsx  artifact 7 - the register, listing itself
+04.Reference/                        artifact 4
+  08. Site Survey.pdf                artifact 8,  Parent Digital = 4
   15. Floor Plan.pdf                artifact 15, Parent Digital = 4
 ```
+
+**Padding is what makes step 3 hold everywhere.** Windows Explorer sorts filenames
+naturally, so `1, 2, 10` looks right there; web clients, macOS and `ls` sort
+lexicographically and give `1, 10, 2`. An unpadded register therefore reads
+correctly on the desktop and wrongly everywhere else — the worst kind of
+inconsistency, because it is invisible from where you built it. The width is a
+per-register setting, so crossing 99 artifacts is a deliberate widening rather
+than a silent re-pad of everything below.
 
 Two things follow, and they are why this is worth the discipline.
 
@@ -183,10 +192,12 @@ and leave rows pointing at nothing.
 |---|---|
 | Header row is detected, not fixed | Registers this tool creates put headers on a known row, but the reader scans for them so a spreadsheet adapted from elsewhere still works. Slight complexity for real adoption benefit |
 | `retire` deletes by default | `--archive` is available and safer. The default is deletion because an artifact register that quietly keeps everything stops being true about the shelf — but it is the sharpest edge in this collection |
+| Widening past the stored width is manual | `repad --width N` handles it, but nothing warns as a register approaches its limit. A register at 95 artifacts with width 2 is five files away from needing a migration |
 | Physical artifacts cannot be reconciled | The disk check only reaches digital ones. A physical artifact's location is an assertion no script can test, which is exactly why the annual walk-through exists |
 
 ## Version history
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-09-01 | IDs are zero-padded on filenames, because lexicographic and numeric order agree only when the number is padded — and the two differ by platform, so an unpadded register reads correctly on the desktop and wrongly in a browser. Width is stored per register (`Settings` sheet, default 2). `repad` migrates an existing register, changing only the number |
 | v1.0 | 2026-08-31 | Initial public version. Generalised from a personal reference-material system dating to 2016 and a separately-built per-project document control list, which turned out to be the same tool at two scopes using the same mechanism |

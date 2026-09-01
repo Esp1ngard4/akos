@@ -7,6 +7,7 @@ Findings tab. A check that lived in only one of those would be a check the other
 silently lacked.
 """
 import datetime as dt
+import os
 
 import schema as S
 
@@ -25,7 +26,7 @@ def _stop_ids(rows, claimed):
     return stop
 
 
-def run(rows, root=None, tools=None, stale_years=STALE_YEARS):
+def run(rows, root=None, tools=None, stale_years=STALE_YEARS, width=None):
     """Check a register. Returns (errors, warnings, stats).
 
     `root`  - folder the register describes; enables the disk reconciliation.
@@ -116,6 +117,14 @@ def run(rows, root=None, tools=None, stale_years=STALE_YEARS):
                          "boundaries": len(stop), "root": root}
         for name in bare:
             err("unregistered on disk: %r has no ID prefix" % name)
+        if width:
+            for pid, names in prefixed.items():
+                want = S.format_id(pid, width)
+                for rel in names:
+                    got = S.ID_PREFIX.match(os.path.basename(rel)).group(1)
+                    if got != want:
+                        warn("filename not padded to %d digits" % width,
+                             "%s should start %s." % (rel, want))
         for pid, names in sorted(prefixed.items(), key=lambda kv: int(kv[0])):
             if pid not in ids:
                 err("orphan on disk: %s is prefixed %s, which is not in the register"

@@ -27,6 +27,7 @@ import datetime as dt
 import os
 import shutil
 import sys
+import time
 
 import openpyxl
 
@@ -41,7 +42,7 @@ def open_register(path):
     wb = openpyxl.load_workbook(path)
     ws = wb[S.SHEET] if S.SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
     hrow, cols = S.find_header(ws)
-    return wb, ws, hrow, cols
+    return wb, ws, hrow, cols, S.id_width(wb)
 
 
 def rows_of(ws, hrow, cols):
@@ -65,10 +66,10 @@ def strip_prefix(name):
     return name[match.end():].strip() if match else name
 
 
-def target_name(artifact_id, name, original):
-    """`<ID>. <Name>` keeping the original extension for files."""
+def target_name(artifact_id, name, original, width):
+    """`<ID>. <Name>`, ID zero-padded, keeping the extension for files."""
     ext = os.path.splitext(original)[1] if os.path.isfile(original) else ""
-    return "%s. %s%s" % (artifact_id, name, ext)
+    return "%s. %s%s" % (S.format_id(artifact_id, width), name, ext)
 
 
 def locate(root, artifact_id):
@@ -112,7 +113,8 @@ def report(register, root, tsp_register):
     ws = wb[S.SHEET] if S.SHEET in wb.sheetnames else wb[wb.sheetnames[0]]
     hrow, cols = S.find_header(ws)
     errors, warnings, _ = checks.run(S.read_rows(ws, hrow, cols), root=root,
-                                     tools=checks.load_tools(tsp_register))
+                                     tools=checks.load_tools(tsp_register),
+                                     width=S.id_width(wb))
     print("\n  check   %d error(s), %d warning(s)"
           % (len(errors), sum(len(v) for v in warnings.values())))
     for msg in errors[:5]:
@@ -124,7 +126,7 @@ def report(register, root, tsp_register):
 # --- commands ---------------------------------------------------------------
 
 def cmd_add(args):
-    wb, ws, hrow, cols = open_register(args.register)
+    wb, ws, hrow, cols, width = open_register(args.register)
     rows = rows_of(ws, hrow, cols)
 
     if not os.path.exists(args.path):
@@ -159,7 +161,7 @@ def cmd_add(args):
                 ws.cell(row, cols[key], value)
         print("  row     %d written" % row)
 
-    rename_on_disk(args.path, target_name(artifact_id, name, args.path), args.dry_run)
+    rename_on_disk(args.path, target_name(artifact_id, name, args.path, width), args.dry_run)
 
     if not args.dry_run:
         wb.save(args.register)
@@ -170,7 +172,7 @@ def cmd_add(args):
 
 
 def cmd_rename(args):
-    wb, ws, hrow, cols = open_register(args.register)
+    wb, ws, hrow, cols, width = open_register(args.register)
     rows = rows_of(ws, hrow, cols)
     rec = row_for(rows, args.id)
     old = S.clean(rec.get("Name"))
@@ -180,7 +182,7 @@ def cmd_rename(args):
 
     path = locate(args.root, args.id)
     if path:
-        rename_on_disk(path, target_name(args.id, args.name, path), args.dry_run)
+        rename_on_disk(path, target_name(args.id, args.name, path, width), args.dry_run)
     else:
         print("  disk    nothing found with prefix %s%s" %
               (args.id, "" if args.root else " (pass --root to rename the file too)"))
@@ -196,7 +198,7 @@ def cmd_rename(args):
 def cmd_move(args):
     if args.parent_digital is None and args.parent_physical is None:
         sys.exit("Give --parent-digital and/or --parent-physical.")
-    wb, ws, hrow, cols = open_register(args.register)
+    wb, ws, hrow, cols, width = open_register(args.register)
     rows = rows_of(ws, hrow, cols)
     rec = row_for(rows, args.id)
     ids = set(S.clean(r["ID"]) for r in rows)
@@ -249,7 +251,7 @@ def cmd_move(args):
 
 
 def cmd_retire(args):
-    wb, ws, hrow, cols = open_register(args.register)
+    wb, ws, hrow, cols, width = open_register(args.register)
     rows = rows_of(ws, hrow, cols)
     rec = row_for(rows, args.id)
     name = S.clean(rec.get("Name"))
@@ -305,6 +307,97 @@ def cmd_retire(args):
     return 0
 
 
+def cmd_repad(args):
+    """Bring every filename up to the register's ID width.
+
+    Needed once when a register adopts padding, and again if the width is raised
+    because the artifact count outgrew it. Only the number changes: the name,
+    separator and extension are left exactly as they are.
+    """
+    wb, ws, hrow, cols, width = open_register(args.register)
+    rows = rows_of(ws, hrow, cols)
+
+    if args.width:
+        width = args.width
+        if S.SHEET_SETTINGS in wb.sheetnames:
+            st = wb[S.SHEET_SETTINGS]
+            for r in range(1, st.max_row + 1):
+                if str(st.cell(r, 1).value or "").strip().lower() == "id width":
+                    st.cell(r, 2, width)
+                    break
+            else:
+                st.cell(st.max_row + 1, 1, "ID width"); st.cell(st.max_row, 2, width)
+        else:
+            st = wb.create_sheet(S.SHEET_SETTINGS)
+            st.cell(1, 1, "Setting"); st.cell(1, 2, "Value")
+            st.cell(2, 1, "ID width"); st.cell(2, 2, width)
+        print("Setting ID width to %d" % width)
+
+    widest = max((len(S.clean(r["ID"])) for r in rows), default=1)
+    if widest > width:
+        sys.exit("This register has %d-digit IDs but the width is %d. "
+                 "Re-run with --width %d, or padding would sort wrongly "
+                 "above 10^%d." % (widest, width, widest, width))
+
+    plan = []
+    if args.root:
+        prefixed, _ = S.scan_folder(args.root)
+        known = set(S.clean(r["ID"]) for r in rows)
+        for rid in sorted(prefixed, key=lambda k: int(k)):
+            if rid not in known:
+                continue
+            for rel in prefixed[rid]:
+                path = os.path.join(args.root, rel.replace("/", os.sep))
+                current = os.path.basename(path)
+                match = S.ID_PREFIX.match(current)
+                sep = current[match.end(1):match.end()]
+                want = "%s%s%s" % (S.format_id(rid, width), sep, current[match.end():])
+                if current != want:
+                    plan.append((os.path.abspath(path), want))
+
+    for path, want in plan:
+        print("  %s -> %s" % (os.path.basename(path), want))
+    print("\n  %d to rename, %d already correct"
+          % (len(plan), sum(len(v) for v in
+                            (prefixed.values() if args.root else [])) - len(plan)))
+
+    if args.dry_run:
+        print("  dry run - nothing written.")
+        return 0
+
+    # Write and release the workbook before touching the filesystem: Windows will
+    # not rename a directory that contains an open file, and the register usually
+    # lives inside one of the folders being renamed.
+    wb.save(args.register)
+    wb.close()
+
+    register = os.path.abspath(args.register)
+    failed = []
+    # Deepest first, so a parent rename never invalidates a path still queued.
+    for path, want in sorted(plan, key=lambda pw: pw[0].count(os.sep), reverse=True):
+        dest = os.path.join(os.path.dirname(path), want)
+        for _ in range(5):
+            try:
+                os.rename(path, dest)
+                if register == path or register.startswith(path + os.sep):
+                    register = dest + register[len(path):]
+                break
+            except OSError:
+                time.sleep(0.2)
+        else:
+            failed.append((os.path.basename(path), want))
+
+    if failed:
+        print("\n  Could not rename %d item(s) - close anything open "
+              "inside them and re-run:" % len(failed))
+        for old, want in failed:
+            print("    %s  ->  %s" % (old, want))
+    if register != os.path.abspath(args.register):
+        print("  register is now %s" % os.path.relpath(register, args.root or "."))
+    report(register, args.root, args.tsp_register)
+    return 0
+
+
 # --- entry point ------------------------------------------------------------
 
 def main():
@@ -347,6 +440,11 @@ def main():
     s.add_argument("--parent-digital")
     s.add_argument("--parent-physical")
     s.set_defaults(func=cmd_move)
+
+    s = subs.add_parser("repad", help="pad every filename to the register's ID width")
+    shared(s)
+    s.add_argument("--width", type=int, help="also change the register's ID width")
+    s.set_defaults(func=cmd_repad)
 
     s = subs.add_parser("retire", help="delete the artifact; keep the row and the ID")
     shared(s, dry=False)

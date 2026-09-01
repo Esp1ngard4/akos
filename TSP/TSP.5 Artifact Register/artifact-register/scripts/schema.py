@@ -23,6 +23,14 @@ TOOL_PREFIX = "TSP."
 ROOT_PARENT = "Main"
 NO_PARENT = "N/A"
 
+# Zero-padded so that lexicographic order matches numeric order. Sorting differs
+# by platform - Windows Explorer sorts naturally (1, 2, 10) while web clients,
+# macOS and `ls` sort lexicographically (1, 10, 2) - and padding makes the folder
+# read the same everywhere. Stored per register rather than derived, so adding
+# artifact 100 never silently re-pads everything below it.
+ID_WIDTH_DEFAULT = 2
+SHEET_SETTINGS = "Settings"
+
 HEADER_ROW = 6          # for registers this tool creates
 TITLE_ROW = 2
 SHEET = "Artifacts"
@@ -31,6 +39,26 @@ LOOKUP_AREAS = "Areas of Focus"
 
 # "12. Insurance", "12.Insurance", "12 Insurance" - the ID written onto the file
 ID_PREFIX = re.compile(r"^(\d+)[.\s]")
+
+
+def id_width(wb):
+    """The register's zero-padding width. Registers predating the setting use 2."""
+    if SHEET_SETTINGS not in wb.sheetnames:
+        return ID_WIDTH_DEFAULT
+    ws = wb[SHEET_SETTINGS]
+    for r in range(1, ws.max_row + 1):
+        if str(ws.cell(r, 1).value or "").strip().lower() == "id width":
+            try:
+                return max(1, int(ws.cell(r, 2).value))
+            except (TypeError, ValueError):
+                break
+    return ID_WIDTH_DEFAULT
+
+
+def format_id(value, width):
+    """`7` -> `07`. Never truncates: an ID wider than the setting prints in full."""
+    text = str(value).strip()
+    return text.zfill(width) if text.isdigit() else text
 
 
 def find_header(ws):
@@ -115,8 +143,10 @@ def scan_folder(root, stop_ids=()):
             rel = "%s/%s" % (rel_base, name) if rel_base else name
             match = ID_PREFIX.match(name)
             if match:
-                prefixed.setdefault(match.group(1), []).append(rel)
-                if os.path.isdir(full) and match.group(1) not in stop:
+                # Key on the numeric value: `07.` and `7.` are the same artifact.
+                key = str(int(match.group(1)))
+                prefixed.setdefault(key, []).append(rel)
+                if os.path.isdir(full) and key not in stop:
                     walk(full, rel)
             else:
                 bare.append(rel)          # reported once; not descended into
