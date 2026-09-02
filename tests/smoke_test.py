@@ -44,7 +44,7 @@ TOOLS = [
     },
     {
         "name": "TSP.2 RAID Register",
-        "skill": "TSP/TSP.2 RAID Register/raid-dashboard",
+        "skill": "TSP/TSP.2 RAID Register/raid-manager",
         "assets": [],
         "register": "RAID Demo.json",
         "dashboard": "RAID Dashboard.html",

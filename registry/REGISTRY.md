@@ -21,7 +21,7 @@ python install.py add <skill> --into <your-project>
 | ID | Tool | Status | Skill | Definition doc |
 |---|---|---|---|---|
 | TSP.1 | **WBS Register** | Implemented | `wbs-manager` | [TD.1](../TSP/TSP.1%20WBS%20Register/TD.1%20-%20WBS%20Register.md) |
-| TSP.2 | **RAID Register** | Implemented | `raid-dashboard` | [TD.2](../TSP/TSP.2%20RAID%20Register/TD.2%20-%20RAID%20Register.md) |
+| TSP.2 | **RAID Register** | Implemented | `raid-manager` | [TD.2](../TSP/TSP.2%20RAID%20Register/TD.2%20-%20RAID%20Register.md) |
 | TSP.3 | **TSP Register** | Implemented | `tsp-manager`, `td-author` | [TD.3](../TSP/TSP.3%20TSP%20Register/TD.3%20-%20TSP%20Register.md) |
 | TSP.4 | **Tool Installer** | Implemented | _none_ | [TD.4](../TSP/TSP.4%20Tool%20Installer/TD.4%20-%20Tool%20Installer.md) |
 | TSP.5 | **Artifact Register** | Implemented | `artifact-register` | [TD.5](../TSP/TSP.5%20Artifact%20Register/TD.5%20-%20Artifact%20Register.md) |
@@ -52,4 +52,4 @@ python install.py add <skill> --into <your-project>
 
 ---
 
-Generated from `registry/TSP Register.json` on 2026-09-01.
+Generated from `registry/TSP Register.json` on 2026-09-02.

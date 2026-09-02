@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Read a RAID .xlsx file and generate a self-contained HTML dashboard.
+Read a RAID register and generate a self-contained HTML dashboard.
 Usage: python refresh_raid.py <register_path> <output_html_path> [project_name]
 """
 import os
@@ -60,6 +60,13 @@ def read_raid(register_path):
         if probability and severity and target not in (None, ""):
             entry["targetResidualRisk"] = round(
                 probability * severity * (1 - target / 100), 1)
+
+        log = entry.get("actionLog")
+        if isinstance(log, list):
+            dates = [e.get("on") for e in log
+                     if isinstance(e, dict) and e.get("on")]
+            if dates:
+                entry["updated"] = max(dates)
 
         entries.append(dict((k, v) for k, v in entry.items() if v is not None))
     return entries
@@ -179,6 +186,13 @@ tr:hover td {{ background: #f8fafc; }}
 .modal .field {{ margin-bottom: 10px; }}
 .modal .field-label {{ font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }}
 .modal .field-value {{ font-size: 13px; line-height: 1.5; white-space: pre-wrap; }}
+.modal ol.log {{ list-style: none; margin: 6px 0 0; padding: 0; border-left: 2px solid #e5e7eb; }}
+.modal ol.log li {{ position: relative; padding: 0 0 12px 14px; }}
+.modal ol.log li:before {{ content: ''; position: absolute; left: -5px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; }}
+.modal ol.log li:first-child:before {{ background: #2563eb; }}
+.modal .log-meta {{ font-size: 11px; color: #666; }}
+.modal .log-note {{ font-size: 13px; line-height: 1.5; white-space: pre-wrap; }}
+.modal .chg {{ display: inline-block; font-size: 11px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 3px; padding: 1px 5px; margin: 2px 4px 2px 0; }}
 .modal .close-btn {{ position: sticky; top: 0; float: right; background: #f3f4f6; border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }}
 .modal .close-btn:hover {{ background: #e5e7eb; }}
 .modal .edit-btn {{ margin-top: 12px; padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }}
@@ -210,7 +224,7 @@ tr:hover td {{ background: #f8fafc; }}
       <thead><tr>
         <th data-sort="id">ID</th><th data-sort="detail">Detail</th><th data-sort="type">Type</th>
         <th data-sort="priority">Priority</th><th data-sort="moscow">MoSCoW</th>
-        <th data-sort="status">Status</th><th data-sort="trackedExternally">Tracked</th><th data-sort="hasAuxMat">AuxMat</th><th data-sort="lastReview">Last Review</th>
+        <th data-sort="status">Status</th><th data-sort="trackedExternally">Tracked</th><th data-sort="hasAuxMat">AuxMat</th><th data-sort="lastReview">Last Review</th><th data-sort="updated">Updated</th>
       </tr></thead>
       <tbody id="tableBody"></tbody>
     </table>
@@ -308,7 +322,7 @@ function renderTable() {{
     const pColor = e.priority >= 80 ? '#dc2626' : e.priority >= 60 ? '#d97706' : '#16a34a';
     const typeClass = 'badge-'+(e.type||'').toLowerCase();
     const statusClass = 'status-'+(e.status||'').toLowerCase();
-    return '<tr><td><strong>R.'+e.id+'</strong></td><td><a class="detail-link" onclick="showDetail('+e.id+')">'+e.detail+'</a></td><td><span class="badge '+typeClass+'">'+(e.type||'—')+'</span></td><td><div class="priority-bar"><div class="priority-fill" style="width:'+e.priority+'%;background:'+pColor+'"></div></div>'+e.priority+'%</td><td>'+(e.moscow||'—').replace(/^\\d\\./,'')+'</td><td><span class="'+statusClass+'">'+(e.status||'—')+'</span></td><td style="text-align:center">'+(e.trackedExternally==='Y'?'✓':'—')+'</td><td style="text-align:center">'+(e.hasAuxMat==='Y'?'📁':'—')+'</td><td>'+(e.lastReview||'—')+'</td></tr>';
+    return '<tr><td><strong>R.'+e.id+'</strong></td><td><a class="detail-link" onclick="showDetail('+e.id+')">'+e.detail+'</a></td><td><span class="badge '+typeClass+'">'+(e.type||'—')+'</span></td><td><div class="priority-bar"><div class="priority-fill" style="width:'+e.priority+'%;background:'+pColor+'"></div></div>'+e.priority+'%</td><td>'+(e.moscow||'—').replace(/^\\d\\./,'')+'</td><td><span class="'+statusClass+'">'+(e.status||'—')+'</span></td><td style="text-align:center">'+(e.trackedExternally==='Y'?'✓':'—')+'</td><td style="text-align:center">'+(e.hasAuxMat==='Y'?'📁':'—')+'</td><td>'+(e.lastReview||'—')+'</td><td>'+(e.updated||'—')+'</td></tr>';
   }}).join('');
 }}
 
@@ -319,11 +333,25 @@ document.querySelector('thead').addEventListener('click', e => {{
   renderTable();
 }});
 
+function logHtml(log) {{
+  if (!log) return '';
+  // A register written before the log was structured holds one free-text
+  // string. Show it as a single undated entry rather than nothing.
+  const items = Array.isArray(log) ? log : [{{note:String(log)}}];
+  const rows = items.slice().reverse().map(en => {{
+    const chg = en.changed ? Object.keys(en.changed).sort().map(k =>
+      '<span class="chg">'+k+': '+(en.changed[k][0]||'—')+' → '+(en.changed[k][1]||'—')+'</span>').join('') : '';
+    return '<li><div class="log-meta">'+(en.on||'undated')+' · '+(en.by||'unattributed')+'</div>'
+      + chg + (en.note ? '<div class="log-note">'+en.note+'</div>' : '')+'</li>';
+  }}).join('');
+  return '<div class="field"><div class="field-label">Action Log · '+items.length+' entr'+(items.length===1?'y':'ies')+'</div><ol class="log">'+rows+'</ol></div>';
+}}
+
 function showDetail(id) {{
   const e = DATA.entries.find(x => x.id === id); if (!e) return;
   const riskFields = e.type === 'Risk' ? [['Probability',e.probability],['Severity',e.severity],['Response Strategy',e.responseStrategy],['Mitigation Target',e.mitigationTarget!=null?e.mitigationTarget+'%':null],['Target Residual Risk',e.targetResidualRisk],['Residual Risk Score',e.residualRisk]] : [];
-  const fields = [['Type',e.type],['DRI',e.dri],['Priority',e.priority+'%'],['Urgency',e.urgency],['Consequences',e.consequences],['Feasibility',e.feasibility],...riskFields,['MoSCoW',e.moscow],['Status',e.status],['Tracked externally',e.trackedExternally==='Y'?'Yes':'No'],['Description',e.description],['Action Plan',e.actionPlan],['Acceptance Criteria',e.acceptanceCriteria],['Action Log',e.actionLog],['Opened',e.openedOn],['Last Review',e.lastReview],['Review On',e.reviewOn],['Next Review On',e.nextReviewOn],['Closed On',e.closedOn],['Closed By',e.closedBy],['Requested By',e.requestedBy],['Estimated Effort',e.estimatedEffort],['ETC',e.etc],['ETC Renegotiated',e.etcRenegotiated],['Has AuxMat',e.hasAuxMat==='Y'?'Yes':'No']].filter(([,v])=>v!=null);
-  document.getElementById('modalContent').innerHTML = '<button class="close-btn" onclick="closeModal()">x</button><h2>R.'+e.id+' — '+e.detail+'</h2>'+fields.map(([l,v])=>'<div class="field"><div class="field-label">'+l+'</div><div class="field-value">'+String(v).replace(/\\n/g,'<br>')+'</div></div>').join('')+'<button class="edit-btn" onclick="requestEdit('+e.id+')">Request Edit via Chat</button>';
+  const fields = [['Type',e.type],['DRI',e.dri],['Priority',e.priority+'%'],['Urgency',e.urgency],['Consequences',e.consequences],['Feasibility',e.feasibility],...riskFields,['MoSCoW',e.moscow],['Status',e.status],['Tracked externally',e.trackedExternally==='Y'?'Yes':'No'],['Description',e.description],['Action Plan',e.actionPlan],['Acceptance Criteria',e.acceptanceCriteria],['Opened',e.openedOn],['Last Review',e.lastReview],['Review On',e.reviewOn],['Next Review On',e.nextReviewOn],['Closed On',e.closedOn],['Closed By',e.closedBy],['Requested By',e.requestedBy],['Estimated Effort',e.estimatedEffort],['ETC',e.etc],['ETC Renegotiated',e.etcRenegotiated],['Has AuxMat',e.hasAuxMat==='Y'?'Yes':'No']].filter(([,v])=>v!=null);
+  document.getElementById('modalContent').innerHTML = '<button class="close-btn" onclick="closeModal()">x</button><h2>R.'+e.id+' — '+e.detail+'</h2>'+fields.map(([l,v])=>'<div class="field"><div class="field-label">'+l+'</div><div class="field-value">'+String(v).replace(/\\n/g,'<br>')+'</div></div>').join('')+logHtml(e.actionLog)+'<button class="edit-btn" onclick="requestEdit('+e.id+')">Request Edit via Chat</button>';
   document.getElementById('modalOverlay').classList.add('open');
 }}
 function closeModal() {{ document.getElementById('modalOverlay').classList.remove('open'); }}

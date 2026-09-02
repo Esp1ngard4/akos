@@ -28,12 +28,17 @@ STATUSES = ["Open", "Closed"]
 # Priority and Target Residual Risk are not fields: they are computed from the
 # scores when the dashboard is rendered, so a stored copy cannot go stale.
 
+# Action Log holds a list of {on, by, note, changed} entries rather than free
+# text, so that a field change always carries the reason it was made. raid.py
+# owns writing them; see SKILL.md.
+
 
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("output")
     p.add_argument("project", help="project this register covers")
+    p.add_argument("--author", help="default author for Action Log entries")
     p.add_argument("--force", action="store_true")
     args = p.parse_args()
     if os.path.exists(args.output) and not args.force:
@@ -42,12 +47,27 @@ def main():
     data = R.new("raid-register", args.project, {"entries": []},
                  settings={"fields": {"entries": FIELDS},
                            "vocabularies": {"type": TYPES, "status": STATUSES}})
+    if args.author:
+        data["meta"]["settings"]["author"] = args.author
     R.save(args.output, data)
+
+    # Documented as part of standing up a register, so do it here rather than
+    # leaving the first person who needs it to guess the folder name.
+    auxmat = os.path.join(os.path.dirname(os.path.abspath(args.output)), "AuxMat")
+    if not os.path.isdir(auxmat):
+        os.makedirs(auxmat)
+
     print("Created %s" % args.output)
+    print("  AuxMat/ ready beside it for per-item supporting documents")
     print("  project: %s | %d fields | types: %s"
           % (args.project, len(FIELDS), ", ".join(TYPES)))
-    print("\nNext: add entries, then"
+    if not args.author:
+        print("  no author set - pass --author so log entries are attributed "
+              "consistently")
+    print("\nNext: add entries with"
           )
+    print('  python raid.py add "%s" "<handle>" --type Risk ...' % args.output)
+    print("then")
     print('  python refresh_raid.py "%s" "RAID Dashboard.html" "%s"'
           % (args.output, args.project))
 
