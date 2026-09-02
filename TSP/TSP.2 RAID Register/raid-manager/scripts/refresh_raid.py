@@ -246,11 +246,30 @@ tr:hover td {{ background: #f8fafc; }}
 <script>
 const DATA = {{entries: {data_json}}};
 const FILTER_KEY = 'raidFilters_' + {json.dumps(project_name)};
+const CLOSED_KEY = FILTER_KEY + '_showClosed';
 let activeFilters = {{}}, sortCol = 'priority', sortDir = -1;
 try {{ activeFilters = JSON.parse(localStorage.getItem(FILTER_KEY)) || {{}}; }} catch(e) {{ activeFilters = {{}}; }}
+
+// Closed entries stay in the register and in the KPI counts, but off the board
+// by default - they are history, and history should not compete with the open
+// work for attention every time the board is opened.
+let showClosed = false;
+try {{ showClosed = localStorage.getItem(CLOSED_KEY) === '1'; }} catch(e) {{}}
+function isClosed(e) {{ return e.status === 'Closed' || e.status === 'Resolved'; }}
+function closedCount() {{ return DATA.entries.filter(isClosed).length; }}
+// Filtering for a closed status is an explicit request to see them, so honour
+// it rather than showing an empty board.
+function wantClosed() {{ return showClosed || activeFilters.status === 'Closed' || activeFilters.status === 'Resolved'; }}
+function toggleClosed() {{
+  showClosed = !showClosed;
+  try {{ localStorage.setItem(CLOSED_KEY, showClosed ? '1' : '0'); }} catch(e) {{}}
+  renderFilters(); renderTable();
+}}
+
 function clearFilters() {{
   activeFilters = {{}};
-  try {{ localStorage.removeItem(FILTER_KEY); }} catch(e) {{}}
+  showClosed = false;
+  try {{ localStorage.removeItem(FILTER_KEY); localStorage.removeItem(CLOSED_KEY); }} catch(e) {{}}
   renderFilters(); renderTable();
 }}
 
@@ -291,6 +310,11 @@ function renderFilters() {{
   html += '<span style="color:#ddd">|</span>';
   html += '<button class="filter-btn" data-filter="trackedExternally" data-val="Y">Tracked ✓</button>';
   html += '<button class="filter-btn" data-filter="trackedExternally" data-val="N">Tracked ✗</button>';
+  const nClosed = closedCount();
+  if (nClosed) {{
+    html += '<span style="color:#ddd">|</span>';
+    html += '<button class="filter-btn'+(showClosed?' active':'')+'" onclick="toggleClosed()">'+(showClosed?'Hide':'Show')+' closed ('+nClosed+')</button>';
+  }}
   const activeCount = Object.values(activeFilters).filter(Boolean).length;
   html += '<span style="color:#ddd">|</span>';
   html += '<button class="filter-btn" style="font-style:italic" onclick="clearFilters()">Clear all</button>';
@@ -310,7 +334,9 @@ document.getElementById('filters').addEventListener('click', e => {{
 }});
 
 function renderTable() {{
+  const withClosed = wantClosed();
   const items = DATA.entries.filter(e => {{
+    if (!withClosed && isClosed(e)) return false;
     for (const [k,v] of Object.entries(activeFilters)) {{ if (v && e[k] !== v) return false; }}
     return true;
   }}).sort((a, b) => {{
@@ -318,12 +344,17 @@ function renderTable() {{
     if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir;
     return String(av).localeCompare(String(bv)) * sortDir;
   }});
-  document.getElementById('tableBody').innerHTML = items.map(e => {{
+  const rows = items.map(e => {{
     const pColor = e.priority >= 80 ? '#dc2626' : e.priority >= 60 ? '#d97706' : '#16a34a';
     const typeClass = 'badge-'+(e.type||'').toLowerCase();
     const statusClass = 'status-'+(e.status||'').toLowerCase();
     return '<tr><td><strong>R.'+e.id+'</strong></td><td><a class="detail-link" onclick="showDetail('+e.id+')">'+e.detail+'</a></td><td><span class="badge '+typeClass+'">'+(e.type||'—')+'</span></td><td><div class="priority-bar"><div class="priority-fill" style="width:'+e.priority+'%;background:'+pColor+'"></div></div>'+e.priority+'%</td><td>'+(e.moscow||'—').replace(/^\\d\\./,'')+'</td><td><span class="'+statusClass+'">'+(e.status||'—')+'</span></td><td style="text-align:center">'+(e.trackedExternally==='Y'?'✓':'—')+'</td><td style="text-align:center">'+(e.hasAuxMat==='Y'?'📁':'—')+'</td><td>'+(e.lastReview||'—')+'</td><td>'+(e.updated||'—')+'</td></tr>';
   }}).join('');
+  const nHidden = withClosed ? 0 : closedCount();
+  document.getElementById('tableBody').innerHTML = rows ||
+    '<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">No entries match'
+    + (nHidden ? ', and '+nHidden+' closed one'+(nHidden===1?' is':'s are')+' hidden — use <em>Show closed</em> above.' : '.')
+    + '</td></tr>';
 }}
 
 document.querySelector('thead').addEventListener('click', e => {{

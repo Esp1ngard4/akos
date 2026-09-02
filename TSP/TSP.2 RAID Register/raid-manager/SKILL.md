@@ -258,6 +258,7 @@ Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of 
 ## Dashboard features
 
 - **Board tab**: sortable table, filters for Type/Status/MoSCoW/Category/DRI/tracked, a "Clear all" button, and an active-filter count badge. The **Updated** column is the newest Action Log date, derived at render time — sort on it to find items that have gone quiet. Filter state persists across reloads via localStorage (keyed per project name).
+- **Closed entries are hidden from the board by default.** They stay in the register permanently and stay in the KPI counts — they are history, and history should not compete with open work for attention. A `Show closed (N)` button brings them back, and the choice persists like any other filter. Filtering explicitly for `Status = Closed` overrides the hide, so that combination shows the closed entries rather than an empty board. When a filter matches nothing, the empty state says how many closed entries are hidden.
 - **Item detail**: the Action Log renders as a timeline, newest first, each entry showing its date, author, field changes and note.
 - **Analytics tab**: KPIs, by-type and by-status charts, priority distribution, MoSCoW breakdown, items-over-time timeline, and — when risk items are present — a risk heat map.
 - **Risk heat map**: Probability x Severity scatter with a green/amber/red zone background (green <6, amber 6-14, red >=15 on Probability x Severity). Only renders when >=3 open risk items have both fields scored.
