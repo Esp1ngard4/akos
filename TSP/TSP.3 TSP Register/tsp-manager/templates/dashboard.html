@@ -110,11 +110,19 @@ function showTab(id) {
 
 // KPIs
 const total = TOOLS.length;
-const implemented = TOOLS.filter(t => t.Status === 'Implementado').length;
-const inProgress = TOOLS.filter(t => t.Status === 'Em execução').length;
-// Status vocabulary is per-estate; accept either the English or Portuguese set.
-const OBSOLETE = ['Obsolete', 'Absoleto', 'Obsoleto'];
-const obsolete = TOOLS.filter(t => OBSOLETE.includes(t.Status)).length;
+// Status vocabulary is per-estate and per-language, so match on a stem rather
+// than a literal. Comparing against one spelling is how a counter reads zero
+// against a register that is perfectly valid - it just answers in the other
+// language. Stems cover Planned/Planeado, In Progress/Em execucao,
+// Implemented/Implementado, Obsolete/Absoleto/Obsoleto.
+const statusIs = (t, stems) => {
+  const s = (t.Status || '').toLowerCase();
+  return stems.some(stem => s.includes(stem));
+};
+const implemented = TOOLS.filter(t => statusIs(t, ['implement'])).length;
+const inProgress = TOOLS.filter(t => statusIs(t, ['progress', 'execu'])).length;
+const isObsolete = t => statusIs(t, ['obsolet', 'absolet']);
+const obsolete = TOOLS.filter(isObsolete).length;
 const critical = TOOLS.filter(t => t.Relevancy === 'Critical').length;
 const overdueActs = ACTIVITIES.filter(a => a['Next Due'] && a['Next Due'] < TODAY).length;
 const automated = TOOLS.filter(t => t.Skill).length;
