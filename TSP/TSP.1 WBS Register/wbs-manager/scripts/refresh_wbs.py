@@ -269,6 +269,42 @@ function descendants(id){{
   return out;
 }}
 
+// The breakdown itself. Parent holds the structure; Code only displays a
+// position, so the tree is built from Parent and sorted by Code.
+function childrenOf(id){{
+  return DATA.filter(d=>(d.pa===null?null:String(d.pa))===(id===null?null:String(id)))
+             .sort((a,b)=>String(a.c).localeCompare(String(b.c),undefined,{{numeric:true}}));
+}}
+
+function renderTree(){{
+  const known=new Set(DATA.map(d=>String(d.id)));
+  // A row whose parent is missing is still a root, so nothing is hidden.
+  const roots=DATA.filter(d=>d.pa===null||!known.has(String(d.pa)))
+                  .sort((a,b)=>String(a.c).localeCompare(String(b.c),undefined,{{numeric:true}}));
+  let h=`<table><tr><th>Code</th><th>Item</th><th>Type</th><th>Delivers</th><th>Nature</th><th>Status</th><th>Effort</th><th>Owner</th></tr>`;
+  let shown=0;
+  function row(d,depth){{
+    shown++;
+    const kids=childrenOf(d.id);
+    const pad=depth*18;
+    const kd=d.kd==='Y'?' <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700">KEY</span>':'';
+    const caret=kids.length?'<span style="color:#9ca3af">▸</span> ':'';
+    const strong=depth===0||d.kd==='Y';
+    h+=`<tr><td>${{d.c||'-'}}</td>
+      <td style="padding-left:${{8+pad}}px">${{caret}}${{strong?'<strong>':''}}${{d.t||'<em style="color:#b91c1c">(no title)</em>'}}${{strong?'</strong>':''}}${{kd}}</td>
+      <td>${{d.ty||'<span style="color:#b91c1c">—</span>'}}</td><td>${{d.dl||'-'}}</td><td>${{d.na||'-'}}</td>
+      <td>${{badge(d.s)}}</td><td>${{d.e||'-'}}${{d.e?'h':''}}</td><td>${{d.o||'-'}}</td></tr>`;
+    kids.forEach(k=>row(k,depth+1));
+  }}
+  roots.forEach(r=>row(r,0));
+  h+=`</table>`;
+  if(shown<DATA.length)h+=`<p style="color:#b91c1c;font-size:12px">${{DATA.length-shown}} row(s) unreachable from any root — a Parent cycle.</p>`;
+  const untyped=DATA.filter(d=>!d.ty).length;
+  if(untyped)h+=`<p style="color:#6b7280;font-size:12px;margin-top:10px">${{untyped}} row(s) with no Type, shown as —.</p>`;
+  h+=`<p style="color:#6b7280;font-size:12px">Filters do not apply here: hiding a parent would break the tree.</p>`;
+  return h;
+}}
+
 function renderDeliverables(){{
   const dels=DATA.filter(d=>d.kd==='Y');
   if(!dels.length)return '<p style="color:#6b7280">No rows tagged Key Deliverable = Y. Tag a Feature or Enabler to see it here.</p>';
@@ -312,18 +348,20 @@ function renderGantt(){{
   return h;
 }}
 
-let activeTab='sprints';
+// The breakdown is what a WBS is, so it is what opens.
+let activeTab='tree';
 function render(){{
   rebuildSprints();
   document.getElementById('app').innerHTML=`${{renderKPIs()}}
   <div class="tabs">
+    <div class="tab ${{activeTab==='tree'?'active':''}}" onclick="activeTab='tree';render()">Breakdown</div>
     <div class="tab ${{activeTab==='deliverables'?'active':''}}" onclick="activeTab='deliverables';render()">Deliverables</div>
     <div class="tab ${{activeTab==='sprints'?'active':''}}" onclick="activeTab='sprints';render()">Sprint Board</div>
     <div class="tab ${{activeTab==='analytics'?'active':''}}" onclick="activeTab='analytics';render()">Analytics</div>
     <div class="tab ${{activeTab==='gantt'?'active':''}}" onclick="activeTab='gantt';render()">Gantt</div>
   </div>
-  ${{activeTab==='deliverables'?'':renderFilters()}}
-  <div class="panel active">${{activeTab==='deliverables'?renderDeliverables():activeTab==='sprints'?renderBoard():activeTab==='analytics'?renderAnalytics():renderGantt()}}</div>
+  ${{(activeTab==='deliverables'||activeTab==='tree')?'':renderFilters()}}
+  <div class="panel active">${{activeTab==='tree'?renderTree():activeTab==='deliverables'?renderDeliverables():activeTab==='sprints'?renderBoard():activeTab==='analytics'?renderAnalytics():renderGantt()}}</div>
   <div class="timestamp">Generated: {timestamp}</div>`;
 }}
 render();
