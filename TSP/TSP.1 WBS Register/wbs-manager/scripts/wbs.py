@@ -13,12 +13,18 @@ keeping Key Deliverable off rows that cannot carry it, and holding every
 vocabulary field to the register's own vocabulary. Everything else is a field
 edit: the register is JSON.
 
-The three axes a row carries are deliberately separate, and `check` enforces
-the separation:
+The axes a row carries are deliberately separate, and `check` enforces the
+separation:
 
-    Type      the level             Feature / Enabler / Story / Task
+    Type      the level             Deliverable / Feature / Story / Task
+    Class     what value it serves  Product / Management / Enabler
     Delivers  the artifact kind     Tool / System / Process / Document
     Nature    what is being done    Build / Improve / Analyse / Fix / Maintain
+
+None of the levels is defined by duration. A Story is the smallest slice that
+is independently valuable and independently verifiable; a Task is a step that
+is not independently valuable. How long either takes is Estimated Effort (h),
+which says it better than a level name ever did.
 
 A deliverable is not a collection of its own - it is a row whose Key
 Deliverable is Y. `Parent` is what connects it to the work that delivers it,
@@ -32,14 +38,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import registry as R                                            # noqa: E402
 
 ITEMS = "items"
-# Only these levels name a thing that exists when the work is done, so only
-# these can be a key deliverable. A Story that improves a tool is work on a
-# deliverable, not one itself.
-DELIVERABLE_LEVELS = ("Feature", "Enabler")
+# Only these levels name a thing rather than an activity, so only these can be
+# put in front of a sponsor as a deliverable. Key Deliverable is curation, not
+# classification - it marks what earns a line in an executive report, which is
+# a smaller set than everything with Class = Product.
+DELIVERABLE_LEVELS = ("Deliverable", "Feature")
 
 # Old Type values, which mixed level with artifact kind and with nature.
 # Each maps onto the three axes that replaced it.
 LEGACY_TYPES = {
+    "Enabler":    {"Type": "Feature", "Class": "Enabler"},
     "Feature":    {"Type": "Feature"},
     "Story":      {"Type": "Story"},
     "Tool":       {"Type": "Feature", "Delivers": "Tool"},
@@ -105,9 +113,9 @@ def check_parent(data, child_id, parent):
 
 def check_deliverable(row):
     if row.get("Key Deliverable") == "Y" and row.get("Type") not in DELIVERABLE_LEVELS:
-        sys.exit("Key Deliverable = Y needs Type to be one of %s - it is %r. A "
-                 "deliverable is the thing that exists when the work is done; "
-                 "work on it cannot be one."
+        sys.exit("Key Deliverable = Y needs Type to be one of %s - it is %r. "
+                 "Deliverables and Features name things; Stories and Tasks name "
+                 "activity, and an activity cannot be reported as a deliverable."
                  % (" / ".join(DELIVERABLE_LEVELS), row.get("Type")))
 
 
@@ -126,16 +134,17 @@ def finish(args, data, note):
 
 def cmd_add(args):
     data = R.load(args.register)
-    for field, value in (("type", args.type), ("nature", args.nature),
-                         ("delivers", args.delivers), ("status", args.status),
-                         ("priority", args.priority)):
+    for field, value in (("type", args.type), ("class", args.klass),
+                         ("nature", args.nature), ("delivers", args.delivers),
+                         ("status", args.status), ("priority", args.priority)):
         check_vocab(data, field, value)
     check_parent(data, None, args.parent)
 
     # next_id returns 0 for an empty collection; IDs here start at 1.
     row = {"ID": R.next_id(data, ITEMS) or 1, "Title": args.title}
     for key, value in (("Parent", as_id(args.parent)), ("Code", args.code),
-                       ("Type", args.type), ("Nature", args.nature),
+                       ("Type", args.type), ("Class", args.klass),
+                       ("Nature", args.nature),
                        ("Delivers", args.delivers), ("Status", args.status),
                        ("Priority", args.priority), ("Owner", args.owner),
                        ("Key Deliverable", args.key_deliverable),
@@ -145,6 +154,7 @@ def cmd_add(args):
     row.setdefault("Status", "Portfolio Backlog")
     row.setdefault("Type", "Story")
     row.setdefault("Nature", "Build")
+    row.setdefault("Class", "Product")
     check_deliverable(row)
     R.rows(data, ITEMS).append(row)
     return finish(args, data, "Added item %s  %s" % (row["ID"], args.title))
@@ -155,9 +165,9 @@ def cmd_set(args):
     row = find(data, args.id)
     if row is None:
         sys.exit("No item with ID %s." % args.id)
-    for field, value in (("type", args.type), ("nature", args.nature),
-                         ("delivers", args.delivers), ("status", args.status),
-                         ("priority", args.priority)):
+    for field, value in (("type", args.type), ("class", args.klass),
+                         ("nature", args.nature), ("delivers", args.delivers),
+                         ("status", args.status), ("priority", args.priority)):
         check_vocab(data, field, value)
     if args.parent is not None:
         check_parent(data, args.id, args.parent)
@@ -165,6 +175,7 @@ def cmd_set(args):
     changed = []
     for key, value in (("Parent", as_id(args.parent)), ("Code", args.code),
                        ("Title", args.title), ("Type", args.type),
+                       ("Class", args.klass),
                        ("Nature", args.nature), ("Delivers", args.delivers),
                        ("Status", args.status), ("Priority", args.priority),
                        ("Owner", args.owner),
@@ -197,7 +208,8 @@ def cmd_check(args):
 
     for row in items:
         rid = row.get("ID")
-        for field, vocab in (("Type", "type"), ("Nature", "nature"),
+        for field, vocab in (("Type", "type"), ("Class", "class"),
+                             ("Nature", "nature"),
                              ("Delivers", "delivers"), ("Status", "status"),
                              ("Priority", "priority"),
                              ("Key Deliverable", "key deliverable")):
@@ -252,6 +264,7 @@ def cmd_migrate(args):
                              % (row.get("ID"), legacy,
                                 ", ".join("%s=%s" % kv for kv in mapped.items())))
         row.setdefault("Nature", "Build")
+    row.setdefault("Class", "Product")
 
     # Parent from Code, which is the only place the hierarchy exists today.
     by_code = {str(r.get("Code")): r for r in items if r.get("Code") not in (None, "")}
@@ -270,7 +283,8 @@ def cmd_migrate(args):
     settings = data.setdefault("meta", {}).setdefault("settings", {})
     vocabs = settings.setdefault("vocabularies", {})
     import create_wbs as C
-    for name, values in (("type", C.TYPES), ("nature", C.NATURES),
+    for name, values in (("type", C.TYPES), ("class", C.CLASSES),
+                         ("nature", C.NATURES),
                          ("delivers", C.DELIVERS), ("key deliverable", C.YESNO)):
         if vocabs.get(name) != values:
             vocabs[name] = values
@@ -319,6 +333,7 @@ def main():
         sub.add_argument("--parent", help="parent item's stable ID")
         sub.add_argument("--code")
         sub.add_argument("--type")
+        sub.add_argument("--class", dest="klass")
         sub.add_argument("--nature")
         sub.add_argument("--delivers")
         sub.add_argument("--status")

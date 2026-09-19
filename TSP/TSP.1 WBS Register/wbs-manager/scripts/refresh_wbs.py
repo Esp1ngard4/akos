@@ -246,7 +246,7 @@ function renderKPIs(){
 
 function renderTree(){
   let h=treeControls();
-  h+=`<table><tr><th>Code</th><th>Item</th><th>Type</th><th>Delivers</th><th>Nature</th><th>Status</th><th>Effort</th><th>Owner</th></tr>`;
+  h+=`<table><tr><th>Code</th><th>Item</th><th>Type</th><th>Class</th><th>Delivers</th><th>Nature</th><th>Status</th><th>Effort</th><th>Owner</th></tr>`;
   let shown=0;
   walk((d,depth)=>{
     shown++;
@@ -256,7 +256,7 @@ function renderTree(){
     const rolled=sub.length?` <span style="color:#6b7280">(${sub.length} hidden, ${sub.reduce((a,k)=>a+(k.e||0),0)+(d.e||0)}h)</span>`:'';
     h+=`<tr><td>${d.c||'-'}</td>
       <td style="padding-left:${8+depth*18}px;${strong}">${twisty(d)} ${d.t||'<em class="warn">(no title)</em>'}${kd}${rolled}</td>
-      <td>${d.ty||'<span class="warn">—</span>'}</td><td>${d.dl||'-'}</td><td>${d.na||'-'}</td>
+      <td>${d.ty||'<span class="warn">—</span>'}</td><td>${d.cl==='Product'?'-':(d.cl||'-')}</td><td>${d.dl||'-'}</td><td>${d.na||'-'}</td>
       <td>${badge(d.s)}</td><td>${d.e?d.e+'h':'-'}</td><td>${d.o||'-'}</td></tr>`;
   });
   h+=`</table>`;
@@ -287,8 +287,8 @@ function renderDeliverables(){
       <td>${d.rel||'-'}</td><td>${d.relon||'-'}</td><td>${d.o||'-'}</td></tr>`;
   });
   h+=`</table>`;
-  const orphans=DATA.filter(d=>(d.ty==='Feature'||d.ty==='Enabler')&&d.kd!=='Y').length;
-  if(orphans)h+=`<p class="muted">${orphans} Feature/Enabler row(s) not tagged as key deliverables.</p>`;
+  const others=DATA.filter(d=>(d.ty==='Deliverable'||d.ty==='Feature')&&d.kd!=='Y').length;
+  if(others)h+=`<p class="muted">${others} further Deliverable/Feature row(s) not flagged for an executive report. Key Deliverable is curation, not classification - Class says what kind of value a row serves.</p>`;
   return h;
 }
 
@@ -438,6 +438,7 @@ def generate_html(project_name, items, stats):
             'sp': str(it.get('Sprint Planned', '') or ''),
             'se': str(it.get('Sprint Ended', '') or ''),
             'ty': str(it.get('Type', '') or ''),
+            'cl': str(it.get('Class', '') or ''),
             'na': str(it.get('Nature', '') or ''),
             'dl': str(it.get('Delivers', '') or ''),
             'kd': str(it.get('Key Deliverable', '') or ''),

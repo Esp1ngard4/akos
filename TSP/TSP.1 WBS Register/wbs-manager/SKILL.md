@@ -65,17 +65,31 @@ A register is one JSON file: a `meta` envelope plus named collections of rows. `
 - **Rows omit their empty fields.** Do not write `null` or `""` to mean "no value"; leave the key out. `meta.settings.fields` carries the canonical field order for rendering a rectangular table.
 - **A register may carry extra collections** beyond `items` when a project has structured data that belongs with its WBS. The dashboard reads `items` only.
 
-### The three axes
+### The four axes
 
-A row says three independent things, and keeping them apart is what lets deliverables be a view over the register rather than a second collection:
+A row says four independent things, and keeping them apart is what lets deliverables be a view over the register rather than a second collection:
 
 | Field | Question it answers | Values |
 |---|---|---|
-| `Type` | What **level** is this? | Feature / Enabler / Story / Task |
+| `Type` | What **level** is this? | Deliverable / Feature / Story / Task |
+| `Class` | What **kind of value** does it serve? | Product / Management / Enabler |
 | `Delivers` | What **artifact** does it produce? | Tool / System / Process / Document |
 | `Nature` | What is being **done**? | Build / Improve / Analyse / Fix / Maintain |
 
-**The deliverable is the parent; work on it are children.** A Feature is the thing that exists when the work is done — the tool, the system, the document set. Build, enhance, assess and fix are children of it, sized as Feature or Story by scale but never themselves key deliverables. A tool enhanced three times has one Feature row and three pieces of work beneath it, not three peer Features.
+**No level is defined by duration.** Size lives in `Estimated Effort (h)`, which states it better than a level name ever could — and once tooling compresses a week of work into an afternoon, any definition resting on "fits in a sprint" stops discriminating anything.
+
+| Type | Test | Names a |
+|---|---|---|
+| **Deliverable** | A verifiable product, result or capability that persists after the project | noun |
+| **Feature** | A named increment of a deliverable that a stakeholder would recognise and ask for | noun |
+| **Story** | The smallest slice that is independently valuable **and** independently verifiable | verb |
+| **Task** | A step that is not independently valuable; it only makes sense inside its story | verb |
+
+The noun/verb column is the quickest test in practice: deliverables and features name *things*, stories and tasks name *activity*. "Renovated kitchen" against "install the cabinets"; "Todoist integration" against "enhance the sync script".
+
+**The deliverable is the parent; work on it are children.** A Deliverable is never finished — it accumulates features for as long as it exists. A tool enhanced three times has one Deliverable row and three Features beneath it, not three peer rows.
+
+`Class` is the distinction between what the project exists to produce and what it needs in order to run. A business case or a project management plan is a real, tracked deliverable that no stakeholder wants the project *for* — PRINCE2 calls these management products, PMBOK separates product scope from project scope. `Enabler` is the third case: work that serves the product without being visible in it, such as a migration or an architectural spike.
 
 ### Collection: `items`
 
@@ -84,11 +98,12 @@ A row says three independent things, and keeping them apart is what lets deliver
 | ID | Yes | Stable identifier — plain sequential integer, assigned once, **never reused, never changed** even if the item is reparented or `Code` is renumbered. This is what anything external references: Execution-folder names, `Parent`, `Key Dependencies`, cross-links to other registers. |
 | Parent | No | The parent item's **stable `ID`**, never its `Code`. Absent on a root. This is the only place the hierarchy is stored — `Code` merely displays it. |
 | Code | Yes | Hierarchical/display position (1.1, 1.2, ...). Free to renumber whenever the structure changes; **never a reference key**. |
-| Title | Yes | Short descriptive name |
-| Type | Yes | Level — see the three axes above |
+| Title | Yes | Short descriptive name. **On a Feature, name the thing, not the work that produced it** — `Artifact Register (FSP.23)`, not `Artifact Register rebuilt AI-first as JSON, replacing the DCL`. A deliverable's title is read in a list of deliverables, where a sentence is unreadable; the detail belongs in `Description`, which is where it stays current anyway. |
+| Type | Yes | Level — see the four axes above |
+| Class | No | What kind of value the row serves. Defaults to `Product`. |
 | Nature | No | What is being done to the thing. Defaults to `Build`. |
 | Delivers | No | Artifact kind, on rows that produce one |
-| Key Deliverable | No | `Y`/`N`. **Only valid on `Feature` and `Enabler` rows** — work on a deliverable cannot be one. Explicit rather than derived: Enablers default to N and Features usually to Y, but the balance varies by project, so a project may adopt its own rule. |
+| Key Deliverable | No | `Y`/`N`. **Curation, not classification** — it marks what earns a line in an executive report, which is a smaller set than everything with `Class: Product`. Valid only on `Deliverable` and `Feature` rows, since a Story or Task names activity and activity cannot be reported as a deliverable. |
 | Description | No | What needs to be done |
 | Acceptance Criteria | No | How completion is verified |
 | Owner | No | Person responsible |
@@ -202,18 +217,17 @@ Builds an empty register — schema, field order and vocabularies, zero rows. It
 | Done | Completed |
 | Cancelled | Dropped without being delivered — keep the row and say why in Comments |
 
-## Type, Delivers and Nature values
+## Vocabularies
 
-| Type (level) | Meaning |
-|------|---------|
-| Feature | A thing that exists when the work is done — the unit of value |
-| Enabler | Supporting or infrastructure deliverable; usually not a key deliverable |
-| Story | A discrete piece of work beneath a Feature or Enabler |
-| Task | A step within a Story, where that granularity earns its keep |
+| Type (level) | Class (kind of value) |
+|---|---|
+| Deliverable · Feature · Story · Task | Product · Management · Enabler |
 
 | Delivers (artifact) | Nature (what is being done) |
-|------|------|
+|---|---|
 | Tool · System · Process · Document | Build · Improve · Analyse · Fix · Maintain |
+
+Definitions for each level are in "The four axes" above. All five vocabularies live in the register's `meta.settings.vocabularies` and are enforced by `wbs.py check`.
 
 ### Migrating an older register
 

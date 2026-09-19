@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Create an empty WBS register for a project.
 
-    python create_wbs.py "WBS Atlas.json" "Atlas"
+    python create_wbs.py "WBS P.208.json" "AKOS"
 
 Built programmatically rather than copied from a template, so the schema has one
 definition and a fresh register can never carry another project's rows across.
@@ -18,7 +18,7 @@ import registry as R                                            # noqa: E402
 
 ITEM_FIELDS = ["ID", "Parent", "Code", "Title", "Description",
                "Acceptance Criteria", "Owner", "Estimated Effort (h)",
-               "Type", "Nature", "Delivers", "Key Deliverable", "Category",
+               "Type", "Class", "Nature", "Delivers", "Key Deliverable", "Category",
                "Status", "Priority", "Sprint Planned", "Sprint Added",
                "Sprint Ended", "Key Dependencies", "Action Plan",
                "Planning Considerations", "Validation Approach",
@@ -28,10 +28,14 @@ ITEM_FIELDS = ["ID", "Parent", "Code", "Title", "Description",
 STATUSES = ["Portfolio Backlog", "Funnel", "Not Started", "Implementing",
             "Done", "Cancelled"]
 PRIORITIES = ["Must", "Should", "Could", "Won't"]
-# Level only. What a row delivers is Delivers; what is being done to it is
-# Nature. Keeping the three apart is what lets deliverables be a view over the
-# items rather than a second collection.
-TYPES = ["Feature", "Enabler", "Story", "Task"]
+# Level only, and defined without reference to duration - size lives in
+# Estimated Effort (h). What a row delivers is Delivers, what kind of value it
+# serves is Class, and what is being done to it is Nature.
+TYPES = ["Deliverable", "Feature", "Story", "Task"]
+# Whether a row serves the value the project exists to create, the running of
+# the project, or the delivery of the product without being visible in it.
+# PRINCE2 calls the first two specialist and management products.
+CLASSES = ["Product", "Management", "Enabler"]
 NATURES = ["Build", "Improve", "Analyse", "Fix", "Maintain"]
 DELIVERS = ["Tool", "System", "Process", "Document"]
 YESNO = ["Y", "N"]
@@ -53,6 +57,7 @@ def main():
                            "vocabularies": {"status": STATUSES,
                                             "priority": PRIORITIES,
                                             "type": TYPES,
+                                            "class": CLASSES,
                                             "nature": NATURES,
                                             "delivers": DELIVERS,
                                             "key deliverable": YESNO}})
