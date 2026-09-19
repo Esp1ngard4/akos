@@ -67,6 +67,8 @@ def generate_html(project_name, items, stats):
     compact = []
     for it in items:
         compact.append({
+            'id': it.get('ID'),
+            'pa': it.get('Parent') if it.get('Parent') not in (None, '') else None,
             'c': str(it.get('Code', '')),
             't': str(it.get('Title', '')),
             's': str(it.get('Status', 'No Status') or 'No Status'),
@@ -75,6 +77,11 @@ def generate_html(project_name, items, stats):
             'sp': str(it.get('Sprint Planned', '') or ''),
             'se': str(it.get('Sprint Ended', '') or ''),
             'ty': str(it.get('Type', '') or ''),
+            'na': str(it.get('Nature', '') or ''),
+            'dl': str(it.get('Delivers', '') or ''),
+            'kd': str(it.get('Key Deliverable', '') or ''),
+            'rel': str(it.get('Planned Release', '') or ''),
+            'relon': str(it.get('Released On', '') or ''),
             'cat': str(it.get('Category', '') or ''),
             'o': str(it.get('Owner', '') or ''),
         })
@@ -250,6 +257,42 @@ function renderAnalytics(){{
   <div class="chart-box"><div class="chart-title">Sprint Effort Allocation</div>${{spd.length?bars(spd,Math.max(...spd.map(d=>d.v),1)):'<p style="color:#6b7280">No sprints planned</p>'}}</div></div>`;
 }}
 
+// A deliverable is not a separate collection - it is a row tagged Key
+// Deliverable = Y. Its progress is rolled up from its descendants through
+// Parent, which holds a stable ID and so survives Code being renumbered.
+function descendants(id){{
+  const out=[],stack=[id];
+  while(stack.length){{
+    const cur=stack.pop();
+    DATA.filter(d=>d.pa!==null&&String(d.pa)===String(cur)).forEach(k=>{{out.push(k);stack.push(k.id);}});
+  }}
+  return out;
+}}
+
+function renderDeliverables(){{
+  const dels=DATA.filter(d=>d.kd==='Y');
+  if(!dels.length)return '<p style="color:#6b7280">No rows tagged Key Deliverable = Y. Tag a Feature or Enabler to see it here.</p>';
+  let h=`<table><tr><th>Code</th><th>Deliverable</th><th>Delivers</th><th>Status</th><th>Work items</th><th>Done</th><th>Progress</th><th>Effort</th><th>Planned</th><th>Released</th><th>Owner</th></tr>`;
+  dels.sort((a,b)=>String(a.c).localeCompare(String(b.c),undefined,{{numeric:true}})).forEach(d=>{{
+    const kids=descendants(d.id);
+    const done=kids.filter(k=>k.s==='Done').length;
+    const live=kids.filter(k=>k.s!=='Cancelled').length;
+    const pct=live?Math.round(done/live*100):(d.s==='Done'?100:0);
+    const effort=kids.reduce((a,k)=>a+(k.e||0),0)+(d.e||0);
+    const bar=`<div style="background:#e5e7eb;border-radius:4px;height:14px;width:90px;position:relative">
+      <div style="background:${{pct===100?'#22c55e':'#4472C4'}};width:${{pct}}%;height:100%;border-radius:4px"></div>
+      <span style="position:absolute;inset:0;font-size:10px;text-align:center;line-height:14px;color:#1a1a2e">${{pct}}%</span></div>`;
+    h+=`<tr><td>${{d.c}}</td><td><strong>${{d.t}}</strong></td><td>${{d.dl||'-'}}</td>
+      <td>${{badge(d.s)}}</td>
+      <td>${{live}}</td><td>${{done}}</td><td>${{bar}}</td><td>${{effort}}h</td>
+      <td>${{d.rel||'-'}}</td><td>${{d.relon||'-'}}</td><td>${{d.o||'-'}}</td></tr>`;
+  }});
+  h+=`</table>`;
+  const orphans=DATA.filter(d=>(d.ty==='Feature'||d.ty==='Enabler')&&d.kd!=='Y').length;
+  if(orphans)h+=`<p style="color:#6b7280;font-size:12px;margin-top:10px">${{orphans}} Feature/Enabler row(s) not tagged as key deliverables.</p>`;
+  return h;
+}}
+
 function renderGantt(){{
   const sprints=Object.keys(sprintGroups).sort();
   if(!sprints.length)return '<p style="color:#6b7280">No sprint-planned items to show.</p>';
@@ -274,12 +317,13 @@ function render(){{
   rebuildSprints();
   document.getElementById('app').innerHTML=`${{renderKPIs()}}
   <div class="tabs">
+    <div class="tab ${{activeTab==='deliverables'?'active':''}}" onclick="activeTab='deliverables';render()">Deliverables</div>
     <div class="tab ${{activeTab==='sprints'?'active':''}}" onclick="activeTab='sprints';render()">Sprint Board</div>
     <div class="tab ${{activeTab==='analytics'?'active':''}}" onclick="activeTab='analytics';render()">Analytics</div>
     <div class="tab ${{activeTab==='gantt'?'active':''}}" onclick="activeTab='gantt';render()">Gantt</div>
   </div>
-  ${{renderFilters()}}
-  <div class="panel active">${{activeTab==='sprints'?renderBoard():activeTab==='analytics'?renderAnalytics():renderGantt()}}</div>
+  ${{activeTab==='deliverables'?'':renderFilters()}}
+  <div class="panel active">${{activeTab==='deliverables'?renderDeliverables():activeTab==='sprints'?renderBoard():activeTab==='analytics'?renderAnalytics():renderGantt()}}</div>
   <div class="timestamp">Generated: {timestamp}</div>`;
 }}
 render();

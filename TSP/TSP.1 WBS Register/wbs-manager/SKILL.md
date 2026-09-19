@@ -23,6 +23,7 @@ TSP.1 WBS Register/
     requirements.txt
     scripts/
       registry.py             <- The shared JSON register format (load/save/hash)
+      wbs.py                  <- The operations with rules attached
       refresh_wbs.py          <- Generates the HTML dashboard from a register
       create_wbs.py           <- Builds an empty register for a new project
 
@@ -56,50 +57,67 @@ A register is one JSON file: a `meta` envelope plus named collections of rows. `
     "values_hash": "sha256:ad2e...",
     "settings": {"fields": {...}, "vocabularies": {...}}
   },
-  "items": [ {...} ],
-  "key_deliverables": [ {...} ]
+  "items": [ {...} ]
 }
 ```
 
 - **`values_hash`** fingerprints the rows, not the file — it excludes `meta`, so reindenting is not a data change. A generated dashboard stamps the hash it was built from, which is how `registry.stale_views()` can tell you a dashboard has gone stale rather than quietly showing old numbers.
 - **Rows omit their empty fields.** Do not write `null` or `""` to mean "no value"; leave the key out. `meta.settings.fields` carries the canonical field order for rendering a rectangular table.
-- **A register may carry extra collections** beyond `items` and `key_deliverables` when a project has structured data that belongs with its WBS. The dashboard reads `items` only.
+- **A register may carry extra collections** beyond `items` when a project has structured data that belongs with its WBS. The dashboard reads `items` only.
 
-### Collection: `items` (main backlog)
+### The three axes
+
+A row says three independent things, and keeping them apart is what lets deliverables be a view over the register rather than a second collection:
+
+| Field | Question it answers | Values |
+|---|---|---|
+| `Type` | What **level** is this? | Feature / Enabler / Story / Task |
+| `Delivers` | What **artifact** does it produce? | Tool / System / Process / Document |
+| `Nature` | What is being **done**? | Build / Improve / Analyse / Fix / Maintain |
+
+**The deliverable is the parent; work on it are children.** A Feature is the thing that exists when the work is done — the tool, the system, the document set. Build, enhance, assess and fix are children of it, sized as Feature or Story by scale but never themselves key deliverables. A tool enhanced three times has one Feature row and three pieces of work beneath it, not three peer Features.
+
+### Collection: `items`
 
 | Field | Required | Description |
 |--------|----------|-------------|
-| ID | Yes | Stable identifier — plain sequential integer, assigned once at creation, **never reused, never changed** even if the item is reparented or `Code` is renumbered. This is what anything external references: Execution-folder names, `Key Dependencies`, cross-links to other registers or a task tracker. Not the same job as `Code`. |
-| Code | Yes | Hierarchical/display position (1.1, 1.2, ...). Free to renumber whenever the WBS structure changes — reprioritized, inserted, regrouped. Purely navigational; never used as a reference key outside the row itself. |
+| ID | Yes | Stable identifier — plain sequential integer, assigned once, **never reused, never changed** even if the item is reparented or `Code` is renumbered. This is what anything external references: Execution-folder names, `Parent`, `Key Dependencies`, cross-links to other registers. |
+| Parent | No | The parent item's **stable `ID`**, never its `Code`. Absent on a root. This is the only place the hierarchy is stored — `Code` merely displays it. |
+| Code | Yes | Hierarchical/display position (1.1, 1.2, ...). Free to renumber whenever the structure changes; **never a reference key**. |
 | Title | Yes | Short descriptive name |
+| Type | Yes | Level — see the three axes above |
+| Nature | No | What is being done to the thing. Defaults to `Build`. |
+| Delivers | No | Artifact kind, on rows that produce one |
+| Key Deliverable | No | `Y`/`N`. **Only valid on `Feature` and `Enabler` rows** — work on a deliverable cannot be one. Explicit rather than derived: Enablers default to N and Features usually to Y, but the balance varies by project, so a project may adopt its own rule. |
 | Description | No | What needs to be done |
 | Acceptance Criteria | No | How completion is verified |
 | Owner | No | Person responsible |
 | Estimated Effort (h) | No | Hours estimate |
-| Type | No | Feature / Story / Tool / System / Process / DocSection / Analysis / Improve |
-| Category | No | Knowledge area or project-specific grouping |
+| Category | No | PMBOK area or project-specific grouping |
 | Status | Yes | Portfolio Backlog / Funnel / Not Started / Implementing / Done / Cancelled |
 | Priority | No | Must / Should / Could / Won't (MoSCoW) |
-| Sprint Planned | No | Sprint ID (e.g. S25.15) |
-| Sprint Added | No | Sprint where actually pulled in |
-| Sprint Ended | No | Sprint where completed |
+| Sprint Planned / Added / Ended | No | Sprint IDs (e.g. S25.15) |
 | Key Dependencies | No | IDs of blocking items |
+| Control Approach | No | How the deliverable is verified (review, functional test, ...) |
+| Control Tool | No | Where that verification happens |
+| Project Phase | No | PMBOK phase |
+| Planned Release / Released On | No | Deliverable dates |
 | Action Plan | No | Approach description |
 | Planning Considerations | No | Assumptions, risks, constraints |
 | Validation Approach | No | How the deliverable will be verified |
 | Comments | No | General notes |
 
-### Collection: `key_deliverables`
-
-High-level deliverable tracking. Fields: KeyDel.ID, Key Deliverable, Description, Acceptance Criteria, Owner, Status, Estimated Effort (h), Control Approach, Control Tool, Project Phase, Priority, Planned Release, Released On, Key Dependencies, Planning Considerations, Comments.
+There is **no `key_deliverables` collection.** A deliverable is a row whose `Key Deliverable` is `Y`; the deliverables view filters on it and rolls progress up from descendants through `Parent`. A register still carrying that collection has not been migrated — run `wbs.py migrate`.
 
 ## Critical Design Rules
 
 1. **The register is the source of truth; the dashboard is generated.** Never hand-edit the HTML — it is overwritten in full on every refresh.
 2. **`ID` is never reused and never changed.** Renumber `Code` freely instead.
-3. **Write through `registry.py`,** so `updated` and `values_hash` stay correct. Hand-editing the JSON is possible but leaves the hash stale.
-4. **No derived values in the register** — effort rollups, counts and percentages are computed by the dashboard generator, not stored.
-5. **Field order doesn't matter** in a row; `meta.settings.fields` defines display order.
+3. **Use `wbs.py` for the edits with rules attached** — claiming an ID, setting `Parent`, tagging `Key Deliverable`, anything vocabulary-bound. Reaching for `registry.py` to do those by hand bypasses the rules rather than following them. Everything else is a plain field edit: `R.load`, change the row, `R.save`, which keeps `updated` and `values_hash` correct.
+4. **`Parent` holds a stable `ID`, never a `Code`.** The hierarchy has to survive renumbering, and `Code` is renumbered by exactly the restructuring the parenting rule invites.
+5. **Deliverables are a view, not a collection.** Never reintroduce a parallel list — the link between a deliverable and the work that delivers it is `Parent`, and a second collection cannot express it.
+6. **No derived values in the register** — effort rollups, counts and percentages are computed by the dashboard generator, not stored.
+7. **Field order doesn't matter** in a row; `meta.settings.fields` defines display order.
 
 ## WBS File Discovery
 
@@ -123,18 +141,28 @@ items = R.rows(data, "items")
 ```
 
 ### 2. Add items
-- Next ID = `R.next_id(data, "items")` (never reuse a retired ID)
-- Next Code = max existing code + 1, or the appropriate hierarchical position (e.g. "3.6") if it's a sub-item — Code can be freely chosen/renumbered, ID cannot
-- Default Status = "Portfolio Backlog" (the default funnel entry point)
-- Default Type = "Story" unless the user specifies otherwise; use "Feature" for larger epic-level deliverables
-- Priority: ask the user or leave blank
-- Omit fields that have no value rather than writing empty strings
-- Append to `items`, `R.save(path, data)`, then **auto-refresh the dashboard** (operation 5)
+
+```bash
+python <skill-path>/scripts/wbs.py add "<register>" "Title" --type Story --parent 37 --code 3.4
+```
+
+Claims the next ID, refuses a `Parent` that does not exist or would close a cycle, holds every vocabulary field to the register's own vocabulary, and keeps `Key Deliverable` off rows that cannot carry it. Defaults: Status `Portfolio Backlog`, Type `Story`, Nature `Build`. Choose `Code` as the hierarchical position; it is display only. Omit fields that have no value rather than writing empty strings. Then **refresh the dashboard** (operation 5).
 
 ### 3. Edit items
-- Find the row by `ID` (stable), not `Code` (may have been renumbered since last touched) — `R.get(data, "items", "ID", 12)`
-- Update only the specified fields
-- `R.save(path, data)`, then **auto-refresh the dashboard** (operation 5)
+
+```bash
+python <skill-path>/scripts/wbs.py set "<register>" --id 42 --status Done --nature Improve
+```
+
+Find rows by `ID`, never `Code`. Pass `--field ""` to clear a field. Then **refresh the dashboard** (operation 5).
+
+### 3b. Validate
+
+```bash
+python <skill-path>/scripts/wbs.py check "<register>"
+```
+
+Reports duplicate IDs, parents that do not exist or close cycles, vocabulary violations, `Key Deliverable` on rows that cannot carry it, and rows with no Type. Run it before a planning ceremony and after any hand-edit.
 
 ### 4. Sprint planning
 - Set `Sprint Planned` to sprint ID (e.g. S25.16)
@@ -174,18 +202,28 @@ Builds an empty register — schema, field order and vocabularies, zero rows. It
 | Done | Completed |
 | Cancelled | Dropped without being delivered — keep the row and say why in Comments |
 
-## Type Values
+## Type, Delivers and Nature values
 
-| Type | Meaning |
+| Type (level) | Meaning |
 |------|---------|
-| Feature | Larger deliverable / epic-level work package |
-| Story | Discrete work item within a feature |
-| Tool | A reusable tool or template |
-| System | A system or framework |
-| Process | A process or procedure |
-| DocSection | A section within a larger document |
-| Analysis | Research or assessment work |
-| Improve | Enhancement to an existing tool |
+| Feature | A thing that exists when the work is done — the unit of value |
+| Enabler | Supporting or infrastructure deliverable; usually not a key deliverable |
+| Story | A discrete piece of work beneath a Feature or Enabler |
+| Task | A step within a Story, where that granularity earns its keep |
+
+| Delivers (artifact) | Nature (what is being done) |
+|------|------|
+| Tool · System · Process · Document | Build · Improve · Analyse · Fix · Maintain |
+
+### Migrating an older register
+
+```bash
+python <skill-path>/scripts/wbs.py migrate "<register>" [--apply]
+```
+
+Dry run unless `--apply`. Maps the old single-axis `Type` onto the three axes (`Tool` → Feature + Delivers Tool, `Improve` → Story + Nature Improve, and so on), fills `Parent` from the `Code` strings, registers the vocabularies, and drops `key_deliverables` **only if it is empty** — populated rows are flagged instead, since folding them into `items` as Feature rows is a judgment call. Snapshot the register first.
+
+The mapping is a sensible default, not an oracle: `DocSection` becomes a Story, which is right for a leaf section and wrong for a top-level deliverable that happens to produce documents. Read what it did before accepting it.
 
 ## Sprint ID Convention
 
