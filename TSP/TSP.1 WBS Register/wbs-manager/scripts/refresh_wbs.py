@@ -22,7 +22,7 @@ SHORT = {"Baseline Start": "bs", "Baseline End": "be",
          "Actual Start": "as", "Actual End": "ae"}
 
 
-def build_schedule(items, log):
+def build_schedule(items, log, sprints=None):
     """Resolve, derive and compare every row's dates, once, here.
 
     The dashboard receives instants and never parses a date, so the rules in
@@ -44,6 +44,20 @@ def build_schedule(items, log):
             if before and after and after["end"] > before["end"]:
                 slips[str(entry.get("Item"))] = slips.get(str(entry.get("Item")), 0) + 1
 
+    # A sprint with dates is a date range, so a row assigned to one is not
+    # undated - it is dated to sprint precision. This is the whole "one
+    # timeline with a zoom control" idea taken literally; without it such a
+    # row falls off the chart while the calendar knows exactly when it runs.
+    window = {s.get("Sprint"): (s.get("Starts"), s.get("Ends"))
+              for s in (sprints or []) if s.get("Starts") and s.get("Ends")}
+
+    def from_sprint(name, which):
+        span = window.get(name)
+        if not span:
+            return None
+        stamp = span[0] if which == "start" else span[1]
+        return {"t": name, "s": stamp, "e": stamp, "p": "day", "sp": 1}
+
     resolved = {}
     for row in items:
         got = {}
@@ -52,6 +66,18 @@ def build_schedule(items, log):
             if value:
                 got[key] = {"t": value["text"], "s": value["start"],
                             "e": value["end"], "p": value["precision"]}
+        if not (got.get("ps") or got.get("pe")):
+            lo = from_sprint(row.get("Sprint Planned"), "start")
+            hi = from_sprint(row.get("Sprint Planned"), "end")
+            if lo and hi:
+                got["ps"], got["pe"] = lo, hi
+        if not (got.get("as") or got.get("ae")):
+            lo = from_sprint(row.get("Sprint Added"), "start")
+            hi = from_sprint(row.get("Sprint Ended"), "end")
+            if lo:
+                got["as"] = lo
+            if hi:
+                got["ae"] = hi
         resolved[str(row.get("ID"))] = got
 
     def descend(rid):
@@ -210,6 +236,7 @@ tr:hover td{background:#f0f4ff}
 .rm-bar.b-act{background:#22c55e}
 .rm-bar.derived{background:#c7d2fe;border:1px dashed #6366f1;color:#3730a3}
 .rm-bar.b-act.derived{background:#bbf7d0;border-color:#16a34a;color:#166534}
+.rm-bar.fromsprint{outline:1px dotted rgba(0,0,0,.35);outline-offset:-1px}
 .rm-bar.open{border-right:2px dotted #1a1a2e;border-top-right-radius:0;border-bottom-right-radius:0}
 /* The slip band sits under the bars, spanning promised-end to actual-end.
    `from` is the dotted edge where it was promised; `to` is the arrow where
@@ -275,11 +302,6 @@ tr:hover td{background:#f0f4ff}
 .bar-label{width:90px;font-size:11px;text-align:right;flex-shrink:0}
 .bar-track{flex:1;height:22px;background:#e5e7eb;border-radius:4px;overflow:hidden}
 .bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;min-width:fit-content}
-.gantt-row{display:flex;align-items:center;margin-bottom:4px}
-.gantt-label{width:300px;font-size:11px;flex-shrink:0;padding-right:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.gantt-track{flex:1;height:24px;position:relative;background:#f3f4f6;border-radius:3px}
-.gantt-bar{position:absolute;height:20px;top:2px;border-radius:3px;display:flex;align-items:center;padding:0 6px;font-size:9px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden}
-.gantt-bar.rollup{height:10px;top:7px;opacity:.85;border:1px solid rgba(0,0,0,.15)}
 .legend{margin-bottom:12px;font-size:12px;color:#6b7280}
 .legend span{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:middle;margin-right:4px}
 .filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
@@ -308,9 +330,8 @@ let activeTab='tree';
 let showCancelled=false;   // R28: kept deliberately, noise by default
 let zoom='month';          // day | month | quarter | sprint
 const collapsed=new Set();        // node ids whose children are hidden
-let ganttMode='tree';             // 'tree' | 'flat'
 
-/* ---------- tree plumbing, shared by Breakdown and Gantt ---------- */
+/* ---------- tree plumbing, shared by Breakdown and Roadmap ---------- */
 
 const byId=new Map(DATA.map(d=>[String(d.id),d]));
 const kids=new Map();
@@ -518,58 +539,6 @@ function renderAnalytics(){
   <div class="chart-box"><div class="chart-title">Sprint Effort Allocation</div>${spd.length?bars(spd,Math.max(...spd.map(d=>d.v),1)):'<p class="muted">No sprints planned</p>'}</div></div>`;
 }
 
-/* ---------- Gantt ---------- */
-
-function sprintSpan(d){
-  // A row's own sprint, plus every descendant's, so a collapsed parent still
-  // shows the range its work covers.
-  const all=[d,...descendants(d.id)].map(x=>x.sp).filter(s=>s&&s.startsWith('S'));
-  if(!all.length)return null;
-  const sorted=[...new Set(all)].sort();
-  return {from:sorted[0],to:sorted[sorted.length-1]};
-}
-
-function renderGantt(){
-  const sprints=[...new Set(DATA.map(d=>d.sp).filter(s=>s&&s.startsWith('S')))].sort();
-  if(!sprints.length)return '<p class="muted">No sprint-planned items to show.</p>';
-  const modeBtn=`<span class="btn" onclick="ganttMode='${ganttMode==='tree'?'flat':'tree'}';render()">View: ${ganttMode==='tree'?'Hierarchy':'Flat by sprint'}</span>`;
-  let h=(ganttMode==='tree'?treeControls(modeBtn):`<div class="filters">${modeBtn}</div>`);
-  h+=`<div class="legend"><span style="background:#86efac"></span> Done <span style="background:#4472C4;margin-left:12px"></span> Planned <span style="background:#94a3b8;margin-left:12px"></span> Rolled up from children</div>`;
-  h+=`<div class="gantt-row" style="margin-bottom:8px"><div class="gantt-label" style="font-weight:700">Work Item</div><div class="gantt-track" style="display:flex;background:transparent">`;
-  sprints.forEach(sp=>{h+=`<div style="flex:1;text-align:center;font-size:11px;font-weight:600;padding:4px;border-bottom:2px solid #4472C4">${sp}</div>`;});
-  h+=`</div></div>`;
-
-  const bar=(d,depth,rollup)=>{
-    const span=rollup?sprintSpan(d):(d.sp&&d.sp.startsWith('S')?{from:d.sp,to:d.sp}:null);
-    let track='';
-    if(span){
-      const i0=sprints.indexOf(span.from),i1=sprints.indexOf(span.to);
-      if(i0>=0&&i1>=0){
-        const left=i0/sprints.length*100,width=(i1-i0+1)/sprints.length*100;
-        const own=d.sp&&d.sp.startsWith('S');
-        const colour=d.s==='Done'?'#86efac':(own?'#4472C4':'#94a3b8');
-        const tc=d.s==='Done'?'#166534':'#fff';
-        const sub=descendants(d.id);
-        const eff=own?(d.e||0):sub.reduce((a,k)=>a+(k.e||0),0);
-        track=`<div class="gantt-bar${own?'':' rollup'}" style="left:${left}%;width:${width}%;background:${colour};color:${tc}">${eff?eff+'h':''}</div>`;
-      }
-    }
-    const pad=ganttMode==='tree'?depth*14:0;
-    const label=ganttMode==='tree'?`${twisty(d)} ${d.c}. ${d.t||''}`:`${d.c}. ${d.t||''}`;
-    return `<div class="gantt-row"><div class="gantt-label" style="padding-left:${pad}px" title="${(d.t||'').replace(/"/g,'')}">${label}</div><div class="gantt-track">${track}</div></div>`;
-  };
-
-  if(ganttMode==='flat'){
-    filtered().filter(d=>d.sp&&sprints.includes(d.sp)).sort(byCode).forEach(d=>{h+=bar(d,0,false);});
-  }else{
-    walk((d,depth)=>{
-      // Only draw rows that have a sprint themselves or cover one below.
-      if(sprintSpan(d))h+=bar(d,depth,true);
-    });
-  }
-  return h;
-}
-
 /* ---------- roadmap ---------- */
 
 const DAY=86400000;
@@ -688,6 +657,7 @@ function renderRoadmap(){
     <span class="sw sw-derived"></span> Rolled up
     <span class="sw sw-act"></span> Actual
     <span class="sw sw-slip"></span> Slip vs baseline
+    <span class="sw sw-plan" style="outline:1px dotted rgba(0,0,0,.45);outline-offset:-1px"></span> From sprint
     <span class="sep"></span><b>Status</b>
     ${Object.keys(SCOL).filter(k=>showCancelled||k!=='Cancelled')
       .map(k=>`<i class="rm-st leg" style="background:${SCOL[k]}"></i>${k}`).join(' ')}</div>`;
@@ -721,11 +691,12 @@ function renderRoadmap(){
     const from=num(a?a.s:b.s),to=num(b?b.e:a.e);
     const l=pct(from),w=Math.max(pct(to+DAY)-l,0.6);
     const derived=(a&&a.d)||(b&&b.d);
+    const fromSp=(a&&a.sp)||(b&&b.sp);
     const open=a&&!b?' open':'';
     const text=(b&&b.t)||(a&&a.t)||'';
-    const tip=title+(text?': '+text:' (derived from children)')
+    const tip=title+(fromSp?` — from sprint ${text}`:(text?': '+text:' (derived from children)'))
               +(open?' — started, no end date':'');
-    return `<div class="rm-bar ${cls}${derived?' derived':''}${open}" style="left:${l}%;width:${w}%" title="${tip}">${fill}${text}</div>`;
+    return `<div class="rm-bar ${cls}${derived?' derived':''}${fromSp?' fromsprint':''}${open}" style="left:${l}%;width:${w}%" title="${tip}">${fill}${text}</div>`;
   };
 
   const undated=[];
@@ -764,8 +735,8 @@ function renderRoadmap(){
 
 function render(){
   rebuildSprints();
-  const tabs=[['tree','Breakdown'],['deliverables','Deliverables'],['roadmap','Roadmap'],['sprints','Sprint Board'],['analytics','Analytics'],['gantt','Gantt']];
-  const body={tree:renderTree,deliverables:renderDeliverables,roadmap:renderRoadmap,sprints:renderBoard,analytics:renderAnalytics,gantt:renderGantt}[activeTab]();
+  const tabs=[['tree','Breakdown'],['deliverables','Deliverables'],['roadmap','Roadmap'],['sprints','Sprint Board'],['analytics','Analytics']];
+  const body={tree:renderTree,deliverables:renderDeliverables,roadmap:renderRoadmap,sprints:renderBoard,analytics:renderAnalytics}[activeTab]();
   const showFilters=(activeTab==='sprints'||activeTab==='analytics');
   document.getElementById('app').innerHTML=`${renderKPIs()}
   <div class="tabs">${tabs.map(([k,l])=>`<div class="tab ${activeTab===k?'active':''}" onclick="activeTab='${k}';render()">${l}</div>`).join('')}</div>
@@ -871,10 +842,10 @@ def main():
     items = [dict((f, row[f]) for f in fields if row.get(f) is not None)
              for row in rows]
     stats = compute_stats(items)
-    schedule = build_schedule(items, register.get('schedule_log'))
     sprints = [s for s in (register.get('sprints') or [])
                if s.get('Starts') and s.get('Ends')]
     sprints.sort(key=lambda s: s['Starts'])
+    schedule = build_schedule(items, register.get('schedule_log'), sprints)
     html = generate_html(project_name, items, stats, schedule, sprints)
 
     html = html.replace('__HASH__', register['meta'].get('values_hash',''))
