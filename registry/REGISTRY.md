@@ -52,4 +52,4 @@ python install.py add <skill> --into <your-project>
 
 ---
 
-Generated from `registry/TSP Register.json` on 2026-09-06.
+Generated from `registry/TSP Register.json` on 2026-09-20.

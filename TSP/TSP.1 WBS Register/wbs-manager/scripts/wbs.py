@@ -6,6 +6,8 @@
     python wbs.py set     <register> --id 42 --status Done --nature Improve
     python wbs.py check   <register>
     python wbs.py migrate <register> [--apply]
+    python wbs.py sprints seed   <conventions.json> --scope "Project name" --year 2026
+    python wbs.py sprints import <register> --from <conventions.json>
 
 These are the operations with rules attached - claiming an ID that is never
 reused, refusing a Parent that does not exist or that would close a cycle,
@@ -29,15 +31,32 @@ which says it better than a level name ever did.
 A deliverable is not a collection of its own - it is a row whose Key
 Deliverable is Y. `Parent` is what connects it to the work that delivers it,
 and it holds the parent's stable `ID`, never its `Code`.
+
+Two more fields say *when*, and they are not the same question:
+
+    Horizon         how soon I want it    Next / Future
+    Sprint Planned  which sprint it is in a sprint ID from the calendar
+
+Horizon is an intention and Sprint Planned is a commitment, so assigning a
+sprint supersedes the horizon and `check` says so. The sprint calendar is
+defined by the sprint ceremonies, kept in the project's agile conventions file, and imported
+here - the register never invents one.
 """
 import argparse
 import os
 import sys
+from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import registry as R                                            # noqa: E402
 
 ITEMS = "items"
+SPRINTS = "sprints"
+# Assigning a real sprint, or closing the row, both supersede an intention
+# about how soon. Without this the field rots exactly as Next/Future did in
+# Sprint Planned - 18 of 45 rows stale and nothing to catch it.
+HORIZON_CLEARS_ON = ("Done", "Cancelled")
+SPRINT_FIELDS_ON_ITEM = ("Sprint Planned", "Sprint Added", "Sprint Ended")
 # Only these levels name a thing rather than an activity, so only these can be
 # put in front of a sponsor as a deliverable. Key Deliverable is curation, not
 # classification - it marks what earns a line in an executive report, which is
@@ -136,7 +155,8 @@ def cmd_add(args):
     data = R.load(args.register)
     for field, value in (("type", args.type), ("class", args.klass),
                          ("nature", args.nature), ("delivers", args.delivers),
-                         ("status", args.status), ("priority", args.priority)):
+                         ("status", args.status), ("priority", args.priority),
+                         ("horizon", args.horizon)):
         check_vocab(data, field, value)
     check_parent(data, None, args.parent)
 
@@ -148,6 +168,7 @@ def cmd_add(args):
                        ("Delivers", args.delivers), ("Status", args.status),
                        ("Priority", args.priority), ("Owner", args.owner),
                        ("Key Deliverable", args.key_deliverable),
+                       ("Horizon", args.horizon),
                        ("Description", args.description)):
         if value:
             row[key] = value
@@ -167,7 +188,8 @@ def cmd_set(args):
         sys.exit("No item with ID %s." % args.id)
     for field, value in (("type", args.type), ("class", args.klass),
                          ("nature", args.nature), ("delivers", args.delivers),
-                         ("status", args.status), ("priority", args.priority)):
+                         ("status", args.status), ("priority", args.priority),
+                         ("horizon", args.horizon)):
         check_vocab(data, field, value)
     if args.parent is not None:
         check_parent(data, args.id, args.parent)
@@ -179,7 +201,8 @@ def cmd_set(args):
                        ("Nature", args.nature), ("Delivers", args.delivers),
                        ("Status", args.status), ("Priority", args.priority),
                        ("Owner", args.owner),
-                       ("Key Deliverable", args.key_deliverable)):
+                       ("Key Deliverable", args.key_deliverable),
+                       ("Horizon", args.horizon)):
         if value is None:
             continue
         if value == "":                      # explicit clear
@@ -197,6 +220,7 @@ def cmd_set(args):
 def cmd_check(args):
     data = R.load(args.register)
     items = R.rows(data, ITEMS)
+    known_sprints = {s.get("Sprint") for s in data.get(SPRINTS) or []}
     errors, warnings = [], []
 
     seen = {}
@@ -233,6 +257,32 @@ def cmd_check(args):
         if not row.get("Type"):
             warnings.append("item %s: no Type" % rid)
 
+        # Horizon is an intention about how soon. A real sprint, or a closed
+        # row, settles the question and the intention has to go.
+        horizon = row.get("Horizon")
+        if horizon:
+            if row.get("Status") in HORIZON_CLEARS_ON:
+                errors.append("item %s: Horizon=%s on a %s row - closing the "
+                              "row supersedes it" % (rid, horizon, row.get("Status")))
+            if row.get("Sprint Planned"):
+                errors.append("item %s: Horizon=%s and Sprint Planned=%s - a "
+                              "commitment supersedes an intention"
+                              % (rid, horizon, row.get("Sprint Planned")))
+
+        # Sprint fields hold calendar IDs and nothing else. Silent until the
+        # register has a calendar: with no sprints imported there is nothing
+        # to check against, and guessing would be worse than saying nothing.
+        for field in SPRINT_FIELDS_ON_ITEM:
+            value = row.get(field)
+            if value and known_sprints and value not in known_sprints:
+                errors.append("item %s: %s=%r is not a sprint in the calendar"
+                              % (rid, field, value))
+
+    if not known_sprints and any(row.get(f) for row in items
+                                 for f in SPRINT_FIELDS_ON_ITEM):
+        warnings.append("sprint IDs are in use but the register has no "
+                        "calendar - run: wbs.py sprints import")
+
     if "key_deliverables" in data:
         warnings.append("register still carries a key_deliverables collection "
                         "- run migrate")
@@ -264,7 +314,24 @@ def cmd_migrate(args):
                              % (row.get("ID"), legacy,
                                 ", ".join("%s=%s" % kv for kv in mapped.items())))
         row.setdefault("Nature", "Build")
-    row.setdefault("Class", "Product")
+        row.setdefault("Class", "Product")
+
+    # Next/Future were living in Sprint Planned, mirroring the task tracker's labels.
+    # They are a horizon, not a commitment, and the wrong home is why 18 of
+    # 45 went stale unnoticed - a field nothing validates cannot rot loudly.
+    # Closing the row settles the question, so those are dropped, not moved.
+    for row in items:
+        horizon = row.get("Sprint Planned")
+        if horizon not in ("Next", "Future"):
+            continue
+        del row["Sprint Planned"]
+        if row.get("Status") in HORIZON_CLEARS_ON:
+            notes.append("item %s: Sprint Planned=%s dropped - row is %s"
+                         % (row.get("ID"), horizon, row.get("Status")))
+        else:
+            row["Horizon"] = horizon
+            notes.append("item %s: Sprint Planned=%s -> Horizon"
+                         % (row.get("ID"), horizon))
 
     # Parent from Code, which is the only place the hierarchy exists today.
     by_code = {str(r.get("Code")): r for r in items if r.get("Code") not in (None, "")}
@@ -284,7 +351,7 @@ def cmd_migrate(args):
     vocabs = settings.setdefault("vocabularies", {})
     import create_wbs as C
     for name, values in (("type", C.TYPES), ("class", C.CLASSES),
-                         ("nature", C.NATURES),
+                         ("nature", C.NATURES), ("horizon", C.HORIZONS),
                          ("delivers", C.DELIVERS), ("key deliverable", C.YESNO)):
         if vocabs.get(name) != values:
             vocabs[name] = values
@@ -323,6 +390,113 @@ def cmd_migrate(args):
 
 
 # --------------------------------------------------------------------------- #
+# The sprint calendar. The ceremonies own the convention; these two commands seed a
+# project's copy of it and pull it into a register. Nothing here decides what
+# a sprint is - it only arithmetic on an anchor the ceremony supplies.
+
+def sprint_series(year, anchor, length):
+    """Every sprint starting in `year`, as (id, start, end) triples.
+
+    `anchor` is any real sprint start date, not 1 January: the cadence is
+    whatever the ceremonies have actually been running, and rounding it to the
+    calendar year moved the one recorded 2026 sprint by three days. A sprint
+    belongs to the quarter it starts in and keeps its length at the boundary,
+    so the quarters hold uneven counts and the last sprint of the year runs
+    into the next one. Both are correct, not artefacts to square off.
+    """
+    step = timedelta(days=length)
+    start = anchor
+    while start - step >= date(year, 1, 1):
+        start -= step
+    while start < date(year, 1, 1):
+        start += step
+    series, counts = [], {}
+    while start.year == year:
+        q = (start.month - 1) // 3 + 1
+        counts[q] = counts.get(q, 0) + 1
+        series.append(("S%02d.Q%d.%d" % (year % 100, q, counts[q]),
+                       start, start + timedelta(days=length - 1)))
+        start += step
+    return series
+
+
+def cmd_sprints_seed(args):
+    if os.path.exists(args.output) and not args.force:
+        sys.exit("%s already exists. Pass --force to regenerate it - but a "
+                 "stored calendar outranks a derived one the moment a ceremony "
+                 "has actually moved." % args.output)
+    anchor = date.fromisoformat(args.anchor)
+    series = sprint_series(args.year, anchor, args.length)
+    import create_wbs as C
+    data = R.new("agile-conventions", args.scope,
+                 {"sprints": [{"Sprint": sid, "Starts": a.isoformat(),
+                               "Ends": b.isoformat()} for sid, a, b in series]},
+                 settings={"fields": {"sprints": C.SPRINT_FIELDS},
+                           "cadence": {"anchor": args.anchor,
+                                       "length_days": args.length,
+                                       "seeded_for": args.year}})
+    R.save(args.output, data)
+    counts = {}
+    for sid, _a, _b in series:
+        q = sid.split(".")[1]
+        counts[q] = counts.get(q, 0) + 1
+    print("Seeded %s with %d sprint(s): %s"
+          % (args.output, len(series),
+             ", ".join("%s %d" % kv for kv in sorted(counts.items()))))
+    print("  %s %s -> %s (last)" % (series[-1][0], series[-1][1], series[-1][2]))
+    print("\n  This is a seed. Once a ceremony moves, edit the row - the stored "
+          "date is\n  the record and regenerating would discard it.")
+    return 0
+
+
+def cmd_sprints_import(args):
+    data = R.load(args.register)
+    src = R.load(args.source)
+    kind = src.get("meta", {}).get("kind")
+    if kind != "agile-conventions":
+        sys.exit("%s is a %r, not an agile-conventions file. The calendar comes "
+                 "from the project's agile conventions file."
+                 % (args.source, kind))
+
+    current = {s.get("Sprint"): s for s in data.get(SPRINTS) or []}
+    incoming = {s.get("Sprint"): s for s in src.get("sprints") or []}
+    added = [k for k in incoming if k not in current]
+    removed = [k for k in current if k not in incoming]
+    changed = [k for k in incoming if k in current and incoming[k] != current[k]]
+
+    in_use = {row.get(f) for row in R.rows(data, ITEMS)
+              for f in SPRINT_FIELDS_ON_ITEM if row.get(f)}
+    orphaned = sorted(s for s in removed if s in in_use)
+
+    for k in sorted(added):
+        print("  +   %s  %s -> %s" % (k, incoming[k].get("Starts"), incoming[k].get("Ends")))
+    for k in sorted(changed):
+        print("  ~   %s  %s -> %s  (was %s -> %s)"
+              % (k, incoming[k].get("Starts"), incoming[k].get("Ends"),
+                 current[k].get("Starts"), current[k].get("Ends")))
+    for k in sorted(removed):
+        print("  -   %s%s" % (k, "   IN USE" if k in in_use else ""))
+    if not (added or changed or removed):
+        print("  calendar already matches - nothing to do.")
+        return 0
+    print("\n  %d added, %d changed, %d removed" % (len(added), len(changed), len(removed)))
+
+    if orphaned and not args.force:
+        sys.exit("\n  Refusing: %s %s referenced by items and would be dropped.\n"
+                 "  Fix the conventions file, or pass --force to leave those "
+                 "references dangling." % (", ".join(orphaned),
+                                           "is" if len(orphaned) == 1 else "are"))
+    if args.dry_run:
+        print("\n  dry run - nothing written.")
+        return 0
+    data[SPRINTS] = [dict(incoming[k]) for k in sorted(incoming)]
+    data.setdefault("meta", {}).setdefault("settings", {}) \
+        .setdefault("fields", {})[SPRINTS] = \
+        src.get("meta", {}).get("settings", {}).get("fields", {}).get("sprints")
+    return finish(args, data, "  imported from %s" % args.source)
+
+
+# --------------------------------------------------------------------------- #
 
 def main():
     p = argparse.ArgumentParser(description=__doc__,
@@ -340,6 +514,7 @@ def main():
         sub.add_argument("--priority")
         sub.add_argument("--owner")
         sub.add_argument("--key-deliverable", choices=["Y", "N"])
+        sub.add_argument("--horizon", help="Next / Future, or '' to clear")
         sub.add_argument("--dry-run", action="store_true")
 
     s = subs.add_parser("add", help="add an item, claiming the next ID")
@@ -365,6 +540,28 @@ def main():
     s.add_argument("--apply", action="store_true",
                    help="write the changes (default is a dry run)")
     s.set_defaults(func=cmd_migrate)
+
+    sp = subs.add_parser("sprints", help="seed or import the sprint calendar")
+    sps = sp.add_subparsers(dest="sprints_command")
+
+    s = sps.add_parser("seed", help="generate a default series into a "
+                                    "conventions file")
+    s.add_argument("output", help="the project's agile conventions file")
+    s.add_argument("--scope", required=True, help='e.g. "Project name"')
+    s.add_argument("--year", type=int, required=True)
+    s.add_argument("--anchor", required=True, metavar="YYYY-MM-DD",
+                   help="a real sprint start date, from the ceremony record")
+    s.add_argument("--length", type=int, default=14, metavar="DAYS")
+    s.add_argument("--force", action="store_true")
+    s.set_defaults(func=cmd_sprints_seed)
+
+    s = sps.add_parser("import", help="read a conventions file into the register")
+    s.add_argument("register")
+    s.add_argument("--from", dest="source", required=True)
+    s.add_argument("--force", action="store_true",
+                   help="drop sprints even when items still reference them")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_sprints_import)
 
     args = p.parse_args()
     if not getattr(args, "func", None):

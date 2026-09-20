@@ -38,7 +38,9 @@ TOOLS = [
         "assets": [],
         "register": "WBS Demo.json",
         "dashboard": "WBS Dashboard.html",
-        "collections": ["items", "key_deliverables"],
+        # key_deliverables stopped being a collection when deliverables became
+        # a view of items; sprints is the imported cadence calendar.
+        "collections": ["items", "sprints"],
         "create": lambda s, r, d: [os.path.join(s, "scripts", "create_wbs.py"), r, "Demo"],
         "refresh": lambda s, r, d: [os.path.join(s, "scripts", "refresh_wbs.py"), r, d, "Demo"],
     },

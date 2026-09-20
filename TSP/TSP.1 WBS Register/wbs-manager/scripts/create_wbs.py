@@ -19,7 +19,7 @@ import registry as R                                            # noqa: E402
 ITEM_FIELDS = ["ID", "Parent", "Code", "Title", "Description",
                "Acceptance Criteria", "Owner", "Estimated Effort (h)",
                "Type", "Class", "Nature", "Delivers", "Key Deliverable", "Category",
-               "Status", "Priority", "Sprint Planned", "Sprint Added",
+               "Status", "Priority", "Horizon", "Sprint Planned", "Sprint Added",
                "Sprint Ended", "Key Dependencies", "Action Plan",
                "Planning Considerations", "Validation Approach",
                "Control Approach", "Control Tool", "Project Phase",
@@ -38,7 +38,15 @@ TYPES = ["Deliverable", "Feature", "Story", "Task"]
 CLASSES = ["Product", "Management", "Enabler"]
 NATURES = ["Build", "Improve", "Analyse", "Fix", "Maintain"]
 DELIVERS = ["Tool", "System", "Process", "Document"]
+# How soon, which is neither how important (Priority) nor where it stands
+# (Status). An item can be Could and Next, or Must and Future. Cleared the
+# moment a real sprint supersedes it, or the row closes.
+HORIZONS = ["Next", "Future"]
 YESNO = ["Y", "N"]
+
+# The sprint calendar, imported from the project's agile conventions and
+# never defined here - the ceremonies own the cadence, the register consumes it.
+SPRINT_FIELDS = ["Sprint", "Starts", "Ends"]
 
 
 def main():
@@ -52,14 +60,16 @@ def main():
         sys.exit("%s already exists. Pass --force to overwrite." % args.output)
 
     data = R.new("wbs-register", args.project,
-                 {"items": []},
-                 settings={"fields": {"items": ITEM_FIELDS},
+                 {"items": [], "sprints": []},
+                 settings={"fields": {"items": ITEM_FIELDS,
+                                      "sprints": SPRINT_FIELDS},
                            "vocabularies": {"status": STATUSES,
                                             "priority": PRIORITIES,
                                             "type": TYPES,
                                             "class": CLASSES,
                                             "nature": NATURES,
                                             "delivers": DELIVERS,
+                                            "horizon": HORIZONS,
                                             "key deliverable": YESNO}})
     R.save(args.output, data)
     print("Created %s" % args.output)

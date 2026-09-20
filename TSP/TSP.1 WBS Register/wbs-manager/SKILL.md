@@ -57,13 +57,15 @@ A register is one JSON file: a `meta` envelope plus named collections of rows. `
     "values_hash": "sha256:ad2e...",
     "settings": {"fields": {...}, "vocabularies": {...}}
   },
-  "items": [ {...} ]
+  "items": [ {...} ],
+  "sprints": [ {"Sprint": "S26.Q3.5", "Starts": "2026-08-30", "Ends": "2026-09-12"} ]
 }
 ```
 
 - **`values_hash`** fingerprints the rows, not the file — it excludes `meta`, so reindenting is not a data change. A generated dashboard stamps the hash it was built from, which is how `registry.stale_views()` can tell you a dashboard has gone stale rather than quietly showing old numbers.
 - **Rows omit their empty fields.** Do not write `null` or `""` to mean "no value"; leave the key out. `meta.settings.fields` carries the canonical field order for rendering a rectangular table.
-- **A register may carry extra collections** beyond `items` when a project has structured data that belongs with its WBS. The dashboard reads `items` only.
+- **`sprints` is the imported calendar**, not a locally-authored one — see "Sprints" below. Absent, or empty, means the project is not run in sprints, and sprint IDs then go unvalidated rather than being rejected.
+- **A register may carry extra collections** beyond `items` and `sprints` when a project has structured data that belongs with its WBS. The dashboard reads `items` only.
 
 ### The four axes
 
@@ -85,7 +87,7 @@ A row says four independent things, and keeping them apart is what lets delivera
 | **Story** | The smallest slice that is independently valuable **and** independently verifiable | verb |
 | **Task** | A step that is not independently valuable; it only makes sense inside its story | verb |
 
-The noun/verb column is the quickest test in practice: deliverables and features name *things*, stories and tasks name *activity*. "Renovated kitchen" against "install the cabinets"; "Todoist integration" against "enhance the sync script".
+The noun/verb column is the quickest test in practice: deliverables and features name *things*, stories and tasks name *activity*. "Renovated kitchen" against "install the cabinets"; "Calendar integration" against "enhance the sync script".
 
 **The deliverable is the parent; work on it are children.** A Deliverable is never finished — it accumulates features for as long as it exists. A tool enhanced three times has one Deliverable row and three Features beneath it, not three peer rows.
 
@@ -98,7 +100,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | ID | Yes | Stable identifier — plain sequential integer, assigned once, **never reused, never changed** even if the item is reparented or `Code` is renumbered. This is what anything external references: Execution-folder names, `Parent`, `Key Dependencies`, cross-links to other registers. |
 | Parent | No | The parent item's **stable `ID`**, never its `Code`. Absent on a root. This is the only place the hierarchy is stored — `Code` merely displays it. |
 | Code | Yes | Hierarchical/display position (1.1, 1.2, ...). Free to renumber whenever the structure changes; **never a reference key**. |
-| Title | Yes | Short descriptive name. **On a Feature, name the thing, not the work that produced it** — `Artifact Register (FSP.23)`, not `Artifact Register rebuilt AI-first as JSON, replacing the DCL`. A deliverable's title is read in a list of deliverables, where a sentence is unreadable; the detail belongs in `Description`, which is where it stays current anyway. |
+| Title | Yes | Short descriptive name. **On a Feature, name the thing, not the work that produced it** — `Artifact Register (TSP.5)`, not `Artifact Register rebuilt AI-first as JSON, replacing the DCL`. A deliverable's title is read in a list of deliverables, where a sentence is unreadable; the detail belongs in `Description`, which is where it stays current anyway. |
 | Type | Yes | Level — see the four axes above |
 | Class | No | What kind of value the row serves. Defaults to `Product`. |
 | Nature | No | What is being done to the thing. Defaults to `Build`. |
@@ -111,7 +113,8 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Category | No | PMBOK area or project-specific grouping |
 | Status | Yes | Portfolio Backlog / Funnel / Not Started / Implementing / Done / Cancelled |
 | Priority | No | Must / Should / Could / Won't (MoSCoW) |
-| Sprint Planned / Added / Ended | No | Sprint IDs (e.g. S25.15) |
+| Horizon | No | `Next` / `Future` — how soon this is wanted. Not a status and not a priority: an item can be `Could` and `Next`, or `Must` and `Future`. Cleared by a real sprint or by closure; `check` enforces both. |
+| Sprint Planned / Added / Ended | No | Sprint IDs from the register's `sprints` calendar (e.g. `S26.Q3.5`), and nothing else. `check` rejects an ID the calendar does not hold. |
 | Key Dependencies | No | IDs of blocking items |
 | Control Approach | No | How the deliverable is verified (review, functional test, ...) |
 | Control Tool | No | Where that verification happens |
@@ -177,14 +180,24 @@ Find rows by `ID`, never `Code`. Pass `--field ""` to clear a field. Then **refr
 python <skill-path>/scripts/wbs.py check "<register>"
 ```
 
-Reports duplicate IDs, parents that do not exist or close cycles, vocabulary violations, `Key Deliverable` on rows that cannot carry it, and rows with no Type. Run it before a planning ceremony and after any hand-edit.
+Reports duplicate IDs, parents that do not exist or close cycles, vocabulary violations, `Key Deliverable` on rows that cannot carry it, and rows with no Type.
+
+It also holds the two time fields apart, which is what stops `Horizon` rotting into noise:
+
+- **`Horizon` on a `Done` or `Cancelled` row** — closing the row settles how soon it was wanted.
+- **`Horizon` alongside a `Sprint Planned`** — a commitment supersedes an intention.
+- **A sprint ID the calendar does not hold**, in any of the three sprint fields. Silent when the register has no calendar: with nothing to check against, guessing would be worse than saying nothing.
+
+Run it before a planning ceremony and after any hand-edit.
 
 ### 4. Sprint planning
-- Set `Sprint Planned` to sprint ID (e.g. S25.16)
-- Multiple items can be allocated to the same sprint
-- When an item starts: Status → "Implementing", Sprint Added → current sprint
-- When an item completes: Status → "Done", Sprint Ended → current sprint
-- After changes, **auto-refresh the dashboard** (operation 5)
+Grooming sets the horizon; planning turns it into a commitment.
+
+- **Grooming** — `--horizon Next` for the upcoming sprint, `Future` for the one after.
+- **Planning** — set `Sprint Planned` to a sprint ID the calendar holds, and **clear `Horizon` in the same edit** (`--horizon ""`). `check` will otherwise flag the row.
+- When an item starts: Status → `Implementing`, `Sprint Added` → current sprint.
+- When an item completes: Status → `Done`, `Sprint Ended` → current sprint, and `Horizon` must be gone.
+- Multiple items can share a sprint. After changes, **refresh the dashboard** (operation 5).
 
 ### 5. Generate dashboard
 ```bash
@@ -227,7 +240,11 @@ Builds an empty register — schema, field order and vocabularies, zero rows. It
 |---|---|
 | Tool · System · Process · Document | Build · Improve · Analyse · Fix · Maintain |
 
-Definitions for each level are in "The four axes" above. All five vocabularies live in the register's `meta.settings.vocabularies` and are enforced by `wbs.py check`.
+| Horizon (how soon) |
+|---|
+| Next · Future |
+
+Definitions for each level are in "The four axes" above. All six vocabularies live in the register's `meta.settings.vocabularies` and are enforced by `wbs.py check`.
 
 ### Migrating an older register
 
@@ -239,9 +256,30 @@ Dry run unless `--apply`. Maps the old single-axis `Type` onto the three axes (`
 
 The mapping is a sensible default, not an oracle: `DocSection` becomes a Story, which is right for a leaf section and wrong for a top-level deliverable that happens to produce documents. Read what it did before accepting it.
 
-## Sprint ID Convention
+## Sprints
 
-Format: `S{YY}.{NN}` — e.g. S25.15 means year 2025, sprint 15.
+**The WBS does not define the cadence.** The sprint ceremonies own it, each project records its own instance in a planning folder, and the register imports a copy. A project with no conventions file is not run in sprints — a valid and common state, and the roadmap then falls back to dates alone.
+
+**`S<YY>.Q<N>.<X>`** — `S26.Q3.5` is the fifth sprint of Q3 2026. A sprint belongs to the quarter it *starts* in and keeps its length at the boundary, so quarters hold uneven counts and the year's last sprint runs into the next one. This beats a running count: a project starting mid-year joins the rhythm already running instead of opening its own count at 1.
+
+### Seed a project's calendar
+
+```bash
+python <skill-path>/scripts/wbs.py sprints seed "<project>/<planning folder>/agile-conventions.json" \
+    --scope "Project name" --year 2026 --anchor 2026-07-19
+```
+
+`--anchor` is **a real sprint start date taken from a ceremony record, never 1 January.** The derived grid and the actual cadence are not the same thing, and where they disagree the record is right.
+
+This is a seed. Once a ceremony moves, edit the row — the stored date is the record, and reseeding would discard it. `seed` refuses to overwrite without `--force` for that reason.
+
+### Import it into the register
+
+```bash
+python <skill-path>/scripts/wbs.py sprints import "<register>" --from "<conventions file>"
+```
+
+Prints a diff rather than overwriting silently, and **refuses to drop a sprint that items still reference** unless forced. The register keeps its own copy so it stays self-contained — no register reads another file at runtime — which is the same relationship the dashboard has with the register: generated, explicit, detectably stale.
 
 ## Relationship to Other Tools
 
