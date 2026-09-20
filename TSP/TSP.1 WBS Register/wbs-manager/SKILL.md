@@ -224,7 +224,9 @@ Generates a self-contained HTML file with:
 - **KPI strip** — total items, implementing, done, not started, total effort, planned sprints
 - **Sprint Board tab** — items grouped by sprint with status badges, filterable by status/priority/type
 - **Analytics tab** — status distribution, priority breakdown, sprint effort allocation
-- **Roadmap tab** — baseline, plan and actual as three bars per row, with a **zoom control** (day / month / quarter / sprint) and a slip indicator. Zoom changes the tick density, not the geometry: once a sprint has dates, the sprint view *is* the date view at sprint granularity, which is why there is one timeline here and not two roadmap models.
+- **Roadmap tab** — baseline, plan and actual as three bars per row, with a **zoom control** (day / month / quarter / sprint) and a slip indicator. Zoom changes the tick density, not the geometry: once a sprint has dates, the sprint view *is* the date view at sprint granularity, which is why there is one timeline here and not two roadmap models. Dates alone do not say what is finished, so each row also carries a **status stripe** and a **progress cell**, and the view opens with one line saying how much of the planned work is done.
+
+  **Progress is measured over leaves, by effort where there is any and by count where there is not.** Only leaves carry effort that is really theirs — adding a parent's own estimate to its children's would count the same work twice. Saying "3 of 7 items" on a row whose hours are unknown is honest; inventing hours to produce a percentage is not. **Cancelled work is excluded from both halves** — it is not work that will be done, so leaving it in the denominator would understate real progress, and the figure does not move when the cancelled toggle does.
 - **Gantt tab** — timeline view of sprint-planned items
 
 Two conventions that run across every view:

@@ -78,7 +78,23 @@ def build_schedule(items, log):
                     hi = max(m["e"] for m in marks)
                     got[start_key] = {"t": "", "s": lo, "e": lo, "p": "day", "d": 1}
                     got[end_key] = {"t": "", "s": hi, "e": hi, "p": "day", "d": 1}
+        # Progress over the leaves at or below this row. Only leaves carry
+        # effort that is really theirs - counting a parent's own estimate too
+        # would double-count the work it contains. Cancelled work is left out
+        # of both halves: it is not work that will be done, so dragging the
+        # denominator with it would understate real progress.
+        family = [row] if not kids.get(rid) else [
+            c for c in descend(row.get("ID")) if not kids.get(str(c.get("ID")))]
+        family = [c for c in family if c.get("Status") != "Cancelled"]
+        total = len(family)
+        done = sum(1 for c in family if c.get("Status") == "Done")
+        effort = sum(c.get("Estimated Effort (h)") or 0 for c in family)
+        effort_done = sum(c.get("Estimated Effort (h)") or 0
+                          for c in family if c.get("Status") == "Done")
         entry = {"d": got}
+        if total:
+            entry["pg"] = {"n": total, "dn": done,
+                           "et": round(effort, 2), "eh": round(effort_done, 2)}
         var = D.variance(
             D.resolve(row.get("Baseline End")),
             D.resolve(row.get("Planned End")) if not kids.get(rid) else None)
@@ -172,10 +188,10 @@ tr:hover td{background:#f0f4ff}
 .sw-derived{background:#c7d2fe;border:1px dashed #6366f1}
 .rm-scroll{overflow-x:auto;overflow-y:visible;position:relative;padding-bottom:6px}
 .rm-inner{position:relative}
-.rm-grid{position:absolute;left:430px;right:0;top:0;bottom:0;pointer-events:none;z-index:0}
+.rm-grid{position:absolute;left:520px;right:0;top:0;bottom:0;pointer-events:none;z-index:0}
 .rm-grid i{position:absolute;top:0;bottom:0;width:1px;background:#eef2f7}
 .rm-row{display:flex;align-items:center;border-bottom:1px solid #f1f5f9;min-height:30px;position:relative;z-index:1}
-.rm-label{width:300px;flex:none;font-size:12px;padding:4px 8px 4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:3}
+.rm-label{width:286px;flex:none;font-size:12px;padding:4px 8px 4px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;left:4px;background:#fff;z-index:3}
 .rm-track{flex:1;position:relative;height:26px;background:rgba(248,250,252,.7);border-radius:3px;overflow:hidden}
 .rm-lane{position:relative;height:7px;margin-top:1.5px}
 .rm-bar{position:absolute;height:7px;border-radius:2px;font-size:9px;line-height:7px;color:#fff;padding-left:3px;overflow:hidden;white-space:nowrap}
@@ -185,8 +201,23 @@ tr:hover td{background:#f0f4ff}
 .rm-bar.derived{background:#c7d2fe;border:1px dashed #6366f1;color:#3730a3}
 .rm-bar.b-act.derived{background:#bbf7d0;border-color:#16a34a;color:#166534}
 .rm-bar.open{border-right:2px dotted #1a1a2e;border-top-right-radius:0;border-bottom-right-radius:0}
-.rm-slip{width:130px;flex:none;font-size:11px;text-align:right;padding-right:10px;position:sticky;left:300px;background:#fff;z-index:3}
-.rm-head .rm-label,.rm-head .rm-slip{font-weight:700;color:#4472C4;font-size:11px}
+.rm-slip{width:118px;flex:none;font-size:11px;text-align:right;padding-right:10px;position:sticky;left:402px;background:#fff;z-index:3}
+.rm-st{width:4px;flex:none;align-self:stretch;position:sticky;left:0;z-index:4}
+.rm-st.leg{display:inline-block;width:9px;height:9px;border-radius:2px;align-self:auto;position:static;margin:0 2px 0 8px}
+.rm-pg{width:112px;flex:none;position:sticky;left:290px;background:#fff;z-index:3;padding-right:8px}
+.pg{display:flex;flex-direction:column;gap:1px}
+.pg-bar{height:5px;background:#eef2f7;border-radius:3px;overflow:hidden}
+.pg-fill{display:block;height:100%;background:#4472C4;border-radius:3px}
+.pg-fill.full{background:#22c55e}
+.pg-num{font-size:11px;font-weight:700;color:#4472C4;line-height:1.1}
+.pg-num.full{color:#16a34a}
+.pg-sub{font-size:9px;color:#9ca3af;line-height:1.1}
+.rm-done{position:absolute;left:0;top:0;bottom:0;background:rgba(255,255,255,.55);border-right:1px solid rgba(255,255,255,.9)}
+.rm-sum{display:flex;align-items:center;gap:12px;margin:10px 0 6px;padding:10px 14px;border:1px solid #e5e7eb;border-radius:8px;background:#fafbfc}
+.rm-sum-bar{flex:none;width:220px;height:10px;background:#eef2f7;border-radius:5px;overflow:hidden}
+.rm-sum-bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#4472C4)}
+.rm-sum-txt{font-size:13px}.rm-sum-txt b{font-size:17px;color:#4472C4}
+.rm-head .rm-label,.rm-head .rm-slip,.rm-head .rm-pg{font-weight:700;color:#4472C4;font-size:11px}
 .slip{font-weight:600}.slip-late{color:#dc2626}.slip-early{color:#16a34a}.slip-ok{color:#6b7280}
 .slip-n{color:#b45309;font-weight:700}
 .hz{display:inline-block;padding:1px 6px;border-radius:8px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:600;margin-right:4px}
@@ -505,6 +536,7 @@ function renderGantt(){
 /* ---------- roadmap ---------- */
 
 const DAY=86400000;
+const PIN=4+286+112+118;   // stripe + label + progress + slip, all pinned left
 const num=iso=>Date.parse(iso+'T00:00:00Z');
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function fmt(ms,mode){
@@ -551,6 +583,29 @@ function ticks(span){
   return out;
 }
 
+const SCOL={'Done':'#22c55e','Implementing':'#3b82f6','Not Started':'#9ca3af',
+  'Portfolio Backlog':'#f59e0b','Funnel':'#ec4899','Cancelled':'#d1d5db'};
+
+/* Effort where it is estimated, count where it is not. Saying "3 of 7 items"
+   on a row whose hours are unknown is honest; inventing hours to get a
+   percentage is not. */
+function progress(d){
+  const g=d.pg; if(!g)return null;
+  const byEffort=g.et>0;
+  const frac=byEffort?(g.et?g.eh/g.et:0):(g.n?g.dn/g.n:0);
+  return {frac:frac,byEffort:byEffort,done:g.dn,n:g.n,eh:g.eh,et:g.et};
+}
+function progressCell(d){
+  const p=progress(d); if(!p)return '';
+  const pc=Math.round(p.frac*100);
+  const detail=p.byEffort?`${p.eh}h of ${p.et}h`:`${p.done} of ${p.n}`;
+  const full=pc===100?' full':'';
+  return `<div class="pg" title="${p.done} of ${p.n} item${p.n===1?'':'s'} done`
+    +(p.byEffort?` · ${p.eh}h of ${p.et}h estimated`:' · no effort estimates, counting items')+`">
+    <div class="pg-bar"><i class="pg-fill${full}" style="width:${pc}%"></i></div>
+    <span class="pg-num${full}">${pc}%</span><span class="pg-sub">${detail}</span></div>`;
+}
+
 function slipTag(d){
   if(!d.v)return '';
   const n=d.v.a,unit=d.v.u+(Math.abs(n)===1?'':'s');
@@ -567,11 +622,26 @@ function renderRoadmap(){
   const zoomBtns=['day','month','quarter','sprint'].map(z=>
     `<span class="btn${zoom===z?' on':''}" onclick="zoom='${z}';render()">${z[0].toUpperCase()+z.slice(1)}</span>`).join('');
   let h=treeControls(`<span class="sep"></span>${zoomBtns}`);
-  h+=`<div class="legend">
+  /* The question a roadmap gets asked second, after "when": how much of it
+     is actually done. Summed over visible leaves, so nothing double-counts
+     and cancelled work neither helps nor hurts. */
+  let tn=0,td=0,te=0,teh=0;
+  DATA.filter(d=>visible(d)&&!hasKids(d)&&d.pg).forEach(d=>{
+    tn+=d.pg.n;td+=d.pg.dn;te+=d.pg.et;teh+=d.pg.eh;});
+  const opc=te>0?Math.round(teh/te*100):(tn?Math.round(td/tn*100):0);
+  h+=`<div class="rm-sum">
+    <div class="rm-sum-bar"><i style="width:${opc}%"></i></div>
+    <div class="rm-sum-txt"><b>${opc}%</b> of planned work done
+      <span class="muted">— ${td} of ${tn} items${te>0?`, ${Math.round(teh)}h of ${Math.round(te)}h estimated`:''}</span></div></div>`;
+
+  h+=`<div class="legend"><b>Bars</b>
     <span class="sw sw-base"></span> Baseline
     <span class="sw sw-plan"></span> Planned
-    <span class="sw sw-derived"></span> Derived from children
-    <span class="sw sw-act"></span> Actual</div>`;
+    <span class="sw sw-derived"></span> Rolled up
+    <span class="sw sw-act"></span> Actual
+    <span class="sep"></span><b>Status</b>
+    ${Object.keys(SCOL).filter(k=>showCancelled||k!=='Cancelled')
+      .map(k=>`<i class="rm-st leg" style="background:${SCOL[k]}"></i>${k}`).join(' ')}</div>`;
 
   /* A tick needs room for its own label. At day or sprint zoom that is more
      room than the page has, so the track grows and scrolls rather than
@@ -579,9 +649,9 @@ function renderRoadmap(){
   const tk=ticks(span);
   const PER={day:58,month:84,quarter:112,sprint:78}[zoom];
   const trackW=Math.max(tk.length*PER,560);
-  h+=`<div class="rm-scroll"><div class="rm-inner" style="width:${430+trackW}px">`;
+  h+=`<div class="rm-scroll"><div class="rm-inner" style="width:${PIN+trackW}px">`;
   h+=`<div class="rm-grid">`+tk.map(t=>`<i style="left:${pct(t.at)}%"></i>`).join('')+`</div>`;
-  h+=`<div class="rm-row rm-head"><div class="rm-label">Work Item</div><div class="rm-slip">vs baseline</div><div class="rm-track">`;
+  h+=`<div class="rm-row rm-head"><i class="rm-st" style="background:transparent"></i><div class="rm-label">Work Item</div><div class="rm-pg">Progress</div><div class="rm-slip">vs baseline</div><div class="rm-track">`;
   tk.forEach(t=>{h+=`<div class="rm-tick" style="left:${pct(t.at)}%"><span>${t.label}</span></div>`;});
   h+=`</div></div>`;
 
@@ -590,8 +660,9 @@ function renderRoadmap(){
      and it draws across the quarter it was promised in, because that is
      exactly how precise the promise was. A start with no end is work under
      way, drawn open-ended. */
-  const lane=(a,b,cls,title)=>{
+  const lane=(a,b,cls,title,pgFrac)=>{
     if(!a&&!b)return '';
+    const fill=(pgFrac!==undefined&&pgFrac>0)?`<i class="rm-done" style="width:${Math.round(pgFrac*100)}%"></i>`:'';
     const from=num(a?a.s:b.s),to=num(b?b.e:a.e);
     const l=pct(from),w=Math.max(pct(to+DAY)-l,0.6);
     const derived=(a&&a.d)||(b&&b.d);
@@ -599,18 +670,20 @@ function renderRoadmap(){
     const text=(b&&b.t)||(a&&a.t)||'';
     const tip=title+(text?': '+text:' (derived from children)')
               +(open?' — started, no end date':'');
-    return `<div class="rm-bar ${cls}${derived?' derived':''}${open}" style="left:${l}%;width:${w}%" title="${tip}">${text}</div>`;
+    return `<div class="rm-bar ${cls}${derived?' derived':''}${open}" style="left:${l}%;width:${w}%" title="${tip}">${fill}${text}</div>`;
   };
 
   const undated=[];
   walk((d,depth)=>{
     if(!dated(d)){undated.push(d);return;}
     const s=d.d;
-    h+=`<div class="rm-row"><div class="rm-label" style="padding-left:${depth*14}px" title="${(d.t||'').replace(/"/g,'')}">${twisty(d)} ${d.c}. ${d.t||''}</div>
+    h+=`<div class="rm-row"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
+      <div class="rm-label" style="padding-left:${depth*14}px" title="${(d.t||'').replace(/"/g,'')} — ${d.s}">${twisty(d)} ${d.c}. ${d.t||''}</div>
+      <div class="rm-pg">${progressCell(d)}</div>
       <div class="rm-slip">${slipTag(d)}</div>
       <div class="rm-track">
         <div class="rm-lane">${lane(s.bs,s.be,'b-base','Baseline')}</div>
-        <div class="rm-lane">${lane(s.ps,s.pe,'b-plan','Planned')}</div>
+        <div class="rm-lane">${lane(s.ps,s.pe,'b-plan','Planned',(progress(d)||{}).frac)}</div>
         <div class="rm-lane">${lane(s.as,s.ae,'b-act','Actual')}</div>
       </div></div>`;
   });
@@ -621,7 +694,8 @@ function renderRoadmap(){
     h+=`<div class="rm-undated"><h3>No dates yet — ${undated.length} item${undated.length===1?'':'s'}</h3>`;
     undated.forEach(d=>{
       const hz=d.hz?`<span class="hz">${d.hz}</span>`:'';
-      h+=`<div class="rm-row"><div class="rm-label">${d.c}. ${d.t||''}</div>
+      h+=`<div class="rm-row"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
+        <div class="rm-label">${d.c}. ${d.t||''}</div><div class="rm-pg">${progressCell(d)}</div>
         <div class="rm-slip">${hz}${badge(d.s)}</div><div class="rm-track rm-empty">—</div></div>`;
     });
     h+=`</div>`;
