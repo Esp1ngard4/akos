@@ -21,7 +21,7 @@ Categories are exactly these three. No fourth category. No index file — scopes
 
 **No external registry is read, required, or degraded around** — not a notebook tree, not a sibling system, not a calendar or task manager. An earlier design treated such a read as a soft dependency with a fallback for when it was absent; the fallback was always going to be the only path that ran, and a dependency whose degradation is its normal case is worse than no dependency.
 
-**Scope identity is always the path form** — `areaOfFocus/product-craft` — in strategy frontmatter, index rows, idea rows, and backbone frontmatter. Display forms like "AF.6 Career" belong in prose only, never in a field that has to join.
+**Scope identity is always the path form** — `areaOfFocus/product-craft` — in strategy frontmatter, index rows, idea rows, and backbone frontmatter. Display forms like "AF.6 Widgets" belong in prose only, never in a field that has to join.
 
 **When candidates are enumerable, offer them.** A scope question is a pick-list of the scopes that have a strategy file, plus `default` and an escape option — never a blank prompt.
 

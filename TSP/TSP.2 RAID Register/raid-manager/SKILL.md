@@ -17,7 +17,7 @@ Examples below write `python`, which is correct on Windows; on macOS/Linux use `
 
 ```
 <Project folder>/
-  0. PrjMgm/
+  <planning folder>/
     RAID/
       RAID <Project>.json        <- source of truth (human + Claude editable)
       RAID Dashboard.html        <- generated dashboard (visual, regenerated on demand)
@@ -34,7 +34,7 @@ Examples below write `python`, which is correct on Windows; on macOS/Linux use `
 
 ### Folder conventions
 
-- **Location**: the RAID register lives under `0. PrjMgm/RAID/` within the project folder. `0. PrjMgm` is the standard project management subfolder.
+- **Location**: the RAID register lives under the project's planning folder, in a `RAID/` subfolder beside the other registers.
 - **AuxMat**: created alongside the register when a new RAID is initialised. Contains one subfolder per RAID item that needs supporting documents (design notes, analysis, evidence, correspondence).
 - **AuxMat subfolder naming**: `{Type initial}{ID}-{slug}` — e.g. `R5-vendor-risk-analysis`, `I3-permit-delay`, `A12-stakeholder-comms`. The slug is a short kebab-case description.
 - **When to create an AuxMat subfolder**: when working on a RAID item requires creating documents beyond what fits in the register's Description, Action Plan, or Action Log fields. Not every item needs one.

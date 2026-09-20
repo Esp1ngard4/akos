@@ -67,7 +67,7 @@ Take the answer as given and record it in `backbone.md`.
 
 **Candidates come from `content-system/strategies/`, and nowhere else.** Not an external registry, not a notebook tree, not a sibling system — see "Resolving a scope" in [`_shared/contracts/strategy-file-format.md`](../_shared/contracts/strategy-file-format.md). If the source idea already carries a scope, use it silently and ask nothing.
 
-**Scope is recorded in path form** — `areaOfFocus/product-craft`, never `AF.6 Career`. The path form is what joins a post to its strategy; a display form joins to nothing.
+**Scope is recorded in path form** — `areaOfFocus/product-craft`, never `AF.6 Widgets`. The path form is what joins a post to its strategy; a display form joins to nothing.
 
 **The hard constraint: never derive scope from what the piece is about.** Do not suggest a scope because the draft mentions a product, a project, or a client. Do not narrow the list to what looks topically relevant. Do not pre-select a "likely" option.
 

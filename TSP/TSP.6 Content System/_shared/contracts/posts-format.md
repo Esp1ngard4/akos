@@ -71,7 +71,7 @@ commitments:                      # optional; one line per artifact credited to 
 | `Title` | The artifact's title. Artifacts in a bundle usually differ. |
 | `Type` | `article`, `short-post`, `carousel`, `video`, `deck`, `poster`. Open set. |
 | `Channel` | `blog`, `linkedin`, `instagram`, `site`. Open set. One value per row. |
-| `Scope` | Strategy path form — `areaOfFocus/product-craft`, not `AF.6 Career`. This is what joins a post to its strategy. A comma-separated list is permitted; a piece may serve more than one scope. |
+| `Scope` | Strategy path form — `areaOfFocus/product-craft`, not `AF.6 Widgets`. This is what joins a post to its strategy. A comma-separated list is permitted; a piece may serve more than one scope. |
 | `Commitment` | The plan commitment satisfied, as `<plan name>/<date>`, or blank. Blank is normal. |
 | `Published` | Date the author recorded publication, or blank. **Never inferred, never derived from the lock signal.** |
 | `Link` | Relative link to the artifact file. |
