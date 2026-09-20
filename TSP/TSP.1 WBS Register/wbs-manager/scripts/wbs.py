@@ -5,6 +5,7 @@
     python wbs.py add     <register> "Title" --type Story --parent 37
     python wbs.py set     <register> --id 42 --status Done --nature Improve
     python wbs.py check   <register>
+    python wbs.py rebaseline <register> --id 42 --baseline-end Q2-26 --reason "..."
     python wbs.py migrate <register> [--apply]
     python wbs.py sprints seed   <conventions.json> --scope "Project name" --year 2026
     python wbs.py sprints import <register> --from <conventions.json>
@@ -49,9 +50,15 @@ from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import registry as R                                            # noqa: E402
+import dates as D                                               # noqa: E402
+import create_wbs as C                                          # noqa: E402
 
 ITEMS = "items"
 SPRINTS = "sprints"
+SCHEDULE_LOG = "schedule_log"
+# --flag -> field. The six schedule dates; see dates.py for what a value
+# may look like and why precision is derived rather than stored.
+DATE_ARGS = [(f.lower().replace(" ", "_"), f) for f in C.DATE_FIELDS]
 # Assigning a real sprint, or closing the row, both supersede an intention
 # about how soon. Without this the field rots exactly as Next/Future did in
 # Sprint Planned - 18 of 45 rows stale and nothing to catch it.
@@ -138,6 +145,73 @@ def check_deliverable(row):
                  % (" / ".join(DELIVERABLE_LEVELS), row.get("Type")))
 
 
+def has_children(data, item_id):
+    return any(str(r.get("Parent")) == str(item_id) for r in R.rows(data, ITEMS))
+
+
+def check_date(field, value):
+    """Reject what cannot be parsed rather than coercing it (R8).
+
+    A date nobody can parse is worse than a blank one: blank is honestly
+    unknown, while a silently coerced value looks like an answer.
+    """
+    if value in (None, ""):
+        return
+    if D.resolve(value) is None:
+        sys.exit("%r is not a date I can read for %s.\n  Use %s."
+                 % (value, field, D.FORMS))
+
+
+def log_schedule(data, item_id, field, before, after, reason):
+    rows = data.setdefault(SCHEDULE_LOG, [])
+    rows.append({"ID": (max([r.get("ID", 0) for r in rows]) + 1) if rows else 1,
+                 "Changed On": date.today().isoformat(),
+                 "Item": as_id(item_id), "Field": field,
+                 "From": before or "", "To": after or "", "Reason": reason})
+
+
+def apply_dates(data, row, args, changed, creating=False):
+    """Set the schedule fields, with the three rules that make them mean something.
+
+    A baseline is write-once (R9) - one that can be quietly edited is not a
+    baseline, it is just another plan. A parent derives its plan and actuals
+    from its children (R16), so setting them there would create a second
+    answer the render would ignore. And every move of a planned date is
+    logged with a reason (R12), because today's variance says a deliverable
+    is late while the log says it has moved right three times, and the
+    second is the more useful signal.
+    """
+    for dest, field in DATE_ARGS:
+        value = getattr(args, dest, None)
+        if value is None:
+            continue
+        check_date(field, value)
+        before = row.get(field)
+
+        if field in C.BASELINE_FIELDS and before and not creating:
+            sys.exit("%s is already %r on item %s. A baseline is set once - "
+                     "use `wbs.py rebaseline` to move it, which records the "
+                     "previous value and why." % (field, before, row.get("ID")))
+        if field not in C.BASELINE_FIELDS and not creating \
+                and has_children(data, row.get("ID")) and value != "":
+            sys.exit("%s is derived on item %s, which has children - it is the "
+                     "span of its descendants, computed at render time. Set it "
+                     "on the leaves instead. (A baseline may be carried on a "
+                     "parent; a plan may not.)" % (field, row.get("ID")))
+        if field in C.PLANNED_FIELDS and not creating and str(before or "") != str(value):
+            if not getattr(args, "reason", None):
+                sys.exit("Moving %s needs --reason. The log of why a date moved "
+                         "is the point of keeping one." % field)
+            log_schedule(data, row.get("ID"), field, before, value, args.reason)
+
+        if value == "":
+            row.pop(field, None)
+            changed.append("%s cleared" % field)
+        else:
+            row[field] = value
+            changed.append("%s=%s" % (field, value))
+
+
 def finish(args, data, note):
     print(note)
     if getattr(args, "dry_run", False):
@@ -177,6 +251,8 @@ def cmd_add(args):
     row.setdefault("Nature", "Build")
     row.setdefault("Class", "Product")
     check_deliverable(row)
+    created = []
+    apply_dates(data, row, args, created, creating=True)
     R.rows(data, ITEMS).append(row)
     return finish(args, data, "Added item %s  %s" % (row["ID"], args.title))
 
@@ -211,6 +287,7 @@ def cmd_set(args):
         else:
             row[key] = value
             changed.append("%s=%s" % (key, value))
+    apply_dates(data, row, args, changed)
     check_deliverable(row)
     if not changed:
         sys.exit("Nothing to change. Pass at least one field.")
@@ -221,6 +298,8 @@ def cmd_check(args):
     data = R.load(args.register)
     items = R.rows(data, ITEMS)
     known_sprints = {s.get("Sprint") for s in data.get(SPRINTS) or []}
+    sprint_window = {s.get("Sprint"): (s.get("Starts"), s.get("Ends"))
+                     for s in data.get(SPRINTS) or []}
     errors, warnings = [], []
 
     seen = {}
@@ -278,6 +357,53 @@ def cmd_check(args):
                 errors.append("item %s: %s=%r is not a sprint in the calendar"
                               % (rid, field, value))
 
+        # Schedule dates. Two answers to whether something finished is one
+        # too many, so the dates and the Status have to agree.
+        resolved = {}
+        for field in C.DATE_FIELDS:
+            value = row.get(field)
+            if not value:
+                continue
+            got = D.resolve(value)
+            if got is None:
+                errors.append("item %s: %s=%r is not a readable date (%s)"
+                              % (rid, field, value, D.FORMS))
+            else:
+                resolved[field] = got
+
+        status = row.get("Status")
+        if row.get("Actual End") and status not in ("Done", "Cancelled"):
+            errors.append("item %s: Actual End is set but Status is %r"
+                          % (rid, status or "unset"))
+        if row.get("Actual Start") and status in ("Not Started", "Portfolio Backlog",
+                                                  "Funnel"):
+            errors.append("item %s: Actual Start is set but Status is %r"
+                          % (rid, status))
+        for start_field, end_field in C.DATE_PAIRS:
+            a, b = resolved.get(start_field), resolved.get(end_field)
+            if a and b and b["end"] < a["start"]:
+                errors.append("item %s: %s (%s) ends before %s (%s) begins"
+                              % (rid, end_field, b["text"], start_field, a["text"]))
+
+        # A parent's plan and actuals are the span of its descendants, so a
+        # stored value there is a second answer the render ignores.
+        if has_children(data, rid):
+            stored = [f for f in C.PLANNED_FIELDS + C.ACTUAL_FIELDS if row.get(f)]
+            if stored:
+                warnings.append("item %s: %s stored on a parent - derived at "
+                                "render time, so the stored value is ignored"
+                                % (rid, ", ".join(stored)))
+
+        # Usually a stale field rather than a mistake, so a warning (R22).
+        planned = resolved.get("Planned End")
+        sprint_id = row.get("Sprint Planned")
+        if planned and sprint_id and sprint_id in sprint_window:
+            window = sprint_window[sprint_id]
+            if window[1] and (planned["end"] < window[0] or planned["start"] > window[1]):
+                warnings.append("item %s: Sprint Planned %s (%s..%s) and Planned "
+                                "End %s do not overlap"
+                                % (rid, sprint_id, window[0], window[1], planned["text"]))
+
     if not known_sprints and any(row.get(f) for row in items
                                  for f in SPRINT_FIELDS_ON_ITEM):
         warnings.append("sprint IDs are in use but the register has no "
@@ -333,6 +459,32 @@ def cmd_migrate(args):
             notes.append("item %s: Sprint Planned=%s -> Horizon"
                          % (row.get("ID"), horizon))
 
+    # Planned Release and Released On fold into the six-field schedule.
+    # Eight overlapping date fields would let a row hold two answers to
+    # when it shipped - the duplication the three-axis Type work removed.
+    for row in items:
+        for old_field, new_field in (("Planned Release", "Planned End"),
+                                     ("Released On", "Actual End")):
+            if old_field not in row:
+                continue
+            value = row.pop(old_field)
+            if not value:
+                continue
+            if D.resolve(value) is None:
+                notes.append("!! item %s: %s=%r is not a readable date and was "
+                             "left in Comments rather than dropped"
+                             % (row.get("ID"), old_field, value))
+                row["Comments"] = ("%s [%s was %s]" % (row.get("Comments", ""),
+                                                       old_field, value)).strip()
+            elif row.get(new_field):
+                notes.append("!! item %s: %s=%r dropped - %s already holds %r"
+                             % (row.get("ID"), old_field, value, new_field,
+                                row[new_field]))
+            else:
+                row[new_field] = value
+                notes.append("item %s: %s -> %s (%s)"
+                             % (row.get("ID"), old_field, new_field, value))
+
     # Parent from Code, which is the only place the hierarchy exists today.
     by_code = {str(r.get("Code")): r for r in items if r.get("Code") not in (None, "")}
     for row in items:
@@ -349,7 +501,6 @@ def cmd_migrate(args):
 
     settings = data.setdefault("meta", {}).setdefault("settings", {})
     vocabs = settings.setdefault("vocabularies", {})
-    import create_wbs as C
     for name, values in (("type", C.TYPES), ("class", C.CLASSES),
                          ("nature", C.NATURES), ("horizon", C.HORIZONS),
                          ("delivers", C.DELIVERS), ("key deliverable", C.YESNO)):
@@ -363,6 +514,14 @@ def cmd_migrate(args):
         if row.get("Status") == "Backlog":
             row["Status"] = "Portfolio Backlog"
             notes.append("item %s: Status Backlog -> Portfolio Backlog" % row.get("ID"))
+    for name, spec in ((SPRINTS, C.SPRINT_FIELDS),
+                       (SCHEDULE_LOG, C.SCHEDULE_LOG_FIELDS)):
+        if name not in data:
+            data[name] = []
+            notes.append("%s collection added" % name)
+        if settings.setdefault("fields", {}).get(name) != spec:
+            settings["fields"][name] = spec
+            notes.append("%s field order registered" % name)
     if settings.get("fields", {}).get("items") != C.ITEM_FIELDS:
         settings.setdefault("fields", {})["items"] = C.ITEM_FIELDS
         notes.append("item field order updated")
@@ -387,6 +546,42 @@ def cmd_migrate(args):
     R.save(args.register, data)
     print("  written to %s" % args.register)
     return 0
+
+
+def cmd_rebaseline(args):
+    """Move a baseline deliberately, recording what it was and why (R10).
+
+    Re-baselining is a real project event, not an edit. Making it its own
+    verb is what lets `set` refuse a baseline outright: there is somewhere
+    else to go, so the refusal costs nothing and the record survives.
+    """
+    data = R.load(args.register)
+    row = find(data, args.id)
+    if row is None:
+        sys.exit("No item with ID %s." % args.id)
+    wanted = [(f, getattr(args, f.lower().replace(" ", "_")))
+              for f in C.BASELINE_FIELDS]
+    wanted = [(f, v) for f, v in wanted if v is not None]
+    if not wanted:
+        sys.exit("Pass at least one of --baseline-start / --baseline-end.")
+
+    changed = []
+    for field, value in wanted:
+        check_date(field, value)
+        before = row.get(field)
+        if str(before or "") == str(value):
+            continue
+        log_schedule(data, row.get("ID"), field, before, value, args.reason)
+        if value == "":
+            row.pop(field, None)
+            changed.append("%s cleared (was %s)" % (field, before))
+        else:
+            row[field] = value
+            changed.append("%s %s -> %s" % (field, before or "unset", value))
+    if not changed:
+        sys.exit("The baseline already reads that. Nothing recorded.")
+    return finish(args, data, "Rebaselined item %s: %s\n  reason: %s"
+                  % (args.id, "; ".join(changed), args.reason))
 
 
 # --------------------------------------------------------------------------- #
@@ -427,7 +622,6 @@ def cmd_sprints_seed(args):
                  "has actually moved." % args.output)
     anchor = date.fromisoformat(args.anchor)
     series = sprint_series(args.year, anchor, args.length)
-    import create_wbs as C
     data = R.new("agile-conventions", args.scope,
                  {"sprints": [{"Sprint": sid, "Starts": a.isoformat(),
                                "Ends": b.isoformat()} for sid, a, b in series]},
@@ -515,6 +709,11 @@ def main():
         sub.add_argument("--owner")
         sub.add_argument("--key-deliverable", choices=["Y", "N"])
         sub.add_argument("--horizon", help="Next / Future, or '' to clear")
+        for dest, field in DATE_ARGS:
+            sub.add_argument("--" + dest.replace("_", "-"), dest=dest,
+                             metavar="DATE", help="%s (%s)" % (field, D.FORMS))
+        sub.add_argument("--reason", help="why a planned date moved; required "
+                                          "when one does")
         sub.add_argument("--dry-run", action="store_true")
 
     s = subs.add_parser("add", help="add an item, claiming the next ID")
@@ -540,6 +739,16 @@ def main():
     s.add_argument("--apply", action="store_true",
                    help="write the changes (default is a dry run)")
     s.set_defaults(func=cmd_migrate)
+
+    s = subs.add_parser("rebaseline", help="move a baseline, recording why")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("--reason", required=True,
+                   help="why the commitment moved; this is the record")
+    for _dest, _field in [(d, f) for d, f in DATE_ARGS if f in C.BASELINE_FIELDS]:
+        s.add_argument("--" + _dest.replace("_", "-"), dest=_dest, metavar="DATE")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_rebaseline)
 
     sp = subs.add_parser("sprints", help="seed or import the sprint calendar")
     sps = sp.add_subparsers(dest="sprints_command")

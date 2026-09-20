@@ -23,7 +23,25 @@ ITEM_FIELDS = ["ID", "Parent", "Code", "Title", "Description",
                "Sprint Ended", "Key Dependencies", "Action Plan",
                "Planning Considerations", "Validation Approach",
                "Control Approach", "Control Tool", "Project Phase",
-               "Planned Release", "Released On", "Comments"]
+               "Baseline Start", "Baseline End", "Planned Start", "Planned End",
+               "Actual Start", "Actual End", "Comments"]
+
+# Six fields, not eight: Planned Release folded into Planned End and
+# Released On into Actual End. Keeping both would let a row hold two
+# answers to when it shipped, which is the duplication the three-axis Type
+# work already removed once.
+BASELINE_FIELDS = ["Baseline Start", "Baseline End"]
+PLANNED_FIELDS = ["Planned Start", "Planned End"]
+ACTUAL_FIELDS = ["Actual Start", "Actual End"]
+DATE_FIELDS = BASELINE_FIELDS + PLANNED_FIELDS + ACTUAL_FIELDS
+# Start/End pairs, for the rule that an end may not precede its start.
+DATE_PAIRS = [tuple(BASELINE_FIELDS), tuple(PLANNED_FIELDS), tuple(ACTUAL_FIELDS)]
+
+# Every move of a planned date, with a reason. Structured rather than the
+# free-text field RAID uses for its Action Log, because the slip count has
+# to be countable: a deliverable that moved four times is a different risk
+# from one that moved once by the same amount.
+SCHEDULE_LOG_FIELDS = ["ID", "Changed On", "Item", "Field", "From", "To", "Reason"]
 
 STATUSES = ["Portfolio Backlog", "Funnel", "Not Started", "Implementing",
             "Done", "Cancelled"]
@@ -60,9 +78,10 @@ def main():
         sys.exit("%s already exists. Pass --force to overwrite." % args.output)
 
     data = R.new("wbs-register", args.project,
-                 {"items": [], "sprints": []},
+                 {"items": [], "sprints": [], "schedule_log": []},
                  settings={"fields": {"items": ITEM_FIELDS,
-                                      "sprints": SPRINT_FIELDS},
+                                      "sprints": SPRINT_FIELDS,
+                                      "schedule_log": SCHEDULE_LOG_FIELDS},
                            "vocabularies": {"status": STATUSES,
                                             "priority": PRIORITIES,
                                             "type": TYPES,

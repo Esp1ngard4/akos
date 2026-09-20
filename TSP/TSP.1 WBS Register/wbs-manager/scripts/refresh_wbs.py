@@ -12,8 +12,87 @@ import sys
 import json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import registry as R
+import dates as D
 from pathlib import Path
 from datetime import datetime
+
+
+SHORT = {"Baseline Start": "bs", "Baseline End": "be",
+         "Planned Start": "ps", "Planned End": "pe",
+         "Actual Start": "as", "Actual End": "ae"}
+
+
+def build_schedule(items, log):
+    """Resolve, derive and compare every row's dates, once, here.
+
+    The dashboard receives instants and never parses a date, so the rules in
+    dates.py have one implementation rather than a Python one and a
+    JavaScript one drifting apart. Derivation is the other half of that: a
+    parent's plan and actuals are the span of its descendants (R16), which
+    is cheaper to compute here than to recompute on every re-render.
+    """
+    kids = {}
+    for row in items:
+        parent = row.get("Parent")
+        kids.setdefault(str(parent) if parent not in (None, "") else None,
+                        []).append(row)
+
+    slips = {}
+    for entry in log or []:
+        if entry.get("Field") == "Planned End":
+            before, after = D.resolve(entry.get("From")), D.resolve(entry.get("To"))
+            if before and after and after["end"] > before["end"]:
+                slips[str(entry.get("Item"))] = slips.get(str(entry.get("Item")), 0) + 1
+
+    resolved = {}
+    for row in items:
+        got = {}
+        for field, key in SHORT.items():
+            value = D.resolve(row.get(field))
+            if value:
+                got[key] = {"t": value["text"], "s": value["start"],
+                            "e": value["end"], "p": value["precision"]}
+        resolved[str(row.get("ID"))] = got
+
+    def descend(rid):
+        out = []
+        for child in kids.get(str(rid), []):
+            out.append(child)
+            out.extend(descend(child.get("ID")))
+        return out
+
+    payload = {}
+    for row in items:
+        rid = str(row.get("ID"))
+        got = dict(resolved[rid])
+        if kids.get(rid):
+            below = [resolved[str(c.get("ID"))] for c in descend(row.get("ID"))]
+            for start_key, end_key in (("ps", "pe"), ("as", "ae")):
+                starts = [b[start_key] for b in below if start_key in b]
+                ends = [b[end_key] for b in below if end_key in b]
+                # A span needs both ends; one date below is a point, not a bar.
+                if starts or ends:
+                    edge = min([s["s"] for s in starts] + [e["e"] for e in ends])
+                    far = max([s["s"] for s in starts] + [e["e"] for e in ends])
+                    got[start_key] = {"t": "", "s": edge, "e": edge,
+                                      "p": "day", "d": 1}
+                    got[end_key] = {"t": "", "s": far, "e": far, "p": "day", "d": 1}
+        entry = {"d": got}
+        var = D.variance(
+            D.resolve(row.get("Baseline End")),
+            D.resolve(row.get("Planned End")) if not kids.get(rid) else None)
+        if var is None and got.get("be") and got.get("pe"):
+            # A parent compares its own baseline against its derived plan,
+            # which is the whole point of letting a parent carry one (R17).
+            var = {"amount": D.bucket(got["pe"]["e"], got["be"]["p"])
+                   - D.bucket(got["be"]["e"], got["be"]["p"]),
+                   "unit": D.UNITS[got["be"]["p"]], "precision": got["be"]["p"]}
+        if var:
+            entry["v"] = {"a": var["amount"], "u": var["unit"]}
+        if slips.get(rid):
+            entry["sl"] = slips[rid]
+        payload[rid] = entry
+    return payload
 
 
 def compute_stats(items):
@@ -85,6 +164,32 @@ tr:hover td{background:#f0f4ff}
 .b-ns{background:#f3f4f6;color:#374151}.b-bl{background:#fef3c7;color:#92400e}
 .b-fn{background:#fce7f3;color:#9d174d}.b-cx{background:#f3f4f6;color:#9ca3af;text-decoration:line-through}.b-no{background:#f9fafb;color:#9ca3af}
 .sprint-section{margin-bottom:24px}
+.btn.on{background:#4472C4;color:#fff;border-color:#4472C4}
+.sep{display:inline-block;width:1px;height:18px;background:#e5e7eb;margin:0 6px;vertical-align:middle}
+.sw{display:inline-block;width:14px;height:8px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.sw-base{background:#cbd5e1}.sw-plan{background:#4472C4}.sw-act{background:#22c55e}
+.sw-derived{background:#c7d2fe;border:1px dashed #6366f1}
+.rm-row{display:flex;align-items:center;gap:8px;border-bottom:1px solid #f1f5f9;min-height:30px}
+.rm-label{width:300px;flex:none;font-size:12px;padding:4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm-track{flex:1;position:relative;height:26px;background:#f8fafc;border-radius:3px;overflow:hidden}
+.rm-lane{position:relative;height:7px;margin-top:1.5px}
+.rm-bar{position:absolute;height:7px;border-radius:2px;font-size:9px;line-height:7px;color:#fff;padding-left:3px;overflow:hidden;white-space:nowrap}
+.rm-bar.b-base{background:#cbd5e1;color:#475569}
+.rm-bar.b-plan{background:#4472C4}
+.rm-bar.b-act{background:#22c55e}
+.rm-bar.derived{background:#c7d2fe;border:1px dashed #6366f1;color:#3730a3}
+.rm-bar.b-act.derived{background:#bbf7d0;border-color:#16a34a;color:#166534}
+.rm-bar.open{border-right:2px dotted #1a1a2e;border-top-right-radius:0;border-bottom-right-radius:0}
+.rm-slip{width:150px;flex:none;font-size:11px;text-align:right}
+.slip{font-weight:600}.slip-late{color:#dc2626}.slip-early{color:#16a34a}.slip-ok{color:#6b7280}
+.slip-n{color:#b45309;font-weight:700}
+.hz{display:inline-block;padding:1px 6px;border-radius:8px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:600;margin-right:4px}
+.rm-head .rm-track{background:transparent;height:20px;border-bottom:2px solid #4472C4}
+.rm-tick{position:absolute;top:0;height:20px;border-left:1px solid #e5e7eb;font-size:10px;color:#6b7280}
+.rm-tick span{padding-left:3px;white-space:nowrap}
+.rm-empty{display:flex;align-items:center;justify-content:center;color:#cbd5e1}
+.rm-undated{margin-top:18px;padding-top:10px;border-top:2px dashed #e5e7eb}
+.rm-undated h3{font-size:13px;color:#b45309;margin-bottom:6px}
 .sprint-header{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:2px solid #4472C4;margin-bottom:8px}
 .sprint-name{font-size:16px;font-weight:700}
 .sprint-meta{font-size:12px;color:#6b7280}
@@ -121,9 +226,12 @@ tr:hover td{background:#f0f4ff}
 JS = '''
 const DATA=__ITEMS__;
 const S=__STATS__;
+const SPRINTS=__SPRINTS__;
 
 let fStatus='All',fPriority='All',fType='All';
 let activeTab='tree';
+let showCancelled=false;   // R28: kept deliberately, noise by default
+let zoom='month';          // day | month | quarter | sprint
 const collapsed=new Set();        // node ids whose children are hidden
 let ganttMode='tree';             // 'tree' | 'flat'
 
@@ -139,7 +247,12 @@ DATA.forEach(d=>{
 });
 const byCode=(a,b)=>String(a.c).localeCompare(String(b.c),undefined,{numeric:true});
 kids.forEach(v=>v.sort(byCode));
-function childrenOf(id){return kids.get(id===null?null:String(id))||[];}
+/* Cancelled work is kept on purpose - the status exists so a dropped item
+   keeps the record of why - but it is noise in the common case, and on a
+   roadmap it draws bars for work that will never happen. Hidden by default,
+   never hidden permanently. */
+function visible(d){return showCancelled||d.s!=='Cancelled';}
+function childrenOf(id){return (kids.get(id===null?null:String(id))||[]).filter(visible);}
 function roots(){return childrenOf(null);}
 function hasKids(d){return childrenOf(d.id).length>0;}
 
@@ -207,6 +320,7 @@ function rebuildSprints(){
 }
 function filtered(){
   return DATA.filter(d=>{
+    if(!visible(d))return false;
     if(fStatus!=='All'&&d.s!==fStatus)return false;
     if(fPriority!=='All'&&d.p!==fPriority)return false;
     if(fType!=='All'&&d.ty!==fType)return false;
@@ -381,15 +495,134 @@ function renderGantt(){
   return h;
 }
 
+/* ---------- roadmap ---------- */
+
+const DAY=86400000;
+const num=iso=>Date.parse(iso+'T00:00:00Z');
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmt(ms,mode){
+  const d=new Date(ms),y=String(d.getUTCFullYear()).slice(2),m=d.getUTCMonth();
+  if(mode==='day')return `${d.getUTCDate()}-${MON[m]}`;
+  if(mode==='quarter')return `Q${Math.floor(m/3)+1}-${y}`;
+  return `${MON[m]}-${y}`;
+}
+
+/* Every resolved instant on a row, so the span covers whatever exists. */
+function instants(d){
+  const out=[];
+  if(d.d)for(const k in d.d){out.push(num(d.d[k].s));out.push(num(d.d[k].e));}
+  return out;
+}
+function dated(d){return d.d&&Object.keys(d.d).length>0;}
+
+function roadmapSpan(){
+  let lo=Infinity,hi=-Infinity;
+  DATA.filter(visible).forEach(d=>instants(d).forEach(v=>{if(v<lo)lo=v;if(v>hi)hi=v;}));
+  SPRINTS.forEach(s=>{const a=num(s.Starts),b=num(s.Ends);if(a<lo)lo=a;if(b>hi)hi=b;});
+  if(!isFinite(lo))return null;
+  const pad=Math.max((hi-lo)*0.02,3*DAY);
+  return {lo:lo-pad,hi:hi+pad};
+}
+
+/* Zoom changes the tick density, not the geometry: once a sprint has dates,
+   the sprint view IS the date view at sprint granularity. */
+function ticks(span){
+  const out=[];
+  if(zoom==='sprint'){
+    SPRINTS.forEach(s=>{const a=num(s.Starts);
+      if(a>=span.lo&&a<=span.hi)out.push({at:a,label:s.Sprint});});
+    if(out.length)return out;
+  }
+  const step=zoom==='day'?7:0;
+  if(step){for(let t=span.lo;t<=span.hi;t+=step*DAY)out.push({at:t,label:fmt(t,'day')});return out;}
+  const start=new Date(span.lo),cur=new Date(Date.UTC(start.getUTCFullYear(),
+      zoom==='quarter'?Math.floor(start.getUTCMonth()/3)*3:start.getUTCMonth(),1));
+  while(cur.getTime()<=span.hi){
+    if(cur.getTime()>=span.lo)out.push({at:cur.getTime(),label:fmt(cur.getTime(),zoom)});
+    cur.setUTCMonth(cur.getUTCMonth()+(zoom==='quarter'?3:1));
+  }
+  return out;
+}
+
+function slipTag(d){
+  if(!d.v)return '';
+  const n=d.v.a,unit=d.v.u+(Math.abs(n)===1?'':'s');
+  const txt=n===0?'on plan':`${Math.abs(n)} ${unit} ${n>0?'late':'early'}`;
+  const cls=n>0?'slip-late':(n<0?'slip-early':'slip-ok');
+  const times=d.sl?` <span class="slip-n" title="moved ${d.sl} time${d.sl===1?'':'s'}">×${d.sl}</span>`:'';
+  return `<span class="slip ${cls}">${txt}</span>${times}`;
+}
+
+function renderRoadmap(){
+  const span=roadmapSpan();
+  if(!span)return '<p class="muted">No dates yet. Set Baseline, Planned or Actual dates to see a roadmap.</p>';
+  const pct=ms=>(ms-span.lo)/(span.hi-span.lo)*100;
+  const zoomBtns=['day','month','quarter','sprint'].map(z=>
+    `<span class="btn${zoom===z?' on':''}" onclick="zoom='${z}';render()">${z[0].toUpperCase()+z.slice(1)}</span>`).join('');
+  let h=treeControls(`<span class="sep"></span>${zoomBtns}`);
+  h+=`<div class="legend">
+    <span class="sw sw-base"></span> Baseline
+    <span class="sw sw-plan"></span> Planned
+    <span class="sw sw-derived"></span> Derived from children
+    <span class="sw sw-act"></span> Actual</div>`;
+
+  const tk=ticks(span);
+  h+=`<div class="rm-row rm-head"><div class="rm-label">Work Item</div><div class="rm-track">`;
+  tk.forEach(t=>{h+=`<div class="rm-tick" style="left:${pct(t.at)}%"><span>${t.label}</span></div>`;});
+  h+=`</div><div class="rm-slip"></div></div>`;
+
+  /* A pair may be half-present, and both halves mean something. "Deliver by
+     Q1-26" is an end with no start - the commonest shape a commitment takes -
+     and it draws across the quarter it was promised in, because that is
+     exactly how precise the promise was. A start with no end is work under
+     way, drawn open-ended. */
+  const lane=(a,b,cls,title)=>{
+    if(!a&&!b)return '';
+    const from=num(a?a.s:b.s),to=num(b?b.e:a.e);
+    const l=pct(from),w=Math.max(pct(to+DAY)-l,0.6);
+    const derived=(a&&a.d)||(b&&b.d);
+    const open=a&&!b?' open':'';
+    const text=(b&&b.t)||(a&&a.t)||'';
+    const tip=title+(text?': '+text:' (derived from children)')
+              +(open?' — started, no end date':'');
+    return `<div class="rm-bar ${cls}${derived?' derived':''}${open}" style="left:${l}%;width:${w}%" title="${tip}">${text}</div>`;
+  };
+
+  const undated=[];
+  walk((d,depth)=>{
+    if(!dated(d)){undated.push(d);return;}
+    const s=d.d;
+    h+=`<div class="rm-row"><div class="rm-label" style="padding-left:${depth*14}px" title="${(d.t||'').replace(/"/g,'')}">${twisty(d)} ${d.c}. ${d.t||''}</div>
+      <div class="rm-track">
+        <div class="rm-lane">${lane(s.bs,s.be,'b-base','Baseline')}</div>
+        <div class="rm-lane">${lane(s.ps,s.pe,'b-plan','Planned')}</div>
+        <div class="rm-lane">${lane(s.as,s.ae,'b-act','Actual')}</div>
+      </div><div class="rm-slip">${slipTag(d)}</div></div>`;
+  });
+
+  /* An undated row in a roadmap is a gap to fix, and hiding it hides the gap. */
+  if(undated.length){
+    h+=`<div class="rm-undated"><h3>No dates yet — ${undated.length} item${undated.length===1?'':'s'}</h3>`;
+    undated.forEach(d=>{
+      const hz=d.hz?`<span class="hz">${d.hz}</span>`:'';
+      h+=`<div class="rm-row"><div class="rm-label">${d.c}. ${d.t||''}</div>
+        <div class="rm-track rm-empty">—</div><div class="rm-slip">${hz}${badge(d.s)}</div></div>`;
+    });
+    h+=`</div>`;
+  }
+  return h;
+}
+
 /* ---------- shell ---------- */
 
 function render(){
   rebuildSprints();
-  const tabs=[['tree','Breakdown'],['deliverables','Deliverables'],['sprints','Sprint Board'],['analytics','Analytics'],['gantt','Gantt']];
-  const body={tree:renderTree,deliverables:renderDeliverables,sprints:renderBoard,analytics:renderAnalytics,gantt:renderGantt}[activeTab]();
+  const tabs=[['tree','Breakdown'],['deliverables','Deliverables'],['roadmap','Roadmap'],['sprints','Sprint Board'],['analytics','Analytics'],['gantt','Gantt']];
+  const body={tree:renderTree,deliverables:renderDeliverables,roadmap:renderRoadmap,sprints:renderBoard,analytics:renderAnalytics,gantt:renderGantt}[activeTab]();
   const showFilters=(activeTab==='sprints'||activeTab==='analytics');
   document.getElementById('app').innerHTML=`${renderKPIs()}
   <div class="tabs">${tabs.map(([k,l])=>`<div class="tab ${activeTab===k?'active':''}" onclick="activeTab='${k}';render()">${l}</div>`).join('')}</div>
+  ${S.cancelled?`<div class="filters"><span class="btn${showCancelled?' on':''}" onclick="showCancelled=!showCancelled;render()">${showCancelled?'Hiding nothing':'Show '+S.cancelled+' cancelled'}</span></div>`:''}
   ${showFilters?renderFilters():''}
   <div class="panel active">${body}</div>
   <div class="timestamp">Generated __TIMESTAMP__</div>`;
@@ -417,7 +650,7 @@ SHELL = '''<!DOCTYPE html>
 </html>'''
 
 
-def generate_html(project_name, items, stats):
+def generate_html(project_name, items, stats, schedule=None, sprints=None):
     """Assemble the dashboard.
 
     The JS and CSS are plain strings, not f-strings, so braces stay as the
@@ -442,14 +675,18 @@ def generate_html(project_name, items, stats):
             'na': str(it.get('Nature', '') or ''),
             'dl': str(it.get('Delivers', '') or ''),
             'kd': str(it.get('Key Deliverable', '') or ''),
-            'rel': str(it.get('Planned Release', '') or ''),
-            'relon': str(it.get('Released On', '') or ''),
+            'hz': str(it.get('Horizon', '') or ''),
             'cat': str(it.get('Category', '') or ''),
             'o': str(it.get('Owner', '') or ''),
         })
 
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-    js = (JS.replace('__ITEMS__', json.dumps(compact))
+    for row in compact:
+        entry = (schedule or {}).get(str(row['id']))
+        if entry:
+            row.update(entry)
+    js = (JS.replace('__SPRINTS__', json.dumps(sprints or []))
+            .replace('__ITEMS__', json.dumps(compact))
             .replace('__STATS__', json.dumps({
                 'total': stats['total'], 'done': stats['done'],
                 'implementing': stats['implementing'],
@@ -487,12 +724,19 @@ def main():
     items = [dict((f, row[f]) for f in fields if row.get(f) is not None)
              for row in rows]
     stats = compute_stats(items)
-    html = generate_html(project_name, items, stats)
+    schedule = build_schedule(items, register.get('schedule_log'))
+    sprints = [s for s in (register.get('sprints') or [])
+               if s.get('Starts') and s.get('Ends')]
+    sprints.sort(key=lambda s: s['Starts'])
+    html = generate_html(project_name, items, stats, schedule, sprints)
 
     html = html.replace('__HASH__', register['meta'].get('values_hash',''))
     Path(html_path).write_text(html, encoding='utf-8')
     print(f"Dashboard generated: {html_path}")
-    print(f"  Items: {stats['total']}, Done: {stats['done']}, Sprints: {len(stats['sprints'])}")
+    dated = sum(1 for e in schedule.values() if e.get('d'))
+    print(f"  Items: {stats['total']}, Done: {stats['done']}, "
+          f"Sprints: {len(stats['sprints'])}")
+    print(f"  Calendar: {len(sprints)} sprint(s) | {dated} item(s) with dates")
 
 
 if __name__ == '__main__':
