@@ -68,15 +68,16 @@ def build_schedule(items, log):
         if kids.get(rid):
             below = [resolved[str(c.get("ID"))] for c in descend(row.get("ID"))]
             for start_key, end_key in (("ps", "pe"), ("as", "ae")):
-                starts = [b[start_key] for b in below if start_key in b]
-                ends = [b[end_key] for b in below if end_key in b]
-                # A span needs both ends; one date below is a point, not a bar.
-                if starts or ends:
-                    edge = min([s["s"] for s in starts] + [e["e"] for e in ends])
-                    far = max([s["s"] for s in starts] + [e["e"] for e in ends])
-                    got[start_key] = {"t": "", "s": edge, "e": edge,
-                                      "p": "day", "d": 1}
-                    got[end_key] = {"t": "", "s": far, "e": far, "p": "day", "d": 1}
+                # Every instant a descendant occupies, not just its starts and
+                # ends taken separately. A child holding only "Q4-26" still
+                # occupies all of October to December, and a parent whose span
+                # ignored that collapsed to a sliver on 31 December.
+                marks = [b[k] for b in below for k in (start_key, end_key) if k in b]
+                if marks:
+                    lo = min(m["s"] for m in marks)
+                    hi = max(m["e"] for m in marks)
+                    got[start_key] = {"t": "", "s": lo, "e": lo, "p": "day", "d": 1}
+                    got[end_key] = {"t": "", "s": hi, "e": hi, "p": "day", "d": 1}
         entry = {"d": got}
         var = D.variance(
             D.resolve(row.get("Baseline End")),
@@ -169,9 +170,13 @@ tr:hover td{background:#f0f4ff}
 .sw{display:inline-block;width:14px;height:8px;border-radius:2px;vertical-align:middle;margin-right:4px}
 .sw-base{background:#cbd5e1}.sw-plan{background:#4472C4}.sw-act{background:#22c55e}
 .sw-derived{background:#c7d2fe;border:1px dashed #6366f1}
-.rm-row{display:flex;align-items:center;gap:8px;border-bottom:1px solid #f1f5f9;min-height:30px}
-.rm-label{width:300px;flex:none;font-size:12px;padding:4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rm-track{flex:1;position:relative;height:26px;background:#f8fafc;border-radius:3px;overflow:hidden}
+.rm-scroll{overflow-x:auto;overflow-y:visible;position:relative;padding-bottom:6px}
+.rm-inner{position:relative}
+.rm-grid{position:absolute;left:430px;right:0;top:0;bottom:0;pointer-events:none;z-index:0}
+.rm-grid i{position:absolute;top:0;bottom:0;width:1px;background:#eef2f7}
+.rm-row{display:flex;align-items:center;border-bottom:1px solid #f1f5f9;min-height:30px;position:relative;z-index:1}
+.rm-label{width:300px;flex:none;font-size:12px;padding:4px 8px 4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:3}
+.rm-track{flex:1;position:relative;height:26px;background:rgba(248,250,252,.7);border-radius:3px;overflow:hidden}
 .rm-lane{position:relative;height:7px;margin-top:1.5px}
 .rm-bar{position:absolute;height:7px;border-radius:2px;font-size:9px;line-height:7px;color:#fff;padding-left:3px;overflow:hidden;white-space:nowrap}
 .rm-bar.b-base{background:#cbd5e1;color:#475569}
@@ -180,13 +185,15 @@ tr:hover td{background:#f0f4ff}
 .rm-bar.derived{background:#c7d2fe;border:1px dashed #6366f1;color:#3730a3}
 .rm-bar.b-act.derived{background:#bbf7d0;border-color:#16a34a;color:#166534}
 .rm-bar.open{border-right:2px dotted #1a1a2e;border-top-right-radius:0;border-bottom-right-radius:0}
-.rm-slip{width:150px;flex:none;font-size:11px;text-align:right}
+.rm-slip{width:130px;flex:none;font-size:11px;text-align:right;padding-right:10px;position:sticky;left:300px;background:#fff;z-index:3}
+.rm-head .rm-label,.rm-head .rm-slip{font-weight:700;color:#4472C4;font-size:11px}
 .slip{font-weight:600}.slip-late{color:#dc2626}.slip-early{color:#16a34a}.slip-ok{color:#6b7280}
 .slip-n{color:#b45309;font-weight:700}
 .hz{display:inline-block;padding:1px 6px;border-radius:8px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:600;margin-right:4px}
 .rm-head .rm-track{background:transparent;height:20px;border-bottom:2px solid #4472C4}
 .rm-tick{position:absolute;top:0;height:20px;border-left:1px solid #e5e7eb;font-size:10px;color:#6b7280}
-.rm-tick span{padding-left:3px;white-space:nowrap}
+.rm-tick span{padding-left:4px;white-space:nowrap}
+.rm-undated .rm-row{padding-right:8px}
 .rm-empty{display:flex;align-items:center;justify-content:center;color:#cbd5e1}
 .rm-undated{margin-top:18px;padding-top:10px;border-top:2px dashed #e5e7eb}
 .rm-undated h3{font-size:13px;color:#b45309;margin-bottom:6px}
@@ -566,10 +573,17 @@ function renderRoadmap(){
     <span class="sw sw-derived"></span> Derived from children
     <span class="sw sw-act"></span> Actual</div>`;
 
+  /* A tick needs room for its own label. At day or sprint zoom that is more
+     room than the page has, so the track grows and scrolls rather than
+     crushing the labels into each other - the name and the slip stay pinned. */
   const tk=ticks(span);
-  h+=`<div class="rm-row rm-head"><div class="rm-label">Work Item</div><div class="rm-track">`;
+  const PER={day:58,month:84,quarter:112,sprint:78}[zoom];
+  const trackW=Math.max(tk.length*PER,560);
+  h+=`<div class="rm-scroll"><div class="rm-inner" style="width:${430+trackW}px">`;
+  h+=`<div class="rm-grid">`+tk.map(t=>`<i style="left:${pct(t.at)}%"></i>`).join('')+`</div>`;
+  h+=`<div class="rm-row rm-head"><div class="rm-label">Work Item</div><div class="rm-slip">vs baseline</div><div class="rm-track">`;
   tk.forEach(t=>{h+=`<div class="rm-tick" style="left:${pct(t.at)}%"><span>${t.label}</span></div>`;});
-  h+=`</div><div class="rm-slip"></div></div>`;
+  h+=`</div></div>`;
 
   /* A pair may be half-present, and both halves mean something. "Deliver by
      Q1-26" is an end with no start - the commonest shape a commitment takes -
@@ -593,20 +607,22 @@ function renderRoadmap(){
     if(!dated(d)){undated.push(d);return;}
     const s=d.d;
     h+=`<div class="rm-row"><div class="rm-label" style="padding-left:${depth*14}px" title="${(d.t||'').replace(/"/g,'')}">${twisty(d)} ${d.c}. ${d.t||''}</div>
+      <div class="rm-slip">${slipTag(d)}</div>
       <div class="rm-track">
         <div class="rm-lane">${lane(s.bs,s.be,'b-base','Baseline')}</div>
         <div class="rm-lane">${lane(s.ps,s.pe,'b-plan','Planned')}</div>
         <div class="rm-lane">${lane(s.as,s.ae,'b-act','Actual')}</div>
-      </div><div class="rm-slip">${slipTag(d)}</div></div>`;
+      </div></div>`;
   });
 
   /* An undated row in a roadmap is a gap to fix, and hiding it hides the gap. */
+  h+=`</div></div>`;
   if(undated.length){
     h+=`<div class="rm-undated"><h3>No dates yet — ${undated.length} item${undated.length===1?'':'s'}</h3>`;
     undated.forEach(d=>{
       const hz=d.hz?`<span class="hz">${d.hz}</span>`:'';
       h+=`<div class="rm-row"><div class="rm-label">${d.c}. ${d.t||''}</div>
-        <div class="rm-track rm-empty">—</div><div class="rm-slip">${hz}${badge(d.s)}</div></div>`;
+        <div class="rm-slip">${hz}${badge(d.s)}</div><div class="rm-track rm-empty">—</div></div>`;
     });
     h+=`</div>`;
   }
