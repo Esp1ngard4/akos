@@ -186,7 +186,12 @@ tr:hover td{background:#f0f4ff}
 .sw{display:inline-block;width:14px;height:8px;border-radius:2px;vertical-align:middle;margin-right:4px}
 .sw-base{background:#cbd5e1}.sw-plan{background:#4472C4}.sw-act{background:#22c55e}
 .sw-derived{background:#c7d2fe;border:1px dashed #6366f1}
-.rm-scroll{overflow-x:auto;overflow-y:visible;position:relative;padding-bottom:6px}
+/* Freezing the date header needs the pane to own the vertical scroll as well.
+   A box that scrolls horizontally is a scroll container on both axes, so a
+   sticky header inside it can never stick to the page - it can only stick to
+   this pane. Hence the height: the header and the name columns stay, the
+   grid moves under them. */
+.rm-scroll{overflow:auto;position:relative;max-height:72vh;border:1px solid #eef2f7;border-radius:6px}
 .rm-inner{position:relative}
 .rm-grid{position:absolute;left:520px;right:0;top:0;bottom:0;pointer-events:none;z-index:0}
 .rm-grid i{position:absolute;top:0;bottom:0;width:1px;background:#eef2f7}
@@ -217,11 +222,16 @@ tr:hover td{background:#f0f4ff}
 .rm-sum-bar{flex:none;width:220px;height:10px;background:#eef2f7;border-radius:5px;overflow:hidden}
 .rm-sum-bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#4472C4)}
 .rm-sum-txt{font-size:13px}.rm-sum-txt b{font-size:17px;color:#4472C4}
-.rm-head .rm-label,.rm-head .rm-slip,.rm-head .rm-pg{font-weight:700;color:#4472C4;font-size:11px}
+.rm-head{position:sticky;top:0;z-index:5;background:#fff;box-shadow:0 1px 0 #4472C4,0 3px 6px -4px rgba(0,0,0,.35)}
+.rm-head .rm-label,.rm-head .rm-slip,.rm-head .rm-pg{font-weight:700;color:#4472C4;font-size:11px;z-index:6;background:#fff}
+.rm-head .rm-st{z-index:7;background:#fff}
+.rm-head .rm-track{background:transparent}
+/* The pinned columns need an edge too, or bars slide under them invisibly. */
+.rm-slip{box-shadow:6px 0 6px -6px rgba(0,0,0,.25)}
 .slip{font-weight:600}.slip-late{color:#dc2626}.slip-early{color:#16a34a}.slip-ok{color:#6b7280}
 .slip-n{color:#b45309;font-weight:700}
 .hz{display:inline-block;padding:1px 6px;border-radius:8px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:600;margin-right:4px}
-.rm-head .rm-track{background:transparent;height:20px;border-bottom:2px solid #4472C4}
+.rm-head .rm-track{height:20px}
 .rm-tick{position:absolute;top:0;height:20px;border-left:1px solid #e5e7eb;font-size:10px;color:#6b7280}
 .rm-tick span{padding-left:4px;white-space:nowrap}
 .rm-undated .rm-row{padding-right:8px}
@@ -689,7 +699,8 @@ function renderRoadmap(){
   });
 
   /* An undated row in a roadmap is a gap to fix, and hiding it hides the gap. */
-  h+=`</div></div>`;
+  /* Inside the pane, not after it: one scroll surface, and the undated rows
+     line up under the same columns as everything else. */
   if(undated.length){
     h+=`<div class="rm-undated"><h3>No dates yet — ${undated.length} item${undated.length===1?'':'s'}</h3>`;
     undated.forEach(d=>{
@@ -700,6 +711,7 @@ function renderRoadmap(){
     });
     h+=`</div>`;
   }
+  h+=`</div></div>`;
   return h;
 }
 
