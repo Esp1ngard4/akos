@@ -203,6 +203,7 @@ And it holds the schedule dates against reality:
 - **`Actual Start` set on a `Not Started`, `Portfolio Backlog` or `Funnel` row.**
 - **An End before its Start**, within each of the three pairs.
 - **A plan or actual stored on a parent** — a warning: it is derived at render time, so the stored value is silently ignored.
+- **A `Done` row with no `Actual End`, or an `Implementing` row with no `Actual Start`** — warnings. The roadmap cannot place such a row, and this is the direction of the implication that actually rots.
 - **`Sprint Planned` and `Planned End` in different periods** — also a warning. The calendar makes them comparable, and disagreement is usually a stale field rather than a mistake.
 
 Run it before a planning ceremony and after any hand-edit.
@@ -212,9 +213,11 @@ Grooming sets the horizon; planning turns it into a commitment.
 
 - **Grooming** — `--horizon Next` for the upcoming sprint, `Future` for the one after.
 - **Planning** — set `Sprint Planned` to a sprint ID the calendar holds, and **clear `Horizon` in the same edit** (`--horizon ""`). `check` will otherwise flag the row.
-- When an item starts: Status → `Implementing`, `Sprint Added` → current sprint.
-- When an item completes: Status → `Done`, `Sprint Ended` → current sprint, and `Horizon` must be gone.
+- When an item starts: Status → `Implementing`, `Sprint Added` → current sprint. `Actual Start` is stamped with it.
+- When an item completes: Status → `Done`, `Sprint Ended` → current sprint, `Horizon` must be gone, and `Actual End` is stamped.
 - Multiple items can share a sprint. After changes, **refresh the dashboard** (operation 5).
+
+The schedule dates hang off these same moments rather than forming a separate routine — see **When each date is written** below for which field belongs to which. Committing to a sprint is also when a story's **baseline** is set, and it is set once.
 
 ### 5. Generate dashboard
 ```bash
@@ -302,6 +305,23 @@ Six fields — `Baseline`, `Planned` and `Actual`, each a Start and an End. They
 **Variance is computed at the coarser of the two precisions compared.** Baseline `Q1-26` against a plan of `2026-Mar-12` is *on plan*, not "19 days early" — the commitment was only ever quarter-accurate. Variance is then reported in that precision's own unit, never converted into a false one.
 
 All of this lives in `scripts/dates.py`, and **only there**. The dashboard receives instants already resolved by `refresh_wbs.py`, so there is one implementation rather than a Python one and a JavaScript one drifting apart.
+
+### When each date is written
+
+The dates are only as good as the moment they are captured, and a field nobody is prompted for is a field nobody fills. **Status is the trigger:** an actual date and a status change are two halves of one fact, so `wbs.py set --status` stamps the matching date itself and says it did.
+
+| Field | Written | At |
+|---|---|---|
+| `Baseline Start` / `End` | **once**, when the commitment is made | Sprint planning for a story; roadmap agreement for a deliverable. Never edited afterwards — `rebaseline` moves it and records why. |
+| `Planned Start` / `End` | at refinement, and again whenever the expectation changes | Backlog grooming and sprint planning. Every later move needs `--reason` and lands in `schedule_log`. |
+| `Actual Start` | when work actually begins | Status → `Implementing`. Stamped automatically. |
+| `Actual End` | when the row closes | Status → `Done` or `Cancelled`, at the grooming or retro that reviews it. Stamped automatically. |
+
+**Never move a Status without its date.** That is the whole convention, and it is enforced from both sides: `check` rejects an `Actual End` on a row that is not closed, and warns about a closed row that has no `Actual End`. The second half is the one that matters — the first stops a wrong date, the second stops a missing one, and it was a missing one that let `Next`/`Future` rot unnoticed across 18 rows.
+
+A stamped date is today's date, which is right when you close a row as you finish it and wrong when you are recording something from last week. It is announced on every write for exactly that reason; pass `--actual-end` to correct it.
+
+**Parents are never stamped** — their actuals are the span of their children.
 
 ### The baseline is write-once
 

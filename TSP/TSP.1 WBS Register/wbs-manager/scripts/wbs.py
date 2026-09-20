@@ -212,6 +212,32 @@ def apply_dates(data, row, args, changed, creating=False):
             changed.append("%s=%s" % (field, value))
 
 
+# Status is the trigger for an actual date - they are two halves of one fact,
+# and letting them move apart is how Next/Future rotted in Sprint Planned.
+# Stamped rather than asked for, because a date nobody is prompted for is a
+# date nobody writes; announced rather than silent, because a wrong one has
+# to be correctable.
+STATUS_STAMPS = (("Implementing", "Actual Start"),
+                 ("Done", "Actual End"), ("Cancelled", "Actual End"))
+
+
+def stamp_actuals(data, row, args, changed):
+    if not args.status:
+        return
+    if has_children(data, row.get("ID")):
+        return                       # a parent's actuals are its children's
+    for status, field in STATUS_STAMPS:
+        if args.status != status or row.get(field):
+            continue
+        if getattr(args, field.lower().replace(" ", "_"), None):
+            continue                 # an explicit value was passed; leave it
+        today = date.today()
+        row[field] = "%d-%s-%d" % (today.year, D.MONTHS[today.month - 1], today.day)
+        changed.append("%s=%s (stamped: Status is now %s; pass --%s to correct)"
+                       % (field, row[field], status,
+                          field.lower().replace(" ", "-")))
+
+
 def finish(args, data, note):
     print(note)
     if getattr(args, "dry_run", False):
@@ -288,6 +314,7 @@ def cmd_set(args):
             row[key] = value
             changed.append("%s=%s" % (key, value))
     apply_dates(data, row, args, changed)
+    stamp_actuals(data, row, args, changed)
     check_deliverable(row)
     if not changed:
         sys.exit("Nothing to change. Pass at least one field.")
@@ -379,6 +406,13 @@ def cmd_check(args):
                                                   "Funnel"):
             errors.append("item %s: Actual Start is set but Status is %r"
                           % (rid, status))
+        if not has_children(data, rid):
+            if status == "Done" and not row.get("Actual End"):
+                warnings.append("item %s: Done with no Actual End - the "
+                                "roadmap cannot place it" % rid)
+            if status == "Implementing" and not row.get("Actual Start"):
+                warnings.append("item %s: Implementing with no Actual Start"
+                                % rid)
         for start_field, end_field in C.DATE_PAIRS:
             a, b = resolved.get(start_field), resolved.get(end_field)
             if a and b and b["end"] < a["start"]:
