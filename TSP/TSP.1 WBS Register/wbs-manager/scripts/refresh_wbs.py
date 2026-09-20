@@ -193,11 +193,16 @@ tr:hover td{background:#f0f4ff}
    grid moves under them. */
 .rm-scroll{overflow:auto;position:relative;max-height:72vh;border:1px solid #eef2f7;border-radius:6px}
 .rm-inner{position:relative}
-.rm-grid{position:absolute;left:402px;right:0;top:0;bottom:0;pointer-events:none;z-index:0}
+.rm-grid{position:absolute;right:0;top:0;bottom:0;pointer-events:none;z-index:0}
 .rm-grid i{position:absolute;top:0;bottom:0;width:1px;background:#eef2f7}
-.rm-row{display:flex;align-items:center;border-bottom:1px solid #f1f5f9;min-height:30px;position:relative;z-index:1}
-.rm-label{width:286px;flex:none;font-size:12px;padding:4px 8px 4px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;left:4px;background:#fff;z-index:3}
-.rm-track{flex:1;position:relative;height:26px;background:rgba(248,250,252,.7);border-radius:3px;overflow:hidden}
+/* The eye travels a long way from a name to its bars, and a hairline does not
+   survive that trip. The band does the work; the rule just closes it off. */
+.rm-row{display:flex;align-items:center;border-bottom:1px solid #eef2f7;min-height:30px;position:relative;z-index:1;background:#fff}
+.rm-row.alt{background:#f6f8fb}
+.rm-row:hover{background:#e8f0ff}
+.rm-row:hover .rm-label{color:#1d4ed8}
+.rm-label{width:286px;flex:none;font-size:12px;padding:4px 8px 4px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;left:4px;background:inherit;z-index:3}
+.rm-track{flex:1;position:relative;height:26px;overflow:hidden}
 .rm-lane{position:relative;height:7px;margin-top:1.5px;z-index:1}
 .rm-bar{position:absolute;height:7px;border-radius:2px;font-size:9px;line-height:7px;color:#fff;padding-left:3px;overflow:hidden;white-space:nowrap}
 .rm-bar.b-base{background:#cbd5e1;color:#475569}
@@ -226,7 +231,7 @@ tr:hover td{background:#f0f4ff}
 .sw-slip{background:repeating-linear-gradient(135deg,rgba(220,38,38,.35) 0 4px,rgba(220,38,38,.12) 4px 8px)}
 .rm-st{width:4px;flex:none;align-self:stretch;position:sticky;left:0;z-index:4}
 .rm-st.leg{display:inline-block;width:9px;height:9px;border-radius:2px;align-self:auto;position:static;margin:0 2px 0 8px}
-.rm-pg{width:112px;flex:none;position:sticky;left:290px;background:#fff;z-index:3;padding-right:8px}
+.rm-pg{width:112px;flex:none;position:sticky;left:290px;background:inherit;z-index:3;padding-right:8px}
 .pg{display:flex;flex-direction:column;gap:1px}
 .pg-bar{height:5px;background:#eef2f7;border-radius:3px;overflow:hidden}
 .pg-fill{display:block;height:100%;background:#4472C4;border-radius:3px}
@@ -241,6 +246,7 @@ tr:hover td{background:#f0f4ff}
 .rm-sum-txt{font-size:13px}.rm-sum-txt b{font-size:17px;color:#4472C4}
 .rm-head{position:sticky;top:0;z-index:5;background:#fff;box-shadow:0 1px 0 #4472C4,0 3px 6px -4px rgba(0,0,0,.35)}
 .rm-head .rm-label,.rm-head .rm-pg{font-weight:700;color:#4472C4;font-size:11px;z-index:6;background:#fff}
+.rm-head{background:#fff}.rm-head:hover{background:#fff}
 .rm-head .rm-st{z-index:7;background:#fff}
 .rm-head .rm-track{background:transparent}
 /* The pinned columns need an edge too, or bars slide under them invisibly. */
@@ -251,6 +257,10 @@ tr:hover td{background:#f0f4ff}
 .rm-head .rm-track{height:20px}
 .rm-tick{position:absolute;top:0;height:20px;border-left:1px solid #e5e7eb;font-size:10px;color:#6b7280}
 .rm-tick span{padding-left:4px;white-space:nowrap}
+.rm-nowline{position:absolute;right:0;top:0;bottom:0;pointer-events:none;z-index:2}
+.rm-nowline i{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #0f766e;opacity:.75}
+.rm-now-lab{position:absolute;top:1px;transform:translateX(-50%);font-size:9px;font-weight:700;
+  color:#fff;background:#0f766e;padding:1px 5px;border-radius:7px;white-space:nowrap;z-index:2}
 .rm-undated .rm-row{padding-right:8px}
 .rm-empty{display:flex;align-items:center;gap:4px;padding-left:8px;color:#cbd5e1}
 .rm-undated{margin-top:18px;padding-top:10px;border-top:2px dashed #e5e7eb}
@@ -689,9 +699,15 @@ function renderRoadmap(){
   const PER={day:58,month:84,quarter:112,sprint:78}[zoom];
   const trackW=Math.max(tk.length*PER,560);
   h+=`<div class="rm-scroll"><div class="rm-inner" style="width:${PIN+trackW}px">`;
-  h+=`<div class="rm-grid">`+tk.map(t=>`<i style="left:${pct(t.at)}%"></i>`).join('')+`</div>`;
+  h+=`<div class="rm-grid" style="left:${PIN}px">`+tk.map(t=>`<i style="left:${pct(t.at)}%"></i>`).join('')+`</div>`;
+  /* Where "now" falls is the reference every other bar is read against, so it
+     gets its own layer rather than becoming one more gridline. */
+  const now=Date.now();
+  const showNow=now>=span.lo&&now<=span.hi;
+  if(showNow)h+=`<div class="rm-nowline" style="left:${PIN}px"><i style="left:${pct(now)}%"></i></div>`;
   h+=`<div class="rm-row rm-head"><i class="rm-st" style="background:transparent"></i><div class="rm-label">Work Item</div><div class="rm-pg">Progress</div><div class="rm-track">`;
   tk.forEach(t=>{h+=`<div class="rm-tick" style="left:${pct(t.at)}%"><span>${t.label}</span></div>`;});
+  if(showNow)h+=`<div class="rm-now-lab" style="left:${pct(now)}%">Today</div>`;
   h+=`</div></div>`;
 
   /* A pair may be half-present, and both halves mean something. "Deliver by
@@ -713,10 +729,11 @@ function renderRoadmap(){
   };
 
   const undated=[];
+  let rowi=0;
   walk((d,depth)=>{
     if(!dated(d)){undated.push(d);return;}
     const s=d.d;
-    h+=`<div class="rm-row"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
+    h+=`<div class="rm-row${(rowi++%2)?' alt':''}"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
       <div class="rm-label" style="padding-left:${depth*14}px" title="${(d.t||'').replace(/"/g,'')} — ${d.s}">${twisty(d)} ${d.c}. ${d.t||''}</div>
       <div class="rm-pg">${progressCell(d)}</div>
       <div class="rm-track">${slipBand(d,s,pct,num,DAY)}
@@ -733,7 +750,7 @@ function renderRoadmap(){
     h+=`<div class="rm-undated"><h3>No dates yet — ${undated.length} item${undated.length===1?'':'s'}</h3>`;
     undated.forEach(d=>{
       const hz=d.hz?`<span class="hz">${d.hz}</span>`:'';
-      h+=`<div class="rm-row"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
+      h+=`<div class="rm-row${(rowi++%2)?' alt':''}"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
         <div class="rm-label">${d.c}. ${d.t||''}</div><div class="rm-pg">${progressCell(d)}</div>
         <div class="rm-track rm-empty">${hz}${badge(d.s)}</div></div>`;
     });
