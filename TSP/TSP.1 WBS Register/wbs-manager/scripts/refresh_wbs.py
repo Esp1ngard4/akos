@@ -193,12 +193,12 @@ tr:hover td{background:#f0f4ff}
    grid moves under them. */
 .rm-scroll{overflow:auto;position:relative;max-height:72vh;border:1px solid #eef2f7;border-radius:6px}
 .rm-inner{position:relative}
-.rm-grid{position:absolute;left:520px;right:0;top:0;bottom:0;pointer-events:none;z-index:0}
+.rm-grid{position:absolute;left:402px;right:0;top:0;bottom:0;pointer-events:none;z-index:0}
 .rm-grid i{position:absolute;top:0;bottom:0;width:1px;background:#eef2f7}
 .rm-row{display:flex;align-items:center;border-bottom:1px solid #f1f5f9;min-height:30px;position:relative;z-index:1}
 .rm-label{width:286px;flex:none;font-size:12px;padding:4px 8px 4px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;left:4px;background:#fff;z-index:3}
 .rm-track{flex:1;position:relative;height:26px;background:rgba(248,250,252,.7);border-radius:3px;overflow:hidden}
-.rm-lane{position:relative;height:7px;margin-top:1.5px}
+.rm-lane{position:relative;height:7px;margin-top:1.5px;z-index:1}
 .rm-bar{position:absolute;height:7px;border-radius:2px;font-size:9px;line-height:7px;color:#fff;padding-left:3px;overflow:hidden;white-space:nowrap}
 .rm-bar.b-base{background:#cbd5e1;color:#475569}
 .rm-bar.b-plan{background:#4472C4}
@@ -206,7 +206,24 @@ tr:hover td{background:#f0f4ff}
 .rm-bar.derived{background:#c7d2fe;border:1px dashed #6366f1;color:#3730a3}
 .rm-bar.b-act.derived{background:#bbf7d0;border-color:#16a34a;color:#166534}
 .rm-bar.open{border-right:2px dotted #1a1a2e;border-top-right-radius:0;border-bottom-right-radius:0}
-.rm-slip{width:118px;flex:none;font-size:11px;text-align:right;padding-right:10px;position:sticky;left:402px;background:#fff;z-index:3}
+/* The slip band sits under the bars, spanning promised-end to actual-end.
+   `from` is the dotted edge where it was promised; `to` is the arrow where
+   it now lands. */
+.rm-band{position:absolute;top:0;bottom:0;z-index:0;border-radius:2px}
+.rm-band.late{background:repeating-linear-gradient(135deg,rgba(220,38,38,.13) 0 5px,rgba(220,38,38,.05) 5px 10px)}
+.rm-band.early{background:repeating-linear-gradient(135deg,rgba(22,163,74,.13) 0 5px,rgba(22,163,74,.05) 5px 10px)}
+.rm-band i{position:absolute;top:0;bottom:0;width:0}
+.rm-band .from{left:0;border-left:1px dashed currentColor}
+.rm-band .to{right:0;border-left:1px solid currentColor}
+.rm-band .to:after{content:'';position:absolute;right:-1px;top:50%;margin-top:-3px;
+  border:3px solid transparent;border-right:0;border-left:4px solid currentColor}
+.rm-band.late{color:#dc2626}.rm-band.early{color:#16a34a}
+.rm-band b{position:absolute;right:6px;top:50%;margin-top:-6px;font-size:9px;font-weight:700;
+  line-height:12px;padding:0 3px;border-radius:6px;background:currentColor;color:#fff;opacity:.85}
+.rm-band.early .to:after{right:auto;left:-1px;border-right:4px solid currentColor;border-left:0}
+.rm-band.early .to{right:auto;left:0}
+.rm-band.early .from{left:auto;right:0}
+.sw-slip{background:repeating-linear-gradient(135deg,rgba(220,38,38,.35) 0 4px,rgba(220,38,38,.12) 4px 8px)}
 .rm-st{width:4px;flex:none;align-self:stretch;position:sticky;left:0;z-index:4}
 .rm-st.leg{display:inline-block;width:9px;height:9px;border-radius:2px;align-self:auto;position:static;margin:0 2px 0 8px}
 .rm-pg{width:112px;flex:none;position:sticky;left:290px;background:#fff;z-index:3;padding-right:8px}
@@ -223,11 +240,11 @@ tr:hover td{background:#f0f4ff}
 .rm-sum-bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#4472C4)}
 .rm-sum-txt{font-size:13px}.rm-sum-txt b{font-size:17px;color:#4472C4}
 .rm-head{position:sticky;top:0;z-index:5;background:#fff;box-shadow:0 1px 0 #4472C4,0 3px 6px -4px rgba(0,0,0,.35)}
-.rm-head .rm-label,.rm-head .rm-slip,.rm-head .rm-pg{font-weight:700;color:#4472C4;font-size:11px;z-index:6;background:#fff}
+.rm-head .rm-label,.rm-head .rm-pg{font-weight:700;color:#4472C4;font-size:11px;z-index:6;background:#fff}
 .rm-head .rm-st{z-index:7;background:#fff}
 .rm-head .rm-track{background:transparent}
 /* The pinned columns need an edge too, or bars slide under them invisibly. */
-.rm-slip{box-shadow:6px 0 6px -6px rgba(0,0,0,.25)}
+.rm-pg{box-shadow:6px 0 6px -6px rgba(0,0,0,.25)}
 .slip{font-weight:600}.slip-late{color:#dc2626}.slip-early{color:#16a34a}.slip-ok{color:#6b7280}
 .slip-n{color:#b45309;font-weight:700}
 .hz{display:inline-block;padding:1px 6px;border-radius:8px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:600;margin-right:4px}
@@ -235,7 +252,7 @@ tr:hover td{background:#f0f4ff}
 .rm-tick{position:absolute;top:0;height:20px;border-left:1px solid #e5e7eb;font-size:10px;color:#6b7280}
 .rm-tick span{padding-left:4px;white-space:nowrap}
 .rm-undated .rm-row{padding-right:8px}
-.rm-empty{display:flex;align-items:center;justify-content:center;color:#cbd5e1}
+.rm-empty{display:flex;align-items:center;gap:4px;padding-left:8px;color:#cbd5e1}
 .rm-undated{margin-top:18px;padding-top:10px;border-top:2px dashed #e5e7eb}
 .rm-undated h3{font-size:13px;color:#b45309;margin-bottom:6px}
 .sprint-header{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:2px solid #4472C4;margin-bottom:8px}
@@ -546,7 +563,7 @@ function renderGantt(){
 /* ---------- roadmap ---------- */
 
 const DAY=86400000;
-const PIN=4+286+112+118;   // stripe + label + progress + slip, all pinned left
+const PIN=4+286+112;   // stripe + label + progress, all pinned left
 const num=iso=>Date.parse(iso+'T00:00:00Z');
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function fmt(ms,mode){
@@ -616,13 +633,24 @@ function progressCell(d){
     <span class="pg-num${full}">${pc}%</span><span class="pg-sub">${detail}</span></div>`;
 }
 
-function slipTag(d){
+function slipText(d){
   if(!d.v)return '';
   const n=d.v.a,unit=d.v.u+(Math.abs(n)===1?'':'s');
   const txt=n===0?'on plan':`${Math.abs(n)} ${unit} ${n>0?'late':'early'}`;
-  const cls=n>0?'slip-late':(n<0?'slip-early':'slip-ok');
-  const times=d.sl?` <span class="slip-n" title="moved ${d.sl} time${d.sl===1?'':'s'}">×${d.sl}</span>`:'';
-  return `<span class="slip ${cls}">${txt}</span>${times}`;
+  return txt+(d.sl?` · moved ${d.sl} time${d.sl===1?'':'s'}`:'');
+}
+
+/* The slip drawn as the distance it is: a band from where it was promised to
+   where it now lands. Nothing to read in a column, and nothing at all on a
+   row that never had a baseline to miss. */
+function slipBand(d,s,pct,num,DAY){
+  if(!d.v||d.v.a===0||!s.be||!s.pe)return '';
+  const late=d.v.a>0;
+  const a=num(late?s.be.e:s.pe.e)+DAY, b=num(late?s.pe.e:s.be.e)+DAY;
+  const l=pct(Math.min(a,b)), w=Math.max(pct(Math.max(a,b))-l,0.3);
+  const n=d.sl>1?`<b>${d.sl}×</b>`:'';
+  return `<div class="rm-band ${late?'late':'early'}" style="left:${l}%;width:${w}%"
+    title="${slipText(d)}"><i class="from"></i><i class="to"></i>${n}</div>`;
 }
 
 function renderRoadmap(){
@@ -649,6 +677,7 @@ function renderRoadmap(){
     <span class="sw sw-plan"></span> Planned
     <span class="sw sw-derived"></span> Rolled up
     <span class="sw sw-act"></span> Actual
+    <span class="sw sw-slip"></span> Slip vs baseline
     <span class="sep"></span><b>Status</b>
     ${Object.keys(SCOL).filter(k=>showCancelled||k!=='Cancelled')
       .map(k=>`<i class="rm-st leg" style="background:${SCOL[k]}"></i>${k}`).join(' ')}</div>`;
@@ -661,7 +690,7 @@ function renderRoadmap(){
   const trackW=Math.max(tk.length*PER,560);
   h+=`<div class="rm-scroll"><div class="rm-inner" style="width:${PIN+trackW}px">`;
   h+=`<div class="rm-grid">`+tk.map(t=>`<i style="left:${pct(t.at)}%"></i>`).join('')+`</div>`;
-  h+=`<div class="rm-row rm-head"><i class="rm-st" style="background:transparent"></i><div class="rm-label">Work Item</div><div class="rm-pg">Progress</div><div class="rm-slip">vs baseline</div><div class="rm-track">`;
+  h+=`<div class="rm-row rm-head"><i class="rm-st" style="background:transparent"></i><div class="rm-label">Work Item</div><div class="rm-pg">Progress</div><div class="rm-track">`;
   tk.forEach(t=>{h+=`<div class="rm-tick" style="left:${pct(t.at)}%"><span>${t.label}</span></div>`;});
   h+=`</div></div>`;
 
@@ -690,8 +719,7 @@ function renderRoadmap(){
     h+=`<div class="rm-row"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
       <div class="rm-label" style="padding-left:${depth*14}px" title="${(d.t||'').replace(/"/g,'')} — ${d.s}">${twisty(d)} ${d.c}. ${d.t||''}</div>
       <div class="rm-pg">${progressCell(d)}</div>
-      <div class="rm-slip">${slipTag(d)}</div>
-      <div class="rm-track">
+      <div class="rm-track">${slipBand(d,s,pct,num,DAY)}
         <div class="rm-lane">${lane(s.bs,s.be,'b-base','Baseline')}</div>
         <div class="rm-lane">${lane(s.ps,s.pe,'b-plan','Planned',(progress(d)||{}).frac)}</div>
         <div class="rm-lane">${lane(s.as,s.ae,'b-act','Actual')}</div>
@@ -707,7 +735,7 @@ function renderRoadmap(){
       const hz=d.hz?`<span class="hz">${d.hz}</span>`:'';
       h+=`<div class="rm-row"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
         <div class="rm-label">${d.c}. ${d.t||''}</div><div class="rm-pg">${progressCell(d)}</div>
-        <div class="rm-slip">${hz}${badge(d.s)}</div><div class="rm-track rm-empty">—</div></div>`;
+        <div class="rm-track rm-empty">${hz}${badge(d.s)}</div></div>`;
     });
     h+=`</div>`;
   }
