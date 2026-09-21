@@ -364,6 +364,33 @@ python <skill-path>/scripts/wbs.py sprints import "<register>" --from "<conventi
 
 Prints a diff rather than overwriting silently, and **refuses to drop a sprint that items still reference** unless forced. The register keeps its own copy so it stays self-contained — no register reads another file at runtime — which is the same relationship the dashboard has with the register: generated, explicit, detectably stale.
 
+## Sprint metrics
+
+```bash
+python <skill-path>/scripts/wbs.py metrics "<register>" --sprint S26.Q3.5 [--json]
+```
+
+What one sprint delivered against what it took on. The retro runs this **before discussion opens**, so the session is insight-led rather than summarised afterwards.
+
+Four populations, and the first two are kept apart deliberately — the gap between them is where over-commitment shows:
+
+| | |
+|---|---|
+| **Committed** | `Sprint Planned` = the sprint. What planning agreed to. |
+| **Pulled in** | `Sprint Added` = the sprint but `Sprint Planned` is not. Scope that arrived mid-sprint. |
+| **Delivered** | `Sprint Ended` = the sprint and `Status` is `Done`. |
+| **Carried over** | Committed, not delivered. Listed by ID, so the retro can discuss items rather than a number. |
+
+Reported: **velocity** (count *and* hours — eight one-hour jobs is not two four-hour ones), **completion rate** by both count and hours, **carryover**, **committed against delivered hours**, and **median cycle time** from `Actual Start` to `Actual End`.
+
+**Cancelled rows are excluded throughout.** Work that will not happen should neither flatter a sprint nor punish it.
+
+**There is no effort-variance metric, deliberately.** It would need hours *spent*, and nothing records those — not the register, not the task tracker. Committed-against-delivered compares two numbers that exist and measures the thing a retro can act on.
+
+**Every figure states its coverage, and a missing one says so.** A completion rate over rows that mostly lack an estimate is a different claim from one where they all have it. Where nothing carries `Sprint Planned`, there is no denominator and the command says that rather than reporting zero — inventing one is the same mistake as inventing a baseline.
+
+`--json` emits the same structure for a caller to consume rather than re-parse.
+
 ## Relationship to Other Tools
 
 - **Task tracker** = committed/active work (what is being done this sprint)

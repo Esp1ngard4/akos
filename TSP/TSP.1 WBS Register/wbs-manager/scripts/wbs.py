@@ -6,6 +6,7 @@
     python wbs.py set     <register> --id 42 --status Done --nature Improve
     python wbs.py check   <register>
     python wbs.py rebaseline <register> --id 42 --baseline-end Q2-26 --reason "..."
+    python wbs.py metrics <register> --sprint S26.Q3.5
     python wbs.py migrate <register> [--apply]
     python wbs.py sprints seed   <conventions.json> --scope "Project name" --year 2026
     python wbs.py sprints import <register> --from <conventions.json>
@@ -619,6 +620,140 @@ def cmd_rebaseline(args):
 
 
 # --------------------------------------------------------------------------- #
+# Sprint metrics. The retro asks these, and the register is what can answer
+# them: it holds sprint membership, status, effort and the actual dates.
+# The task tracker holds the same work as labels, but nothing enforces that the two
+# agree, so it verifies rather than computes.
+
+def hours(rows):
+    return round(sum(r.get("Estimated Effort (h)") or 0 for r in rows), 2)
+
+
+def estimated(rows):
+    return [r for r in rows if r.get("Estimated Effort (h)")]
+
+
+def cycle_days(row):
+    """Calendar days from starting a row to finishing it, or None.
+
+    Only possible since the actual dates existed; a task tracker has no
+    equivalent. Uses each date's own resolved span, so a month-precision
+    actual measures from the start of that month, not a guessed day in it.
+    """
+    began, ended = D.resolve(row.get("Actual Start")), D.resolve(row.get("Actual End"))
+    if not began or not ended:
+        return None
+    return (date.fromisoformat(ended["end"]) - date.fromisoformat(began["start"])).days
+
+
+def sprint_metrics(data, sprint):
+    """The four populations, and what each one is worth.
+
+    Committed and pulled-in are kept apart because the difference is where
+    over-commitment shows: a sprint that delivered its plan and absorbed
+    more is not the same as one that merely hit its number.
+    """
+    live = [r for r in R.rows(data, ITEMS) if r.get("Status") != "Cancelled"]
+    committed = [r for r in live if r.get("Sprint Planned") == sprint]
+    pulled = [r for r in live if r.get("Sprint Added") == sprint
+              and r.get("Sprint Planned") != sprint]
+    delivered = [r for r in live if r.get("Sprint Ended") == sprint
+                 and r.get("Status") == "Done"]
+    carried = [r for r in committed if r not in delivered]
+    spans = sorted(d for d in (cycle_days(r) for r in delivered) if d is not None)
+    median = None
+    if spans:
+        mid = len(spans) // 2
+        median = spans[mid] if len(spans) % 2 else (spans[mid - 1] + spans[mid]) / 2
+
+    return {
+        "sprint": sprint,
+        "committed": {"n": len(committed), "h": hours(committed),
+                      "estimated": len(estimated(committed))},
+        "pulled_in": {"n": len(pulled), "h": hours(pulled)},
+        "delivered": {"n": len(delivered), "h": hours(delivered),
+                      "estimated": len(estimated(delivered))},
+        "carryover": {"n": len(carried), "h": hours(carried),
+                      "ids": [r.get("ID") for r in carried]},
+        "cycle_time": {"median_days": median, "measured": len(spans),
+                       "of": len(delivered)},
+    }
+
+
+def pct(part, whole):
+    return None if not whole else round(part / whole * 100)
+
+
+def cmd_metrics(args):
+    data = R.load(args.register)
+    known = {s.get("Sprint") for s in data.get(SPRINTS) or []}
+    if known and args.sprint not in known:
+        sys.exit("%r is not a sprint in this register's calendar.\n  known: %s"
+                 % (args.sprint, ", ".join(sorted(known)) or "(none imported)"))
+    m = sprint_metrics(data, args.sprint)
+
+    if args.json:
+        import json
+        print(json.dumps(m, indent=2))
+        return 0
+
+    c, p, dl, co, ct = (m["committed"], m["pulled_in"], m["delivered"],
+                        m["carryover"], m["cycle_time"])
+    print("Sprint %s\n" % args.sprint)
+    if not (c["n"] or dl["n"] or p["n"]):
+        print("  Nothing references this sprint yet - no row names it as planned, "
+              "added or ended.")
+        return 0
+    print("  Velocity        %d item(s) delivered, %gh" % (dl["n"], dl["h"]))
+    if c["n"]:
+        print("  Completion      %s%% of items (%d of %d), %s%% of hours (%gh of %gh)"
+              % (pct(dl["n"], c["n"]), dl["n"], c["n"],
+                 pct(dl["h"], c["h"]) if c["h"] else "-", dl["h"], c["h"]))
+        print("  Committed/del.  %gh committed, %gh delivered  (%+gh)"
+              % (c["h"], dl["h"], round(dl["h"] - c["h"], 2)))
+    else:
+        # An invented denominator is the same mistake as an invented baseline.
+        print("  Completion      no denominator - nothing carries Sprint Planned "
+              "= %s, so what\n                  was committed is unrecorded. The "
+              "next planning session fixes it." % args.sprint)
+    # Only meaningful against a commitment. With Sprint Planned empty the
+    # whole sprint looks pulled in, which says nothing about the sprint and
+    # everything about the missing field - and it double-counts the
+    # delivered rows, which were also added.
+    if p["n"] and c["n"]:
+        print("  Pulled in       %d item(s) added after planning, %gh - scope beyond "
+              "the commitment" % (p["n"], p["h"]))
+    elif p["n"]:
+        print("  Pulled in       not distinguishable - with nothing committed, all %d "
+              "item(s) added" % p["n"])
+        print("                  to this sprint look unplanned, including the "
+              "delivered ones")
+    if co["n"]:
+        print("  Carryover       %d item(s), %gh  (IDs %s)"
+              % (co["n"], co["h"], ", ".join(str(i) for i in co["ids"])))
+    elif c["n"]:
+        print("  Carryover       none")
+    if ct["measured"]:
+        print("  Cycle time      %g days median, over %d of %d delivered item(s)"
+              % (ct["median_days"], ct["measured"], ct["of"]))
+    elif dl["n"]:
+        print("  Cycle time      not measurable - no delivered item carries both "
+              "an Actual Start and End")
+
+    # A rate over rows that mostly lack an estimate is a different claim from
+    # one where they all have it, and the retro should know which it has.
+    gaps = []
+    if c["n"] and c["estimated"] < c["n"]:
+        gaps.append("%d of %d committed" % (c["n"] - c["estimated"], c["n"]))
+    if dl["n"] and dl["estimated"] < dl["n"]:
+        gaps.append("%d of %d delivered" % (dl["n"] - dl["estimated"], dl["n"]))
+    if gaps:
+        print("\n  Coverage        no effort estimate on %s - the hour figures "
+              "cover only the rest." % "; ".join(gaps))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # The sprint calendar. The ceremonies own the convention; these two commands seed a
 # project's copy of it and pull it into a register. Nothing here decides what
 # a sprint is - it only arithmetic on an anchor the ceremony supplies.
@@ -783,6 +918,13 @@ def main():
         s.add_argument("--" + _dest.replace("_", "-"), dest=_dest, metavar="DATE")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_rebaseline)
+
+    s = subs.add_parser("metrics", help="what one sprint delivered against what it took on")
+    s.add_argument("register")
+    s.add_argument("--sprint", required=True, metavar="ID", help='e.g. "S26.Q3.5"')
+    s.add_argument("--json", action="store_true",
+                   help="emit the same figures as a structure, for a caller to consume")
+    s.set_defaults(func=cmd_metrics)
 
     sp = subs.add_parser("sprints", help="seed or import the sprint calendar")
     sps = sp.add_subparsers(dest="sprints_command")
