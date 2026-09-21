@@ -383,6 +383,14 @@ Four populations, and the first two are kept apart deliberately — the gap betw
 
 Reported: **velocity** (count *and* hours — eight one-hour jobs is not two four-hour ones), **completion rate** by both count and hours, **carryover**, **committed against delivered hours**, and **median cycle time** from `Actual Start` to `Actual End`.
 
+**A sprint spans whatever projects were in play**, so pass every register it touched:
+
+```bash
+python <skill-path>/scripts/wbs.py metrics "<register A>" "<register B>" --sprint S26.Q3.5
+```
+
+Totals come first, with a per-project split underneath — capacity belongs to the person, not to any one register. Three details make that safe: **item IDs are qualified by scope** (`Atlas#4`), since an ID is unique within a register and not across them; **a combined median is computed from the raw spans**, never by averaging medians; and **registers whose calendars disagree about the sprint are refused**, because the same ID over different dates describes a sprint that never happened. That last check is only possible — and only necessary — because projects share one cadence.
+
 **Cancelled rows are excluded throughout.** Work that will not happen should neither flatter a sprint nor punish it.
 
 **There is no effort-variance metric, deliberately.** It would need hours *spent*, and nothing records those — not the register, not the task tracker. Committed-against-delivered compares two numbers that exist and measures the thing a retro can act on.

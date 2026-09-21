@@ -6,7 +6,7 @@
     python wbs.py set     <register> --id 42 --status Done --nature Improve
     python wbs.py check   <register>
     python wbs.py rebaseline <register> --id 42 --baseline-end Q2-26 --reason "..."
-    python wbs.py metrics <register> --sprint S26.Q3.5
+    python wbs.py metrics <register>... --sprint S26.Q3.5
     python wbs.py migrate <register> [--apply]
     python wbs.py sprints seed   <conventions.json> --scope "Project name" --year 2026
     python wbs.py sprints import <register> --from <conventions.json>
@@ -661,23 +661,55 @@ def sprint_metrics(data, sprint):
                  and r.get("Status") == "Done"]
     carried = [r for r in committed if r not in delivered]
     spans = sorted(d for d in (cycle_days(r) for r in delivered) if d is not None)
-    median = None
-    if spans:
-        mid = len(spans) // 2
-        median = spans[mid] if len(spans) % 2 else (spans[mid - 1] + spans[mid]) / 2
+    scope = data.get("meta", {}).get("scope", "?")
 
     return {
         "sprint": sprint,
+        "scope": scope,
         "committed": {"n": len(committed), "h": hours(committed),
                       "estimated": len(estimated(committed))},
         "pulled_in": {"n": len(pulled), "h": hours(pulled)},
         "delivered": {"n": len(delivered), "h": hours(delivered),
                       "estimated": len(estimated(delivered))},
+        # IDs are unique within a register, not across them, so a combined
+        # report has to say which project each one belongs to.
         "carryover": {"n": len(carried), "h": hours(carried),
-                      "ids": [r.get("ID") for r in carried]},
-        "cycle_time": {"median_days": median, "measured": len(spans),
-                       "of": len(delivered)},
+                      "ids": ["%s#%s" % (scope, r.get("ID")) for r in carried]},
+        "cycle_time": {"median_days": median_of(spans), "measured": len(spans),
+                       "of": len(delivered), "days": spans},
     }
+
+
+def median_of(spans):
+    if not spans:
+        return None
+    ordered = sorted(spans)
+    mid = len(ordered) // 2
+    return ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def combine(parts):
+    """One sprint's figures across several registers.
+
+    A sprint is planned across whatever projects are in play, and capacity is
+    the person's, not the project's - so the totals are the meaningful
+    numbers and the per-project split is the detail. Cycle time is combined
+    from the raw spans: the median of two medians is not a median.
+    """
+    total = {"sprint": parts[0]["sprint"], "scope": "combined",
+             "parts": [p["scope"] for p in parts]}
+    for group in ("committed", "pulled_in", "delivered"):
+        total[group] = {k: round(sum(p[group].get(k, 0) for p in parts), 2)
+                        for k in parts[0][group]}
+    total["carryover"] = {
+        "n": sum(p["carryover"]["n"] for p in parts),
+        "h": round(sum(p["carryover"]["h"] for p in parts), 2),
+        "ids": [i for p in parts for i in p["carryover"]["ids"]]}
+    days = [d for p in parts for d in p["cycle_time"]["days"]]
+    total["cycle_time"] = {"median_days": median_of(days), "measured": len(days),
+                           "of": sum(p["cycle_time"]["of"] for p in parts),
+                           "days": sorted(days)}
+    return total
 
 
 def pct(part, whole):
@@ -685,21 +717,50 @@ def pct(part, whole):
 
 
 def cmd_metrics(args):
-    data = R.load(args.register)
-    known = {s.get("Sprint") for s in data.get(SPRINTS) or []}
-    if known and args.sprint not in known:
-        sys.exit("%r is not a sprint in this register's calendar.\n  known: %s"
-                 % (args.sprint, ", ".join(sorted(known)) or "(none imported)"))
-    m = sprint_metrics(data, args.sprint)
+    """One sprint, across however many projects it spanned.
+
+    Planning is often cross-project, and capacity belongs to the person
+    rather than to any one register - so the totals are what a close-out
+    actually needs, with the per-project split kept visible underneath.
+    """
+    parts, windows = [], {}
+    for path in args.register:
+        data = R.load(path)
+        known = {s.get("Sprint"): (s.get("Starts"), s.get("Ends"))
+                 for s in data.get(SPRINTS) or []}
+        scope = data.get("meta", {}).get("scope", path)
+        if known and args.sprint not in known:
+            sys.exit("%r is not a sprint in %s's calendar.\n  known: %s"
+                     % (args.sprint, scope, ", ".join(sorted(known)) or "(none)"))
+        if args.sprint in known:
+            windows[scope] = known[args.sprint]
+        parts.append(sprint_metrics(data, args.sprint))
+
+    # Two registers can hold the same sprint ID over different dates if their
+    # calendars were seeded from different anchors. Adding those together
+    # would report one sprint that never happened.
+    if len(set(windows.values())) > 1:
+        sys.exit("%s means different dates in different registers, so they "
+                 "cannot be added together:\n%s\n  Reseed from one anchor, or "
+                 "report them separately."
+                 % (args.sprint, "\n".join("    %-22s %s -> %s" % (k, v[0], v[1])
+                                           for k, v in sorted(windows.items()))))
+
+    m = combine(parts) if len(parts) > 1 else parts[0]
 
     if args.json:
         import json
-        print(json.dumps(m, indent=2))
+        print(json.dumps({"total": m, "by_project": parts}
+                         if len(parts) > 1 else m, indent=2))
         return 0
 
     c, p, dl, co, ct = (m["committed"], m["pulled_in"], m["delivered"],
                         m["carryover"], m["cycle_time"])
-    print("Sprint %s\n" % args.sprint)
+    if len(parts) > 1:
+        print("Sprint %s across %d projects: %s\n"
+              % (args.sprint, len(parts), ", ".join(m["parts"])))
+    else:
+        print("Sprint %s\n" % args.sprint)
     if not (c["n"] or dl["n"] or p["n"]):
         print("  Nothing references this sprint yet - no row names it as planned, "
               "added or ended.")
@@ -750,6 +811,15 @@ def cmd_metrics(args):
     if gaps:
         print("\n  Coverage        no effort estimate on %s - the hour figures "
               "cover only the rest." % "; ".join(gaps))
+
+    if len(parts) > 1:
+        print("\n  By project")
+        for part in parts:
+            print("    %-22s %d delivered (%gh)  |  %d committed (%gh)  |  "
+                  "%d carried"
+                  % (part["scope"], part["delivered"]["n"], part["delivered"]["h"],
+                     part["committed"]["n"], part["committed"]["h"],
+                     part["carryover"]["n"]))
     return 0
 
 
@@ -920,7 +990,8 @@ def main():
     s.set_defaults(func=cmd_rebaseline)
 
     s = subs.add_parser("metrics", help="what one sprint delivered against what it took on")
-    s.add_argument("register")
+    s.add_argument("register", nargs="+",
+                   help="one or more; a cross-project sprint takes all of them")
     s.add_argument("--sprint", required=True, metavar="ID", help='e.g. "S26.Q3.5"')
     s.add_argument("--json", action="store_true",
                    help="emit the same figures as a structure, for a caller to consume")
