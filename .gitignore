@@ -11,8 +11,9 @@ Thumbs.db
 *.html
 *.xlsx
 !TSP/TSP.3 TSP Register/tsp-manager/templates/dashboard.html
+!TSP/TSP.7 Notebook Manager/notebook-capture/assets/post-template.html
 
 # Registers are JSON now, and JSON is not ignored - so there is no longer a list
-# of shipped-asset exceptions to keep in step with the tools. The one remaining
-# negation is the dashboard template, the last asset any tool has to ship.
+# of shipped-asset exceptions to keep in step with the tools. The two remaining
+# negations are HTML templates a tool ships: the TSP dashboard and the eDiary post.
 PreviousV/

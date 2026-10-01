@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  eDiary post template. Copy to entries/YYYY-MM-DD-<post-slug>.html and replace every {placeholder}.
+  date, title, tags and related appear twice: in <head> and in the visible header/footer.
+  Keep both copies in sync on every edit; nothing links them.
+  Image and video blocks are optional: include them only for real media, never placeholders.
+-->
+<head>
+  <meta charset="UTF-8">
+  <title>{title}</title>
+  <meta name="date" content="{YYYY-MM-DD}">
+  <meta name="tags" content="{#tag1, #tag2, #tag3}">
+  <meta name="related" content="{category}/{path}">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<article>
+
+  <header class="post-header">
+    <h1>{title}</h1>
+    <p class="post-date">{YYYY-MM-DD}</p>
+    <ul class="post-tags">
+      <!-- one <li> per tag, the same tags as the meta above (0-3) -->
+      <li>{#tag1}</li>
+    </ul>
+  </header>
+
+  <div class="post-body">
+    <p>{narrative prose}</p>
+
+    <!-- optional, real images only
+    <figure class="post-image">
+      <img src="{src}" alt="{what the image shows}">
+      <figcaption>{caption}</figcaption>
+    </figure>
+    -->
+
+    <!-- optional, at most one, real link only
+    <div class="post-video">
+      <span class="post-video-label">Video</span>
+      <a href="{url}">{what the video is}</a>
+    </div>
+    -->
+  </div>
+
+  <footer class="post-related">
+    <span class="related-label">Related:</span>
+    <a href="{relative path to the source entry}">{category}/{path}</a>
+  </footer>
+
+</article>
+</body>
+</html>
