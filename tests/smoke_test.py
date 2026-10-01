@@ -516,6 +516,98 @@ def test_content_system(root, scratch):
     os.remove(canary)
 
 
+NOTEBOOK_TOOL = "TSP.7 Notebook Manager"
+NOTEBOOK_SKILL = "notebook-capture"
+NOTEBOOK_TREE = ["index.md", "diary/index.md", "projects/index.md",
+                 "areaOfFocus/index.md", "areaOfInterest/index.md",
+                 "meetings/index.md", "eDiary/index.md", "eDiary/style.css"]
+
+
+def test_notebook_manager(root, scratch):
+    """TSP.7 ships no code and no data, so what can rot is first use.
+
+    The installer copies the skill folder and nothing else, and the user's
+    notebooks/ does not exist yet. Everything the skill needs on day one must
+    therefore travel inside it, as assets/, and first use must build the tree
+    from there without ever overwriting a note. Each of those is asserted on a
+    real install, not on the catalogue layout.
+    """
+    print("\nTSP.7 Notebook Manager")
+    tool = os.path.join(root, "TSP", NOTEBOOK_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    path = os.path.join(tool, NOTEBOOK_SKILL, "SKILL.md")
+    if not check("%s has SKILL.md" % NOTEBOOK_SKILL, os.path.isfile(path), path):
+        return
+    text = io.open(path, encoding="utf-8").read()
+    check("%s declares name and description" % NOTEBOOK_SKILL,
+          "name:" in text[:600] and "description:" in text[:600], text[:120])
+    check("TD.7 present", any(n.startswith("TD.7") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool),
+          "; ".join(broken_links(tool)[:5]))
+
+    project = os.path.join(scratch, "notebook-project")
+    os.makedirs(project, exist_ok=True)
+    ok, out = run([os.path.join(root, "install.py"), "add", NOTEBOOK_SKILL,
+                   "--into", project, "--catalogue", root], root)
+    if not check("install.py add brings the skill in", ok, out):
+        return
+    skill = os.path.join(project, ".github", "skills", NOTEBOOK_SKILL)
+    assets = os.path.join(skill, "assets", "notebooks")
+    check("assets/ installed with the skill", os.path.isdir(assets), skill)
+    notebooks = os.path.join(project, "notebooks")
+    check("no notebooks data ships with the tool", not os.path.exists(notebooks))
+
+    # The base path rule: notebooks/ sits beside the folder that holds the
+    # skills folder - here, the project root.
+    unit = os.path.dirname(os.path.dirname(os.path.dirname(skill)))
+    check("base path resolves to the project root",
+          os.path.normcase(unit) == os.path.normcase(project), unit)
+
+    def first_use():
+        """What the skill's First use section tells the agent to do."""
+        copied = 0
+        for dirpath, _, filenames in os.walk(assets):
+            for name in filenames:
+                src = os.path.join(dirpath, name)
+                dst = os.path.join(notebooks, os.path.relpath(src, assets))
+                if not os.path.exists(dst):
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.copyfile(src, dst)
+                    copied += 1
+        return copied
+
+    first_use()
+    missing = [f for f in NOTEBOOK_TREE
+               if not os.path.isfile(os.path.join(notebooks, f))]
+    check("first use builds the whole tree", not missing, ", ".join(missing))
+    check("links resolve in the new tree", not broken_links(notebooks),
+          "; ".join(broken_links(notebooks)[:5]))
+
+    # A second run must copy nothing: first use can never overwrite a note.
+    diary = os.path.join(notebooks, "diary", "index.md")
+    io.open(diary, "a", encoding="utf-8").write(u"| 2026-01-01 | kept | | | |\n")
+    check("a second first use copies nothing", first_use() == 0)
+    check("an edited index survives",
+          "kept" in io.open(diary, encoding="utf-8").read())
+
+    # A post is drafted from the template in place; its stylesheet link must
+    # resolve from where posts live.
+    template = os.path.join(skill, "assets", "post-template.html")
+    if check("post template installed", os.path.isfile(template), template):
+        href = re.search(r'rel="stylesheet" href="([^"]+)"',
+                         io.open(template, encoding="utf-8").read())
+        target = os.path.normpath(os.path.join(
+            notebooks, "eDiary", "entries", href.group(1) if href else ""))
+        check("a post finds the stylesheet", bool(href) and os.path.isfile(target),
+              target)
+
+    named = set(re.findall(r"`(assets/[^`]+)`", text))
+    absent = [a for a in named if not os.path.exists(os.path.join(skill, a))]
+    check("every assets/ path the skill names exists", named and not absent,
+          ", ".join(absent) or "SKILL.md names no assets/ path")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -544,6 +636,7 @@ def main():
         test_reconciliation(root, scratch)
         test_catalogue(root, scratch)
         test_content_system(root, scratch)
+        test_notebook_manager(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
 
@@ -555,8 +648,8 @@ def main():
             return 1
         print("All checks passed (%d tools, plus the installer, the "
               "reconciliation case, the catalogue, the shared modules, the "
-              "docs-versus-code pass and "
-              "the content system)." % len(TOOLS))
+              "docs-versus-code pass, "
+              "the content system and the notebook manager)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

@@ -30,6 +30,12 @@
       "Description": "Registered as TSP.6. First tool published with no code and with shared material: its skills read contracts from _shared/, which install.py now copies beside the skill.",
       "ID": 5,
       "Tool": "Content System"
+    },
+    {
+      "Changed On": "2026-10-01",
+      "Description": "Registered as TSP.7. Second tool with no code. Ships an empty notebooks tree and a post template as assets/, so a fresh install builds what it needs on first use.",
+      "ID": 6,
+      "Tool": "Notebook Manager"
     }
   ],
   "control_activities": [],
@@ -80,8 +86,8 @@
         ]
       }
     },
-    "updated": "2026-09-02T09:30:43",
-    "values_hash": "sha256:0717667a53881f5ff58ab7b56aabfaa1d84ec4d7f3282bd0df53a4c7890cda1a",
+    "updated": "2026-10-01T16:09:13",
+    "values_hash": "sha256:f8d4e30c411888863cde9f6ea226c66eed43341db844cea924bf99315fd0dc4b",
     "version": 1
   },
   "tools": [
@@ -165,6 +171,20 @@
       "Primary Area": "Writing and publishing",
       "Relevancy": "Often",
       "Skill": "content-idea-capture, content-plan-author, content-post-writer, content-review, content-strategy-author",
+      "Status": "In Progress",
+      "Type": "Tool"
+    },
+    {
+      "Description": "Plain-Markdown notebooks the agent keeps: a diary, notebooks scoped to a project, an area of focus or an area of interest, and meeting notes, with an index per notebook. Raw entries worth more than a note can be crystallized into static HTML posts that link back to the entry they came from. No app, no search index, no database - files only.",
+      "Doc Aux": "Yes",
+      "ID": 7,
+      "Last Reviewed": "2026-10-01",
+      "Links": "TSP/TSP.7 Notebook Manager/TD.7 - Notebook Manager.md",
+      "Name": "Notebook Manager",
+      "Notes": "Usable: the diary and eDiary paths are used on real work, and a fresh install is tested. Meetings and scoped notebooks have never been exercised - see TD.7, Status. Personal by nature: install it in a personal workspace, or keep notebooks/ out of git.",
+      "Primary Area": "Personal knowledge",
+      "Relevancy": "Often",
+      "Skill": "notebook-capture",
       "Status": "In Progress",
       "Type": "Tool"
     }

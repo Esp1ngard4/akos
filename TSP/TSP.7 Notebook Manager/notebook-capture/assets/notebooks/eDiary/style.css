@@ -1,0 +1,119 @@
+/* Shared stylesheet for all eDiary posts (notebooks/eDiary/entries/*.html).
+   One file, referenced by every post via `<link rel="stylesheet" href="../style.css">`,
+   so the look can evolve across all past entries at once.
+   No JS anywhere in this category — layout/typography only. */
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+  line-height: 1.6;
+  color: #222;
+  background: #fff;
+}
+
+/* Header block: title, date, tags */
+
+.post-header {
+  margin-bottom: 2rem;
+}
+
+.post-header h1 {
+  font-size: 2rem;
+  line-height: 1.25;
+  margin: 0 0 0.5rem;
+}
+
+.post-date {
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0 0 0.5rem;
+}
+
+.post-tags {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.post-tags li {
+  background: #f0f0f0;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+/* Body: narrative prose */
+
+.post-body p {
+  margin: 0 0 1.25rem;
+}
+
+/* Image blocks: inline, full content-width, never floated/wrapped or batched into a gallery */
+
+.post-image {
+  margin: 2rem 0;
+}
+
+.post-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+}
+
+.post-image figcaption {
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+/* Video reference: one first-class block, not a buried inline-text link */
+
+.post-video {
+  margin: 2rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid #ddd;
+  border-left: 4px solid #444;
+  background: #fafafa;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+}
+
+.post-video-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+  margin-bottom: 0.35rem;
+}
+
+.post-video a {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Related/source citation: low-emphasis, label text (not color-only) */
+
+.post-related {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e5e5;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.related-label {
+  font-weight: 600;
+  margin-right: 0.35rem;
+}
