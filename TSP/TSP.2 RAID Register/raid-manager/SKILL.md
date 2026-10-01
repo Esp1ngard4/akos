@@ -245,6 +245,7 @@ Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of 
 | Action Log | List of `{on, by, note, changed}` entries — see "The Action Log" |
 | Category | |
 | Tracked Externally | Y/N flag, see operation 7 |
+| WBS Ref | Optional. The WBS row the entry bears on, as `<project>#<id>` (e.g. `Atlas#24`) — always scope-qualified. `check` validates the shape only; `wbs.py refined --raid` resolves it. Leave it empty for an entry that is not about a deliverable |
 | Opened On | |
 | Requested By | |
 | Involve | Other stakeholders |

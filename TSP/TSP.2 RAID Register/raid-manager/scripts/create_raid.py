@@ -18,7 +18,7 @@ FIELDS = ["RAID.ID", "Detail", "Type", "DRI", "Urgency (1-5)",
           "Severity (1-5)", "Response Strategy", "Mitigation Target %",
           "Residual Risk Score", "MoSCoW", "Status", "Last Review", "Review On",
           "Next Review On", "Description", "Action Plan", "Acceptance Criteria",
-          "Action Log", "Category", "Tracked Externally", "Opened On",
+          "Action Log", "Category", "Tracked Externally", "WBS Ref", "Opened On",
           "Requested By", "Involve", "Has AuxMat", "Estimated Effort", "ETC",
           "ETC Renegotiated", "Closed On", "Closed By"]
 

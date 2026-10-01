@@ -162,6 +162,11 @@ def render(entry):
 
 # --- validation -------------------------------------------------------------
 
+# "<project>#<WBS ID>", e.g. "Atlas#24". Scope-qualified always, never a bare
+# number: an ID is unique inside a register and not across them.
+WBS_REF = re.compile(r"^[^#]+#\d+$")
+
+
 def run_checks(data):
     """Read-only. Errors are things that will misrender or mislead; warnings are
     conventions worth following that no one should be blocked on."""
@@ -181,6 +186,20 @@ def run_checks(data):
             if known and name not in known:
                 errors.append("R.%s has field %r, which the schema does not "
                               "define" % (rid, name))
+
+        # A reference to a WBS row, when the item is about one. Shape only:
+        # this register does not know where any WBS register lives, and a
+        # stored path would rot the first time a folder moved. Resolution
+        # happens in `wbs.py refined --raid`, which is handed both registers.
+        #
+        # Always scope-qualified, because a WBS ID is unique within a register
+        # and not across them. Most entries carry nothing here and should: a
+        # capacity risk or a systemic decision is not about a deliverable, and
+        # there is no "n/a" to write because nothing asks the reverse question.
+        ref = R.clean(row.get("WBS Ref"))
+        if ref and not WBS_REF.match(ref):
+            errors.append("R.%s WBS Ref %r is not project#id - e.g. "
+                          "Atlas#24" % (rid, ref))
 
         log = row.get(LOG)
         if isinstance(log, list):
