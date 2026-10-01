@@ -124,6 +124,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Actual Start / End | No | What happened. Derived on a parent. `check` holds them against Status. |
 | Horizon | No | `Next` / `Future` — how soon this is wanted. Not a status and not a priority: an item can be `Could` and `Next`, or `Must` and `Future`. Cleared by a real sprint or by closure; `check` enforces both. |
 | Sprint Planned / Added / Ended | No | Sprint IDs from the register's `sprints` calendar (e.g. `S26.Q3.5`), and nothing else. `check` rejects an ID the calendar does not hold. |
+| Sprint Carried | No | A **list** of the sprints the row was committed to again after `Sprint Planned` — spillover, or the next slice of a deliverable worked across sprints. `set --sprint-carried S --reason "…"` adds one and notes `Carried into S: …` in Comments — refused without the reason; `--sprint-carried ""` clears the list. Never repeats `Sprint Planned`. |
 | Key Dependencies | No | IDs of blocking items |
 | Control Approach | No | How the deliverable is verified (review, functional test, ...) |
 | Control Tool | No | Where that verification happens |
@@ -132,7 +133,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Action Plan | No | Approach description |
 | Planning Considerations | No | Assumptions, risks, constraints |
 | Validation Approach | No | How the deliverable will be verified |
-| Comments | No | General notes |
+| Comments | No | A log of dated entries, **newest on top**, one paragraph each — written with `wbs.py note`. A **closure note** from `set --closure` stays pinned above them (see operation 3) |
 
 There is **no `key_deliverables` collection.** A deliverable is a row whose `Key Deliverable` is `Y`; the deliverables view filters on it and rolls progress up from descendants through `Parent`. A register still carrying that collection has not been migrated — run `wbs.py migrate`.
 
@@ -183,6 +184,31 @@ python <skill-path>/scripts/wbs.py set "<register>" --id 42 --status Done --natu
 
 Find rows by `ID`, never `Code`. Pass `--field ""` to clear a field. Then **refresh the dashboard** (operation 5).
 
+**Closing a row takes a closure note.** Moving a row to `Done` or `Cancelled` is refused without `--closure`, the way moving a planned date is refused without `--reason`:
+
+```bash
+python <skill-path>/scripts/wbs.py set "<register>" --id 42 --status Done \
+  --closure "What happened: <what was delivered>. AC: (1) <criterion> - met. (2) <criterion> - partial: <why>, <where the rest went>. Follow-up: <task or row, or none>."
+```
+
+It goes at the **top** of `Comments` as `Closure 2026-Sep-26 (Done): …` — newest first, the order a TD's version history keeps, because a closed row is read for how it ended. The convention:
+
+- **What happened** — what was actually delivered, in a sentence or two. Evidence where there is some: a commit, a record, a TD version.
+- **AC** — each acceptance criterion by number: met, partial or not met. **Any gap says why**, and where the missing part went.
+- **Follow-up** — the task or row that picks up anything left over, by stable `ID`. `none` is an answer.
+- For `Cancelled`: why it was dropped, and where anything it held went.
+
+If the work was also tracked as a task, its closure comment can say the same — but a task's comment goes out of view once the task is completed, and the row is what gets read afterwards. Only the transition asks: correcting a date on a row that is already closed needs no new note, and `--closure` on a row that is not closing is refused.
+
+**Every other entry in `Comments` goes through `note`:**
+
+```bash
+python <skill-path>/scripts/wbs.py note "<register>" --id 42 "Scope revised: was X (3h), now Y - because Z."
+```
+
+It stamps the date and puts the entry on top, **below any closure note** — a closed row is read first for how it ended, so the closure stays pinned however much is added after it. One paragraph per entry, because the blank line is what separates them. Rows written before this convention hold their entries run together in one paragraph, oldest first; they are re-cut by reading them, not by script, since the entries are woven into prose.
+
+
 ### 3b. Validate
 
 ```bash
@@ -205,6 +231,7 @@ And it holds the schedule dates against reality:
 - **A plan or actual stored on a parent** — a warning: it is derived at render time, so the stored value is silently ignored.
 - **A `Done` row with no `Actual End`, or an `Implementing` row with no `Actual Start`** — warnings. The roadmap cannot place such a row, and this is the direction of the implication that actually rots.
 - **`Sprint Planned` and `Planned End` in different periods** — also a warning. The calendar makes them comparable, and disagreement is usually a stale field rather than a mistake.
+- **A closed row with no closure note** — a warning. `set` refuses that close, so one of these was closed by hand-edit. A register adopting the rule part-way sets `meta.settings.closure_notes_from` to an ISO date, and only rows closed on or after it are checked; older notes are a backfill chosen by the outcome each delivered, not a sweep.
 
 Run it before a planning ceremony and after any hand-edit.
 
@@ -212,7 +239,7 @@ Run it before a planning ceremony and after any hand-edit.
 Grooming sets the horizon; planning turns it into a commitment.
 
 - **Grooming** — `--horizon Next` for the upcoming sprint, `Future` for the one after.
-- **Planning** — set `Sprint Planned` to a sprint ID the calendar holds, and **clear `Horizon` in the same edit** (`--horizon ""`). `check` will otherwise flag the row.
+- **Planning** — set `Sprint Planned` to a sprint ID the calendar holds, and **clear `Horizon` in the same edit** (`--horizon ""`). `check` will otherwise flag the row. **A row already planned into an earlier sprint and not Done** keeps its `Sprint Planned`; add the new sprint with `--sprint-carried` and a `--reason` saying why it did not finish. Work committed at a planning counts to that sprint from that moment, even if it finishes before the sprint's start date.
 - When an item starts: Status → `Implementing`, `Sprint Added` → current sprint. `Actual Start` is stamped with it.
 - When an item completes: Status → `Done`, `Sprint Ended` → current sprint, `Horizon` must be gone, and `Actual End` is stamped.
 - Multiple items can share a sprint. After changes, **refresh the dashboard** (operation 5).
@@ -260,7 +287,7 @@ Builds an empty register — schema, field order and vocabularies, zero rows. It
 | Not Started | Committed but work hasn't begun |
 | Implementing | Actively being worked on |
 | Done | Completed |
-| Cancelled | Dropped without being delivered — keep the row and say why in Comments |
+| Cancelled | Dropped without being delivered — keep the row; `--closure` records why |
 
 ## Vocabularies
 
@@ -376,10 +403,12 @@ Four populations, and the first two are kept apart deliberately — the gap betw
 
 | | |
 |---|---|
-| **Committed** | `Sprint Planned` = the sprint. What planning agreed to. |
-| **Pulled in** | `Sprint Added` = the sprint but `Sprint Planned` is not. Scope that arrived mid-sprint. |
+| **Committed** | `Sprint Planned` = the sprint, or the sprint is in `Sprint Carried`. What planning agreed to. |
+| **Pulled in** | `Sprint Added` = the sprint but the row is not committed to it. Scope that arrived mid-sprint. |
 | **Delivered** | `Sprint Ended` = the sprint and `Status` is `Done`. |
 | **Carried over** | Committed, not delivered. Listed by ID, so the retro can discuss items rather than a number. |
+
+**Hours count as committed in every sprint a row was planned into, and as delivered only in the sprint where it closes.** A deliverable worked across three sprints is a real commitment in each; completion % is low while it is in progress and catches up when it closes.
 
 Reported: **velocity** (count *and* hours — eight one-hour jobs is not two four-hour ones), **completion rate** by both count and hours, **carryover**, **committed against delivered hours**, and **median cycle time** from `Actual Start` to `Actual End`.
 
@@ -398,6 +427,24 @@ Totals come first, with a per-project split underneath — capacity belongs to t
 **Every figure states its coverage, and a missing one says so.** A completion rate over rows that mostly lack an estimate is a different claim from one where they all have it. Where nothing carries `Sprint Planned`, there is no denominator and the command says that rather than reporting zero — inventing one is the same mistake as inventing a baseline.
 
 `--json` emits the same structure for a caller to consume rather than re-parse.
+
+### Key Deliverables before planning
+
+```bash
+python <skill-path>/scripts/wbs.py deliverables "<register A>" "<register B>" --by 2026-Oct-24 --sprint S26.Q4.1
+```
+
+Read-only. Per open row with `Key Deliverable = Y`, across every register given: a **baseline already passed**, or passing before `--by`; **nothing scheduling it** (no `Planned End`, `Horizon` or sprint on it or below it); and, with `--sprint`, **nothing committed to that sprint or staged `Next`** on it or below it. It lists findings, not verdicts — commit, rebaseline with a reason, or accept is the planning session's call. Run it the day before planning, while there is still time to act on what it finds.
+
+### Is a candidate ready to commit to?
+
+```bash
+python <skill-path>/scripts/wbs.py refined "<register>" --ids 12,14,15 [--execution "<project>/1. Execution"] [--raid "<RAID register>"]
+```
+
+Read-only. For each candidate a grooming draft names, it reports what is absent: acceptance criteria, an action plan, an estimate, a parent, a Type. With `--execution`, also whether any Markdown file in that folder names the row (`ID <n>`); with `--raid`, the open RAID entries whose `WBS Ref` points at it (`<scope>#<id>`, matched against this register's `meta.scope`). A gap is a flag, not a veto: a Task may reasonably have no spec, and what counts as ready is the session's call. Run it at grooming, so planning starts from rows that are ready rather than refining them on the spot.
+
+Whether rows and their tasks agree is **reconciliation**, and it is deliberately not here: it depends on the task tracker a project uses. TD.1 says what it checks and where to build it.
 
 ## Relationship to Other Tools
 

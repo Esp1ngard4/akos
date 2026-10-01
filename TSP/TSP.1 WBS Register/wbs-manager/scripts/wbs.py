@@ -4,6 +4,7 @@
 
     python wbs.py add     <register> "Title" --type Story --parent 37
     python wbs.py set     <register> --id 42 --status Done --nature Improve
+    python wbs.py note    <register> --id 42 "what changed and why"
     python wbs.py check   <register>
     python wbs.py rebaseline <register> --id 42 --baseline-end Q2-26 --reason "..."
     python wbs.py metrics <register>... --sprint S26.Q3.5
@@ -45,7 +46,9 @@ defined by the sprint ceremonies, kept in the project's agile conventions file, 
 here - the register never invents one.
 """
 import argparse
+import json
 import os
+import re
 import sys
 from datetime import date, timedelta
 
@@ -65,6 +68,33 @@ DATE_ARGS = [(f.lower().replace(" ", "_"), f) for f in C.DATE_FIELDS]
 # Sprint Planned - 18 of 45 rows stale and nothing to catch it.
 HORIZON_CLEARS_ON = ("Done", "Cancelled")
 SPRINT_FIELDS_ON_ITEM = ("Sprint Planned", "Sprint Added", "Sprint Ended")
+# --flag -> field, the same shape as DATE_ARGS. The fields were in the schema
+# and in every register's field order from the start, but nothing could write
+# them, so they stood at 0 of 97 rows while `check` validated them, `metrics`
+# read them and the dashboard rendered them.
+SPRINT_ARGS = [(f.lower().replace(" ", "_"), f) for f in SPRINT_FIELDS_ON_ITEM]
+# The sprints a row was committed to again, after Sprint Planned: spillover,
+# or the next slice of a deliverable worked across sprints. A list, and the
+# only one in the model, because a row can be recommitted more than once and
+# each later sprint has to see it. Re-pointing Sprint Planned instead would
+# rewrite the earlier sprint's carryover; Sprint Added would report planned
+# work as pulled in.
+CARRIED = "Sprint Carried"
+
+
+def carried(row):
+    value = row.get(CARRIED) or []
+    return [value] if isinstance(value, str) else list(value)
+
+
+def sprint_ids(row):
+    """Every sprint a row names, across the scalar fields and the list."""
+    return [row.get(f) for f in SPRINT_FIELDS_ON_ITEM if row.get(f)] + carried(row)
+
+
+def committed_to(row, sprint):
+    """Planned into it at the start, or committed to it again later."""
+    return row.get("Sprint Planned") == sprint or sprint in carried(row)
 # Only these levels name a thing rather than an activity, so only these can be
 # put in front of a sponsor as a deliverable. Key Deliverable is curation, not
 # classification - it marks what earns a line in an executive report, which is
@@ -239,6 +269,198 @@ def stamp_actuals(data, row, args, changed):
                           field.lower().replace(" ", "-")))
 
 
+def clear_horizon_on_close(row, args, changed):
+    """Closing a row settles how soon it was wanted, so the intention goes.
+
+    `check` has always errored on a closed row that still carries a Horizon,
+    and HORIZON_CLEARS_ON has always named the statuses - but nothing acted on
+    it, so every close of a row with a Horizon produced an error to be fixed by
+    hand afterwards. Three of those in two days is the argument for doing it
+    here, beside the actual-date stamp it belongs with.
+    """
+    if getattr(args, "status", None) not in HORIZON_CLEARS_ON:
+        return
+    if row.pop("Horizon", None):
+        changed.append("Horizon cleared (a %s row supersedes it)" % args.status)
+
+
+# A closure note is how a closed row says what happened and whether its AC
+# held. A task tracker's closure comment disappears from view once the task is
+# completed; the row is what gets read afterwards. Without a rule, almost no
+# row gets one: in the register this came from, 1 of 33 closed rows had one.
+CLOSURE_MARK = re.compile(r"(^|\n)Closure \d{4}-[A-Z][a-z]{2}-\d{1,2} \(")
+# A register that adopts the rule part-way can exempt its history: set
+# meta.settings.closure_notes_from to an ISO date, and `check` holds only rows
+# closed on or after it. Backfilling older rows is then a choice, made by the
+# outcome each delivered, not a sweep.
+
+
+def apply_closure(row, args, changed, was):
+    """Closing a row takes a note, the way moving a date takes a reason.
+
+    Only on the transition: correcting a date on a row that is already Done
+    does not ask for a second note. Stamped with the date and the status so
+    a later close (a reopened row closing again) reads as its own entry.
+    """
+    note = getattr(args, "closure", None)
+    closing = getattr(args, "status", None) in HORIZON_CLEARS_ON \
+        and was not in HORIZON_CLEARS_ON
+    if note is not None and not note.strip():
+        sys.exit("--closure is empty. Say what happened and where each "
+                 "acceptance criterion stands.")
+    if closing and not note:
+        ask = ("what happened, where each acceptance criterion stands (with "
+               "the reason for any gap) and any follow-up"
+               if args.status == "Done" else
+               "why it was dropped and where anything it held went")
+        sys.exit("Closing item %s as %s needs --closure. Say %s - the row is "
+                 "what gets read afterwards." % (row.get("ID"), args.status, ask))
+    if note and not closing:
+        sys.exit("--closure goes with moving a row to Done or Cancelled. To "
+                 "add to a row that is already closed, use `wbs.py note`.")
+    if not note:
+        return
+    entry = "Closure %s (%s): %s" % (today_text(), args.status, one_paragraph(note))
+    # Newest first, the order DF version histories keep: a closed row is read
+    # for how it ended, so that is what it opens with.
+    row["Comments"] = ("%s\n\n%s" % (entry, row.get("Comments") or "")).strip()
+    changed.append("closure note added at the top of Comments")
+
+
+def today_text():
+    today = date.today()
+    return "%d-%s-%d" % (today.year, D.MONTHS[today.month - 1], today.day)
+
+
+def one_paragraph(text):
+    """An entry is one paragraph, so the blank line can separate entries."""
+    return re.sub(r"\n\s*\n+", "\n", text.strip())
+
+
+def add_note(row, text):
+    """Newest entry on top - below any closure note, which stays pinned.
+
+    Comments is a log of dated paragraphs. A closed row is read first for
+    how it ended, so a note added after the close goes under the closure
+    rather than displacing it; everything older sits beneath.
+    """
+    paras = [p for p in (row.get("Comments") or "").split("\n\n") if p.strip()]
+    pinned = 0
+    while pinned < len(paras) and CLOSURE_MARK.match(paras[pinned]):
+        pinned += 1
+    paras.insert(pinned, "%s: %s" % (today_text(), one_paragraph(text)))
+    row["Comments"] = "\n\n".join(paras)
+    return pinned
+
+
+def sprint_calendar(data):
+    """Sprint ID -> (starts, ends), from the register's imported calendar."""
+    return {s.get("Sprint"): (s.get("Starts"), s.get("Ends"))
+            for s in data.get(SPRINTS) or [] if s.get("Sprint")}
+
+
+def sprint_on(data, stamp):
+    """The sprint whose window contains an ISO date, or None.
+
+    A date falls in at most one sprint: the calendar is a partition, seeded
+    from a single anchor and length. Outside every window this returns None
+    rather than the nearest sprint - a row closed outside the cadence is a
+    fact worth seeing, not one worth rounding away.
+    """
+    for sid, (starts, ends) in sprint_calendar(data).items():
+        if starts and ends and starts <= stamp <= ends:
+            return sid
+    return None
+
+
+def apply_sprints(data, row, args, changed):
+    """Write the sprint fields, refusing an ID the calendar never had.
+
+    Refused here rather than left for `check`, because a mistyped sprint ID
+    silently drops the row out of the metrics that sprint is measured by -
+    the failure is invisible at exactly the moment it counts.
+    """
+    known = sprint_calendar(data)
+    for dest, field in SPRINT_ARGS:
+        value = getattr(args, dest, None)
+        if value is None:
+            continue
+        if value == "":                      # explicit clear
+            row.pop(field, None)
+            changed.append("%s cleared" % field)
+            continue
+        if known and value not in known:
+            sys.exit("%r is not a sprint in this register's calendar.\n"
+                     "  known: %s" % (value, ", ".join(sorted(known))))
+        if not known:
+            sys.exit("This register has no sprint calendar to check %r "
+                     "against.\n  run: wbs.py sprints import" % value)
+        row[field] = value
+        changed.append("%s=%s" % (field, value))
+        # A commitment supersedes an intention, and `check` errors when both
+        # stand. Clearing it here is what stops the two drifting apart - the
+        # drift that left Next/Future stale in Sprint Planned on 18 of 45 rows.
+        if field == "Sprint Planned" and row.pop("Horizon", None):
+            changed.append("Horizon cleared (a sprint supersedes it)")
+
+    # Carried adds to a list rather than replacing, since each recommitment is
+    # its own fact. '' clears the list - the way to undo a mistaken entry.
+    value = getattr(args, "sprint_carried", None)
+    if value is None:
+        return
+    if value == "":
+        if row.pop(CARRIED, None) is not None:
+            changed.append("%s cleared" % CARRIED)
+        return
+    if not known:
+        sys.exit("This register has no sprint calendar to check %r "
+                 "against.\n  run: wbs.py sprints import" % value)
+    if value not in known:
+        sys.exit("%r is not a sprint in this register's calendar.\n"
+                 "  known: %s" % (value, ", ".join(sorted(known))))
+    if value == row.get("Sprint Planned"):
+        sys.exit("%s is this row's Sprint Planned - carried means committed "
+                 "again in a later sprint." % value)
+    now = carried(row)
+    if value in now:
+        return
+    # Why it did not finish is the part nobody can reconstruct later, and the
+    # row is what gets read once the sprint's record is closed - the same
+    # bargain as a moved date's --reason and a closure's --closure.
+    reason = (getattr(args, "reason", None) or "").strip()
+    if not reason:
+        sys.exit("Carrying a row into %s needs --reason: why it did not finish "
+                 "where it was committed." % value)
+    row[CARRIED] = now + [value]
+    add_note(row, "Carried into %s: %s" % (value, reason))
+    changed.append("%s += %s (reason noted in Comments)" % (CARRIED, value))
+
+
+def stamp_sprint_ended(data, row, args, changed):
+    """Done closes a row into whatever sprint the calendar was on that day.
+
+    The same bargain as the actual dates: derived from a fact already being
+    recorded, so the close-out opens with numbers nobody had to remember to
+    write down. Only Done - a cancelled row delivered nothing, and delivery
+    is what `metrics` counts.
+    """
+    if getattr(args, "status", None) != "Done" or row.get("Sprint Ended"):
+        return
+    if getattr(args, "sprint_ended", None):
+        return                       # an explicit value was passed; leave it
+    if has_children(data, row.get("ID")):
+        return                       # a parent's membership is its children's
+    ended = D.resolve(row.get("Actual End"))
+    if not ended:
+        return
+    sid = sprint_on(data, ended["start"])
+    if not sid:
+        return
+    row["Sprint Ended"] = sid
+    changed.append("Sprint Ended=%s (stamped from Actual End %s; pass "
+                   "--sprint-ended to correct)" % (sid, ended["text"]))
+
+
 def finish(args, data, note):
     print(note)
     if getattr(args, "dry_run", False):
@@ -279,7 +501,9 @@ def cmd_add(args):
     row.setdefault("Class", "Product")
     check_deliverable(row)
     created = []
+    apply_closure(row, args, created, None)
     apply_dates(data, row, args, created, creating=True)
+    apply_sprints(data, row, args, created)
     R.rows(data, ITEMS).append(row)
     return finish(args, data, "Added item %s  %s" % (row["ID"], args.title))
 
@@ -298,6 +522,7 @@ def cmd_set(args):
         check_parent(data, args.id, args.parent)
 
     changed = []
+    was = row.get("Status")
     for key, value in (("Parent", as_id(args.parent)), ("Code", args.code),
                        ("Title", args.title), ("Type", args.type),
                        ("Class", args.klass),
@@ -315,11 +540,27 @@ def cmd_set(args):
             row[key] = value
             changed.append("%s=%s" % (key, value))
     apply_dates(data, row, args, changed)
+    apply_sprints(data, row, args, changed)
+    apply_closure(row, args, changed, was)
+    clear_horizon_on_close(row, args, changed)
     stamp_actuals(data, row, args, changed)
+    stamp_sprint_ended(data, row, args, changed)
     check_deliverable(row)
     if not changed:
         sys.exit("Nothing to change. Pass at least one field.")
     return finish(args, data, "Item %s: %s" % (args.id, ", ".join(changed)))
+
+
+def cmd_note(args):
+    data = R.load(args.register)
+    row = find(data, args.id)
+    if row is None:
+        sys.exit("No item with ID %s." % args.id)
+    if not args.text.strip():
+        sys.exit("The note is empty.")
+    pinned = add_note(row, args.text)
+    return finish(args, data, "Item %s: note added %s" % (
+        args.id, "below the closure note" if pinned else "at the top of Comments"))
 
 
 def cmd_check(args):
@@ -384,6 +625,17 @@ def cmd_check(args):
             if value and known_sprints and value not in known_sprints:
                 errors.append("item %s: %s=%r is not a sprint in the calendar"
                               % (rid, field, value))
+        raw = row.get(CARRIED)
+        if raw is not None and not isinstance(raw, list):
+            errors.append("item %s: %s must be a list of sprint IDs, not %r"
+                          % (rid, CARRIED, raw))
+        for value in carried(row):
+            if known_sprints and value not in known_sprints:
+                errors.append("item %s: %s holds %r, not a sprint in the calendar"
+                              % (rid, CARRIED, value))
+            if value == row.get("Sprint Planned"):
+                errors.append("item %s: %s repeats Sprint Planned %s"
+                              % (rid, CARRIED, value))
 
         # Schedule dates. Two answers to whether something finished is one
         # too many, so the dates and the Status have to agree.
@@ -439,10 +691,33 @@ def cmd_check(args):
                                 "End %s do not overlap"
                                 % (rid, sprint_id, window[0], window[1], planned["text"]))
 
-    if not known_sprints and any(row.get(f) for row in items
-                                 for f in SPRINT_FIELDS_ON_ITEM):
+    if not known_sprints and any(sprint_ids(row) for row in items):
         warnings.append("sprint IDs are in use but the register has no "
                         "calendar - run: wbs.py sprints import")
+
+    # And the inverse, which is the quieter failure: a calendar sits imported
+    # and nothing points at it, so `metrics` answers every sprint with
+    # "nothing references this sprint yet" and reads as a tooling fault
+    # rather than an empty field.
+    if known_sprints and not any(sprint_ids(row) for row in items):
+        warnings.append("the register has a sprint calendar (%d sprints) but "
+                        "no row references any of them - sprint metrics stay "
+                        "empty until planning stamps Sprint Planned"
+                        % len(known_sprints))
+
+    # `set` refuses a close without a note, so one of these means the row was
+    # closed by hand-edit - or before the register adopted the rule.
+    rule_from = ((data.get("meta") or {}).get("settings") or {}).get("closure_notes_from")
+    def closed_since_rule(r):
+        ended = D.resolve(r.get("Actual End"))
+        return bool(ended) and (not rule_from or ended["start"] >= rule_from)
+    unnoted = [str(r.get("ID")) for r in items
+               if r.get("Status") in HORIZON_CLEARS_ON and closed_since_rule(r)
+               and not CLOSURE_MARK.search(r.get("Comments") or "")]
+    if unnoted:
+        warnings.append("%d closed row(s)%s have no closure note: %s"
+                        % (len(unnoted), " since %s" % rule_from if rule_from else "",
+                           ", ".join(unnoted)))
 
     if "key_deliverables" in data:
         warnings.append("register still carries a key_deliverables collection "
@@ -654,9 +929,9 @@ def sprint_metrics(data, sprint):
     more is not the same as one that merely hit its number.
     """
     live = [r for r in R.rows(data, ITEMS) if r.get("Status") != "Cancelled"]
-    committed = [r for r in live if r.get("Sprint Planned") == sprint]
+    committed = [r for r in live if committed_to(r, sprint)]
     pulled = [r for r in live if r.get("Sprint Added") == sprint
-              and r.get("Sprint Planned") != sprint]
+              and not committed_to(r, sprint)]
     delivered = [r for r in live if r.get("Sprint Ended") == sprint
                  and r.get("Status") == "Done"]
     carried = [r for r in committed if r not in delivered]
@@ -882,6 +1157,177 @@ def cmd_sprints_seed(args):
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# Planning readiness: read-only questions a grooming or planning session asks
+# before it commits. Each reports what is absent; none of them decides.
+
+def cmd_deliverables(args):
+    """The open Key Deliverables, and which of them planning has to talk about.
+
+    Read-only, across every register given, because deliverables span
+    projects the way sprints do. Three questions, each a finding rather than
+    a verdict: is the baseline already lost (or lost before --by), is anything
+    scheduling the row at all, and - with --sprint - does anything under it
+    sit in that sprint or the one being groomed. A deliverable nothing touches
+    is a question for planning, not a surprise for the next close-out.
+    """
+    today = date.today().isoformat()
+    by = D.resolve(args.by) if args.by else None
+    if args.by and not by:
+        sys.exit("--by %r is not a readable date (%s)" % (args.by, D.FORMS))
+    horizon_end = by["end"] if by else today
+
+    total = flagged = 0
+    for path in args.registers:
+        data = R.load(path)
+        scope = data.get("meta", {}).get("scope", "?")
+        items = R.rows(data, ITEMS)
+        kids = {}
+        for r in items:
+            kids.setdefault(r.get("Parent"), []).append(r)
+
+        def subtree(row):
+            out, todo = [], list(kids.get(row.get("ID"), []))
+            while todo:
+                r = todo.pop()
+                out.append(r)
+                todo.extend(kids.get(r.get("ID"), []))
+            return out
+
+        open_kd = [r for r in items if str(r.get("Key Deliverable") or "").upper() == "Y"
+                   and r.get("Status") not in ("Done", "Cancelled")]
+        if not open_kd:
+            continue
+        print("%s - %d open Key Deliverable(s)" % (scope, len(open_kd)))
+        for row in open_kd:
+            total += 1
+            notes = []
+            base = D.resolve(row.get("Baseline End"))
+            if not base:
+                notes.append("no baseline")
+            elif base["end"] < today:
+                notes.append("baseline %s already passed" % base["text"])
+            elif base["end"] < horizon_end:
+                notes.append("baseline %s falls before %s" % (base["text"], by["text"]))
+            tree = [row] + subtree(row)
+            scheduled = any(r.get("Planned End") or r.get("Horizon") or sprint_ids(r)
+                            for r in tree)
+            if not scheduled:
+                notes.append("nothing schedules it - no Planned End, Horizon or sprint "
+                             "on it or below it")
+            if args.sprint:
+                touched = any(committed_to(r, args.sprint) or r.get("Horizon") == "Next"
+                              for r in tree)
+                if not touched:
+                    notes.append("nothing in it is committed to %s or staged Next"
+                                 % args.sprint)
+            if notes:
+                flagged += 1
+            print("  %s#%-4s %-44s %s" % (scope, row.get("ID"), str(row.get("Title"))[:44],
+                                         "; ".join(notes) if notes else "ok"))
+        print("")
+    if not total:
+        print("No open Key Deliverables in the register(s) given.")
+        return 0
+    print("%d of %d need a word at planning. Nothing was changed: commit, rebaseline "
+          "with a reason, or accept - each is the session's call." % (flagged, total))
+    return 0
+
+
+def cmd_refined(args):
+    """Is a candidate refined enough to commit to?
+
+    A different question from whether a row and its tasks agree, which is
+    reconciliation and belongs to the project's own tracker. This asks whether
+    the row itself is ready: planning should start from items that have
+    acceptance criteria and an action plan, and a candidate missing either will
+    be refined during planning instead of before it, which is what grooming
+    exists to prevent.
+
+    Deliberately not a verdict. A Task may reasonably have no spec and a small
+    Story no action plan; what counts as ready is the session's call. This
+    reports what is absent.
+    """
+    data = R.load(args.register)
+    rows = {str(r.get("ID")): r for r in R.rows(data, ITEMS)}
+    wanted = [i.strip() for i in args.ids.split(",") if i.strip()]
+
+    # Open RAID items bearing on a candidate. The reference lives on the RAID
+    # entry and points here - one direction is enough, unlike a task tracker, because
+    # both registers are local and a scan costs nothing. Most entries carry no
+    # reference and should: a capacity risk is not about a deliverable.
+    threats = {}
+    if args.raid:
+        raid = R.load(args.raid)
+        scope = str(data.get("meta", {}).get("scope") or "")
+        for entry in R.rows(raid, "entries"):
+            ref = str(entry.get("WBS Ref") or "").strip()
+            if "#" not in ref:
+                continue
+            where, _, rid = ref.rpartition("#")
+            if where.strip() != scope or str(entry.get("Status")) == "Closed":
+                continue
+            threats.setdefault(rid, []).append(
+                "%s R.%s %s" % (entry.get("Type"), entry.get("RAID.ID"),
+                                str(entry.get("Detail"))[:40]))
+
+    specs = {}
+    if args.execution:
+        for base, _dirs, files in os.walk(args.execution):
+            for name in files:
+                if not name.lower().endswith(".md"):
+                    continue
+                path = os.path.join(base, name)
+                try:
+                    text = open(path, encoding="utf-8", errors="ignore").read(4000)
+                except IOError:
+                    continue
+                for found in re.findall(r"\bID\s*(\d+)", text, re.I):
+                    specs.setdefault(found, set()).add(name)
+
+    print("Refinement of %d candidate(s) in %s\n"
+          % (len(wanted), data.get("meta", {}).get("scope", "?")))
+    missing_any = 0
+    for rid in wanted:
+        row = rows.get(rid)
+        if row is None:
+            print("  ID %-4s [%-13s] %-38s | %s"
+                  % (rid, "-", "-", "no such row in this register"))
+            missing_any += 1
+            continue
+        gaps = []
+        if not str(row.get("Acceptance Criteria") or "").strip():
+            gaps.append("no acceptance criteria")
+        if not row.get("Estimated Effort (h)"):
+            gaps.append("no estimate")
+        if row.get("Parent") in (None, ""):
+            gaps.append("no parent")
+        if not str(row.get("Type") or "").strip():
+            gaps.append("no Type")
+        if not str(row.get("Action Plan") or "").strip():
+            gaps.append("no action plan")
+        if args.execution and rid not in specs:
+            gaps.append("no spec naming it")
+        for threat in threats.get(rid, []):
+            gaps.append("open " + threat)
+        state = ", ".join(gaps) if gaps else "ready"
+        if gaps:
+            missing_any += 1
+        print("  ID %-4s [%-13s] %-38s | %s"
+              % (rid, str(row.get("Status"))[:13], str(row.get("Title"))[:38], state))
+
+    print("")
+    if not missing_any:
+        print("  Every candidate carries what planning needs.")
+    else:
+        print("  %d of %d have a gap. A gap is a flag, not a veto - if an item is\n"
+              "  to be prioritised it is to be prioritised, and the close-out records\n"
+              "  what it was committed without." % (missing_any, len(wanted)))
+    print("  Whether rows and their tasks agree is reconciliation, which depends on\n"
+          "  the project's tracker and is deliberately not part of this tool.")
+    return 0
+
+
 def cmd_sprints_import(args):
     data = R.load(args.register)
     src = R.load(args.source)
@@ -897,8 +1343,7 @@ def cmd_sprints_import(args):
     removed = [k for k in current if k not in incoming]
     changed = [k for k in incoming if k in current and incoming[k] != current[k]]
 
-    in_use = {row.get(f) for row in R.rows(data, ITEMS)
-              for f in SPRINT_FIELDS_ON_ITEM if row.get(f)}
+    in_use = {sid for row in R.rows(data, ITEMS) for sid in sprint_ids(row)}
     orphaned = sorted(s for s in removed if s in in_use)
 
     for k in sorted(added):
@@ -948,11 +1393,23 @@ def main():
         sub.add_argument("--owner")
         sub.add_argument("--key-deliverable", choices=["Y", "N"])
         sub.add_argument("--horizon", help="Next / Future, or '' to clear")
+        for dest, field in SPRINT_ARGS:
+            sub.add_argument("--" + dest.replace("_", "-"), dest=dest,
+                             metavar="SPRINT",
+                             help="%s - a sprint ID from the register's "
+                                  "calendar, or '' to clear" % field)
+        sub.add_argument("--sprint-carried", dest="sprint_carried", metavar="SPRINT",
+                         help="add a sprint this row is committed to again, after "
+                              "Sprint Planned (spillover or the next slice), or '' "
+                              "to clear the list")
         for dest, field in DATE_ARGS:
             sub.add_argument("--" + dest.replace("_", "-"), dest=dest,
                              metavar="DATE", help="%s (%s)" % (field, D.FORMS))
         sub.add_argument("--reason", help="why a planned date moved; required "
                                           "when one does")
+        sub.add_argument("--closure", metavar="NOTE",
+                         help="what happened and where each AC stands; "
+                              "required when a row moves to Done or Cancelled")
         sub.add_argument("--dry-run", action="store_true")
 
     s = subs.add_parser("add", help="add an item, claiming the next ID")
@@ -968,6 +1425,14 @@ def main():
     s.add_argument("--title")
     fields(s)
     s.set_defaults(func=cmd_set)
+
+    s = subs.add_parser("note", help="add a dated entry to Comments, newest on "
+                                     "top (below any closure note)")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("text")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_note)
 
     s = subs.add_parser("check", help="validate IDs, parents and vocabularies")
     s.add_argument("register")
@@ -996,6 +1461,28 @@ def main():
     s.add_argument("--json", action="store_true",
                    help="emit the same figures as a structure, for a caller to consume")
     s.set_defaults(func=cmd_metrics)
+
+    s = subs.add_parser("refined",
+                        help="whether candidates carry what planning needs")
+    s.add_argument("register")
+    s.add_argument("--ids", required=True, metavar="N,N,N",
+                   help="the candidates, as the grooming draft names them")
+    s.add_argument("--execution", metavar="DIR",
+                   help="also check whether a spec in this folder names each one")
+    s.add_argument("--raid", metavar="REGISTER",
+                   help="also name open RAID items whose WBS Ref points at each one")
+    s.set_defaults(func=cmd_refined)
+
+    s = subs.add_parser("deliverables",
+                        help="open Key Deliverables: lost baselines, unscheduled, uncovered")
+    s.add_argument("registers", nargs="+")
+    s.add_argument("--by", metavar="DATE",
+                   help="also flag baselines falling before this date - usually the "
+                        "end of the sprint being planned (%s)" % D.FORMS)
+    s.add_argument("--sprint", metavar="ID",
+                   help="flag deliverables with nothing committed to this sprint "
+                        "or staged Next")
+    s.set_defaults(func=cmd_deliverables)
 
     sp = subs.add_parser("sprints", help="seed or import the sprint calendar")
     sps = sp.add_subparsers(dest="sprints_command")

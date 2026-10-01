@@ -21,6 +21,37 @@ SHORT = {"Baseline Start": "bs", "Baseline End": "be",
          "Planned Start": "ps", "Planned End": "pe",
          "Actual Start": "as", "Actual End": "ae"}
 
+# The three ways a row relates to a sprint, and the order that decides which
+# one owns its effort when a row spans two of them.
+SPRINT_FIELDS = ("Sprint Planned", "Sprint Added", "Sprint Ended")
+SPRINT_HOME_ORDER = ("Sprint Ended", "Sprint Planned", "Sprint Added")
+
+
+def carried(row):
+    value = row.get('Sprint Carried') or []
+    return [value] if isinstance(value, str) else list(value)
+
+
+def sprint_home(row):
+    """The single sprint a row's effort counts against, or None.
+
+    Where it closed, else the latest sprint it was committed to, else where it
+    was pulled in. A row listed on several boards is still one row of work, so
+    only its home sprint adds its hours - otherwise a carried-over row inflates
+    each.
+    """
+    ended = str(row.get('Sprint Ended') or '')
+    if ended.startswith('S'):
+        return ended
+    later = [s for s in carried(row) if str(s).startswith('S')]
+    if later:
+        return later[-1]
+    for field in SPRINT_HOME_ORDER[1:]:
+        value = str(row.get(field) or '')
+        if value.startswith('S'):
+            return value
+    return None
+
 
 def build_schedule(items, log, sprints=None):
     """Resolve, derive and compare every row's dates, once, here.
@@ -170,15 +201,25 @@ def compute_stats(items):
 
         stats['total_effort'] += it.get('Estimated Effort (h)', 0) or 0
 
-        sp = it.get('Sprint Planned')
-        if sp and str(sp).startswith('S'):
-            sp = str(sp)
+        # A row belongs to a sprint it was committed to, pulled into, or closed
+        # in. Keying this on Sprint Planned alone hid every row a sprint
+        # delivered without having committed it - which is every row of a
+        # sprint whose planning session never ran.
+        touched = [str(it.get(f)) for f in SPRINT_FIELDS
+                   if str(it.get(f) or '').startswith('S')]
+        touched += [str(s) for s in carried(it) if str(s).startswith('S')]
+        # Effort and the done count land in one sprint only, or the totals
+        # double-count a row that spans two: where it closed, else where it was
+        # committed, else where it was pulled in.
+        home = sprint_home(it)
+        for sp in dict.fromkeys(touched):
             if sp not in stats['sprints']:
                 stats['sprints'][sp] = {'items': [], 'effort': 0, 'done': 0}
             stats['sprints'][sp]['items'].append(it)
-            stats['sprints'][sp]['effort'] += it.get('Estimated Effort (h)', 0) or 0
-            if s == 'Done':
-                stats['sprints'][sp]['done'] += 1
+            if sp == home:
+                stats['sprints'][sp]['effort'] += it.get('Estimated Effort (h)', 0) or 0
+                if s == 'Done':
+                    stats['sprints'][sp]['done'] += 1
 
     return stats
 
@@ -314,6 +355,41 @@ tr:hover td{background:#f0f4ff}
 .leafdot{display:inline-block;width:14px;color:#d1d5db;user-select:none}
 .kdtag{background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;margin-left:6px}
 .muted{color:#6b7280;font-size:12px;margin-top:10px}
+/* ID is the one identifier that never moves - Code is renumbered from the
+   tree, and Parent holds an ID for that reason. Shown everywhere Code is, so
+   a row stays quotable across a renumber. */
+.idcell{color:#6b7280;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* ID doubles as the way in to a row's full record. Clicking a title would be
+   the obvious target, but the tree indents titles and the roadmap truncates
+   them, while the ID sits in the same place in every view. */
+.idbtn{color:#4472C4;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;
+  background:none;border:none;padding:0;cursor:pointer;text-decoration:underline;
+  text-decoration-style:dotted;text-underline-offset:2px;font-family:inherit}
+.idbtn:hover{color:#1a1a2e;background:#eef2ff;border-radius:3px}
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;
+  align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow-y:auto}
+.sheet{background:#fff;border-radius:10px;max-width:860px;width:100%;
+  box-shadow:0 20px 50px rgba(0,0,0,.3);padding:0 0 8px}
+.sheet-head{position:sticky;top:0;background:#fff;border-bottom:2px solid #4472C4;
+  padding:16px 20px 12px;border-radius:10px 10px 0 0;display:flex;gap:12px;align-items:flex-start}
+.sheet-head h3{font-size:17px;color:#1a1a2e;flex:1;line-height:1.35}
+.sheet-head .x{background:none;border:none;font-size:22px;line-height:1;cursor:pointer;
+  color:#6b7280;padding:0 4px}
+.sheet-head .x:hover{color:#1a1a2e}
+.sheet-sub{font-size:12px;color:#6b7280;margin-top:4px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:12px 20px 4px}
+.chip{font-size:11px;background:#f1f5f9;color:#334155;border-radius:999px;padding:3px 9px}
+.chip b{color:#0f172a;font-weight:600}
+.sheet dl{padding:8px 20px 0;margin:0}
+.sheet dt{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;
+  margin-top:14px;font-weight:600}
+.sheet dd{margin:4px 0 0;font-size:13px;line-height:1.5;color:#1a1a2e;white-space:pre-wrap}
+.sheet .datebox{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:8px;padding:10px 20px 0}
+.sheet .datebox div{background:#f8fafc;border-radius:6px;padding:8px 10px;font-size:12px}
+.sheet .datebox span{display:block;color:#6b7280;font-size:10px;text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:2px}
+@media print{.backdrop{display:none}}
 .warn{color:#b91c1c}
 .timestamp{margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;text-align:right}
 '''
@@ -402,16 +478,97 @@ function treeControls(extra){
     ${lv.join('')}${extra||''}</div>`;
 }
 
+/* ---------- item detail ---------- */
+
+/* byId is already a Map built above - do not redeclare it. */
+function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function openDetail(id){
+  const d=byId.get(String(id)); if(!d)return;
+  const parent=d.pa?byId.get(String(d.pa)):null;
+  const kids=DATA.filter(k=>String(k.pa)===String(d.id));
+  const chip=(l,v)=>v?`<span class="chip"><b>${esc(l)}</b> ${esc(v)}</span>`:'';
+  const block=(l,v)=>v?`<dt>${esc(l)}</dt><dd>${esc(v)}</dd>`:'';
+  const dbox=(l,v)=>`<div><span>${esc(l)}</span>${v?esc(v):'—'}</div>`;
+  const done=kids.filter(k=>k.s==='Done').length;
+  const rollup=kids.length?`${kids.length} child item(s), ${done} done, `
+    +`${kids.reduce((a,k)=>a+(k.e||0),0)+(d.e||0)}h including this row`:'';
+
+  document.getElementById('detail').innerHTML=
+   `<div class="backdrop" onclick="if(event.target===this)closeDetail()">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="Item ${esc(d.id)}">
+        <div class="sheet-head">
+          <div style="flex:1">
+            <h3>${esc(d.t)||'<em>(no title)</em>'}</h3>
+            <div class="sheet-sub">ID ${esc(d.id)} · Code ${esc(d.c)||'—'}
+              ${parent?` · parent ID ${esc(parent.id)} — ${esc(parent.t)}`:' · no parent'}</div>
+          </div>
+          <button class="x" onclick="closeDetail()" aria-label="Close">&times;</button>
+        </div>
+        <div class="chips">
+          ${chip('Status',d.s)}${chip('Type',d.ty)}${chip('Class',d.cl)}${chip('Nature',d.na)}
+          ${chip('Delivers',d.dl)}${chip('Priority',d.p)}${chip('Effort',d.e?d.e+'h':'')}
+          ${chip('Horizon',d.hz)}${chip('Key deliverable',d.kd==='Y'?'Yes':'')}
+          ${chip('Owner',d.o)}${chip('Category',d.cat)}${chip('Phase',d.ph)}
+          ${chip('Planned',d.sp)}${chip('Carried',(d.sc||[]).join(', '))}${chip('Added',d.sa)}${chip('Ended',d.se)}
+        </div>
+        <div class="datebox">
+          ${dbox('Baseline start',d.dbs)}${dbox('Baseline end',d.dbe)}
+          ${dbox('Planned start',d.dps)}${dbox('Planned end',d.dpe)}
+          ${dbox('Actual start',d.das)}${dbox('Actual end',d.dae)}
+        </div>
+        <dl>
+          ${rollup?`<dt>Rolls up</dt><dd>${esc(rollup)}</dd>`:''}
+          ${block('Description',d.de)}
+          ${block('Acceptance criteria',d.ac)}
+          ${block('Action plan',d.ap)}
+          ${block('Key dependencies',d.dep)}
+          ${block('Planning considerations',d.pcon)}
+          ${block('Validation approach',d.va)}
+          ${block('Control approach',d.capp)}
+          ${block('Control tool',d.ctool)}
+          ${block('Comments',d.cm)}
+        </dl>
+      </div>
+    </div>`;
+  document.body.style.overflow='hidden';
+}
+function closeDetail(){
+  document.getElementById('detail').innerHTML='';
+  document.body.style.overflow='';
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
+
 /* ---------- the rest of the plumbing ---------- */
 
+/* A row belongs to a sprint it was committed to, pulled into, or closed in,
+   and appears on each of their boards labelled by which. Only its home sprint
+   counts its hours, or a row that spans two inflates both. */
 const sprintGroups={};
+const SPRINT_ROLES=[['sp','Committed'],['sa','Pulled in'],['se','Closed here']];
+function sprintHome(d){
+  const later=(d.sc||[]).filter(v=>v&&v.startsWith('S'));
+  return [d.se,later[later.length-1],d.sp,d.sa].find(v=>v&&v.startsWith('S'))||null;
+}
 function rebuildSprints(){
   Object.keys(sprintGroups).forEach(k=>delete sprintGroups[k]);
-  filtered().filter(d=>d.sp&&d.sp.startsWith('S')).forEach(d=>{
-    if(!sprintGroups[d.sp])sprintGroups[d.sp]={items:[],effort:0,done:0};
-    sprintGroups[d.sp].items.push(d);
-    sprintGroups[d.sp].effort+=d.e||0;
-    if(d.s==='Done')sprintGroups[d.sp].done++;
+  filtered().forEach(d=>{
+    const home=sprintHome(d),roles={};
+    SPRINT_ROLES.forEach(([k,label])=>{
+      const sp=d[k];
+      if(sp&&sp.startsWith('S'))(roles[sp]=roles[sp]||[]).push(label);
+    });
+    (d.sc||[]).forEach(sp=>{
+      if(sp&&sp.startsWith('S'))(roles[sp]=roles[sp]||[]).push('Carried in');
+    });
+    Object.keys(roles).forEach(sp=>{
+      if(!sprintGroups[sp])sprintGroups[sp]={items:[],effort:0,done:0};
+      sprintGroups[sp].items.push(Object.assign({},d,{_role:roles[sp].join(' · ')}));
+      if(sp===home){
+        sprintGroups[sp].effort+=d.e||0;
+        if(d.s==='Done')sprintGroups[sp].done++;
+      }
+    });
   });
 }
 function filtered(){
@@ -456,7 +613,7 @@ function renderKPIs(){
 
 function renderTree(){
   let h=treeControls();
-  h+=`<table><tr><th>Code</th><th>Item</th><th>Type</th><th>Class</th><th>Delivers</th><th>Nature</th><th>Status</th><th>Effort</th><th>Owner</th></tr>`;
+  h+=`<table><tr><th>ID</th><th>Code</th><th>Item</th><th>Type</th><th>Class</th><th>Delivers</th><th>Nature</th><th>Status</th><th>Effort</th><th>Owner</th></tr>`;
   let shown=0;
   walk((d,depth)=>{
     shown++;
@@ -464,7 +621,7 @@ function renderTree(){
     const strong=(depth===0||d.kd==='Y')?'font-weight:700':'';
     const sub=collapsed.has(String(d.id))?descendants(d.id):[];
     const rolled=sub.length?` <span style="color:#6b7280">(${sub.length} hidden, ${sub.reduce((a,k)=>a+(k.e||0),0)+(d.e||0)}h)</span>`:'';
-    h+=`<tr><td>${d.c||'-'}</td>
+    h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c||'-'}</td>
       <td style="padding-left:${8+depth*18}px;${strong}">${twisty(d)} ${d.t||'<em class="warn">(no title)</em>'}${kd}${rolled}</td>
       <td>${d.ty||'<span class="warn">—</span>'}</td><td>${d.cl==='Product'?'-':(d.cl||'-')}</td><td>${d.dl||'-'}</td><td>${d.na||'-'}</td>
       <td>${badge(d.s)}</td><td>${d.e?d.e+'h':'-'}</td><td>${d.o||'-'}</td></tr>`;
@@ -482,7 +639,7 @@ function renderTree(){
 function renderDeliverables(){
   const dels=DATA.filter(d=>d.kd==='Y').sort(byCode);
   if(!dels.length)return '<p class="muted">No rows tagged Key Deliverable = Y. Tag a Feature or Enabler to see it here.</p>';
-  let h=`<table><tr><th>Code</th><th>Deliverable</th><th>Delivers</th><th>Status</th><th>Work items</th><th>Done</th><th>Progress</th><th>Effort</th><th>Planned</th><th>Released</th><th>Owner</th></tr>`;
+  let h=`<table><tr><th>ID</th><th>Code</th><th>Deliverable</th><th>Delivers</th><th>Status</th><th>Work items</th><th>Done</th><th>Progress</th><th>Effort</th><th>Planned</th><th>Released</th><th>Owner</th></tr>`;
   dels.forEach(d=>{
     const sub=descendants(d.id);
     const done=sub.filter(k=>k.s==='Done').length;
@@ -492,7 +649,7 @@ function renderDeliverables(){
     const bar=`<div style="background:#e5e7eb;border-radius:4px;height:14px;width:90px;position:relative">
       <div style="background:${pct===100?'#22c55e':'#4472C4'};width:${pct}%;height:100%;border-radius:4px"></div>
       <span style="position:absolute;inset:0;font-size:10px;text-align:center;line-height:14px;color:#1a1a2e">${pct}%</span></div>`;
-    h+=`<tr><td>${d.c}</td><td><strong>${d.t}</strong></td><td>${d.dl||'-'}</td>
+    h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c}</td><td><strong>${d.t}</strong></td><td>${d.dl||'-'}</td>
       <td>${badge(d.s)}</td><td>${live}</td><td>${done}</td><td>${bar}</td><td>${effort}h</td>
       <td>${d.rel||'-'}</td><td>${d.relon||'-'}</td><td>${d.o||'-'}</td></tr>`;
   });
@@ -511,16 +668,16 @@ function renderBoard(){
     const g=sprintGroups[sp];
     h+=`<div class="sprint-section"><div class="sprint-header"><div class="sprint-name">${sp}</div>
       <div class="sprint-meta">${g.items.length} items · ${g.effort}h · ${g.done} done</div></div>
-      <table><tr><th>Code</th><th>Title</th><th>Status</th><th>Priority</th><th>Effort</th><th>Type</th><th>Owner</th></tr>`;
-    g.items.forEach(d=>{h+=`<tr><td>${d.c}</td><td>${d.t}</td><td>${badge(d.s)}</td><td>${d.p||'-'}</td><td>${d.e||'-'}h</td><td>${d.ty||'-'}</td><td>${d.o||'-'}</td></tr>`;});
+      <table><tr><th>ID</th><th>Code</th><th>Title</th><th>How</th><th>Status</th><th>Priority</th><th>Effort</th><th>Type</th><th>Owner</th></tr>`;
+    g.items.forEach(d=>{h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c}</td><td>${d.t}</td><td class="muted">${d._role||'-'}</td><td>${badge(d.s)}</td><td>${d.p||'-'}</td><td>${d.e||'-'}h</td><td>${d.ty||'-'}</td><td>${d.o||'-'}</td></tr>`;});
     h+=`</table></div>`;
   });
-  const unplanned=filtered().filter(d=>!d.sp||!d.sp.startsWith('S'));
+  const unplanned=filtered().filter(d=>!sprintHome(d));
   if(unplanned.length){
     h+=`<div class="sprint-section"><div class="sprint-header"><div class="sprint-name">Unplanned</div>
       <div class="sprint-meta">${unplanned.length} items</div></div>
-      <table><tr><th>Code</th><th>Title</th><th>Status</th><th>Effort</th><th>Type</th><th>Owner</th></tr>`;
-    unplanned.forEach(d=>{h+=`<tr><td>${d.c}</td><td>${d.t}</td><td>${badge(d.s)}</td><td>${d.e||'-'}h</td><td>${d.ty||'-'}</td><td>${d.o||'-'}</td></tr>`;});
+      <table><tr><th>ID</th><th>Code</th><th>Title</th><th>Status</th><th>Effort</th><th>Type</th><th>Owner</th></tr>`;
+    unplanned.forEach(d=>{h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c}</td><td>${d.t}</td><td>${badge(d.s)}</td><td>${d.e||'-'}h</td><td>${d.ty||'-'}</td><td>${d.o||'-'}</td></tr>`;});
     h+=`</table></div>`;
   }
   return h||'<p class="muted">Nothing matches the current filters.</p>';
@@ -705,7 +862,7 @@ function renderRoadmap(){
     if(!dated(d)){undated.push(d);return;}
     const s=d.d;
     h+=`<div class="rm-row${(rowi++%2)?' alt':''}"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
-      <div class="rm-label" style="padding-left:${depth*14}px" title="${(d.t||'').replace(/"/g,'')} — ${d.s}">${twisty(d)} ${d.c}. ${d.t||''}</div>
+      <div class="rm-label" style="padding-left:${depth*14}px" title="ID ${d.id} · ${(d.t||'').replace(/"/g,'')} — ${d.s}">${twisty(d)} <button class="idbtn" onclick="event.stopPropagation();openDetail(${d.id})" title="Open the full record">${d.id}</button> ${d.c}. ${d.t||''}</div>
       <div class="rm-pg">${progressCell(d)}</div>
       <div class="rm-track">${slipBand(d,s,pct,num,DAY)}
         <div class="rm-lane">${lane(s.bs,s.be,'b-base','Baseline')}</div>
@@ -722,7 +879,7 @@ function renderRoadmap(){
     undated.forEach(d=>{
       const hz=d.hz?`<span class="hz">${d.hz}</span>`:'';
       h+=`<div class="rm-row${(rowi++%2)?' alt':''}"><i class="rm-st" style="background:${SCOL[d.s]||'#e5e7eb'}" title="${d.s}"></i>
-        <div class="rm-label">${d.c}. ${d.t||''}</div><div class="rm-pg">${progressCell(d)}</div>
+        <div class="rm-label"><button class="idbtn" onclick="event.stopPropagation();openDetail(${d.id})" title="Open the full record">${d.id}</button> ${d.c}. ${d.t||''}</div><div class="rm-pg">${progressCell(d)}</div>
         <div class="rm-track rm-empty">${hz}${badge(d.s)}</div></div>`;
     });
     h+=`</div>`;
@@ -744,6 +901,7 @@ function render(){
   ${showFilters?renderFilters():''}
   <div class="panel active">${body}</div>
   <div class="timestamp">Generated __TIMESTAMP__</div>`;
+  if(!document.getElementById('detail')){const m=document.createElement('div');m.id='detail';document.body.appendChild(m);}
 }
 render();
 '''
@@ -787,6 +945,8 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None):
             'p': str(it.get('Priority', '') or ''),
             'e': it.get('Estimated Effort (h)', 0) or 0,
             'sp': str(it.get('Sprint Planned', '') or ''),
+            'sc': [str(s) for s in carried(it)],
+            'sa': str(it.get('Sprint Added', '') or ''),
             'se': str(it.get('Sprint Ended', '') or ''),
             'ty': str(it.get('Type', '') or ''),
             'cl': str(it.get('Class', '') or ''),
@@ -796,6 +956,27 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None):
             'hz': str(it.get('Horizon', '') or ''),
             'cat': str(it.get('Category', '') or ''),
             'o': str(it.get('Owner', '') or ''),
+            # Everything below is for the detail view only - never rendered in a
+            # table. The tables stayed readable by shipping a subset, which also
+            # meant the dashboard could show a row's title and nothing else about
+            # it, and the register had to be opened in an editor to read an
+            # acceptance criterion.
+            'de': str(it.get('Description', '') or ''),
+            'ac': str(it.get('Acceptance Criteria', '') or ''),
+            'ap': str(it.get('Action Plan', '') or ''),
+            'cm': str(it.get('Comments', '') or ''),
+            'dep': str(it.get('Key Dependencies', '') or ''),
+            'pcon': str(it.get('Planning Considerations', '') or ''),
+            'va': str(it.get('Validation Approach', '') or ''),
+            'capp': str(it.get('Control Approach', '') or ''),
+            'ctool': str(it.get('Control Tool', '') or ''),
+            'ph': str(it.get('Project Phase', '') or ''),
+            'dbs': str(it.get('Baseline Start', '') or ''),
+            'dbe': str(it.get('Baseline End', '') or ''),
+            'dps': str(it.get('Planned Start', '') or ''),
+            'dpe': str(it.get('Planned End', '') or ''),
+            'das': str(it.get('Actual Start', '') or ''),
+            'dae': str(it.get('Actual End', '') or ''),
         })
 
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
