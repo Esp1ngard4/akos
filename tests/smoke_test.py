@@ -642,6 +642,111 @@ def test_tsp_fields(root, scratch):
           "t['Primary Area']" in template)
 
 
+def test_sync_commands(root, scratch):
+    """The commands the WBS, RAID and TSP registers gained, each run for real.
+
+    test_tool builds empty registers, so none of these would be exercised by
+    it: a close refused without a note, a carried sprint, the planning
+    checks, the RAID reference they read, and a retired control dropping out
+    of what is due. Each is driven through its command line, the way a user
+    or an agent would.
+    """
+    import json
+    print("\nRegister commands")
+    work = os.path.join(scratch, "sync")
+    os.makedirs(work, exist_ok=True)
+    wbs = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts", "wbs.py")
+    raid_dir = os.path.join(root, "TSP", "TSP.2 RAID Register", "raid-manager", "scripts")
+    tsp_dir = os.path.join(root, "TSP", "TSP.3 TSP Register", "tsp-manager", "scripts")
+
+    # --- WBS ---------------------------------------------------------------
+    reg = os.path.join(work, "WBS Atlas.json")
+    conv = os.path.join(work, "conventions.json")
+    steps = [
+        ("create", [os.path.join(os.path.dirname(wbs), "create_wbs.py"), reg, "Atlas"]),
+        ("seed a sprint calendar", [wbs, "sprints", "seed", conv, "--scope", "Atlas",
+                                    "--year", "2026", "--anchor", "2026-07-19"]),
+        ("import it", [wbs, "sprints", "import", reg, "--from", conv]),
+        ("add a deliverable", [wbs, "add", reg, "Website", "--type", "Deliverable"]),
+        ("mark it key", [wbs, "set", reg, "--id", "1", "--key-deliverable", "Y"]),
+        ("add a story", [wbs, "add", reg, "Login page", "--type", "Story", "--parent", "1"]),
+        ("plan it into a sprint", [wbs, "set", reg, "--id", "2", "--sprint-planned", "S26.Q3.6"]),
+    ]
+    for label, cmd in steps:
+        ok, out = run(cmd, work)
+        if not check("wbs: %s" % label, ok, out):
+            return
+    ok, _ = run([wbs, "set", reg, "--id", "2", "--sprint-carried", "S26.Q3.7"], work)
+    check("wbs: a carried sprint without a reason is refused", not ok)
+    ok, out = run([wbs, "set", reg, "--id", "2", "--sprint-carried", "S26.Q3.7",
+                   "--reason", "blocked on design"], work)
+    check("wbs: a carried sprint with a reason is kept", ok, out)
+    ok, out = run([wbs, "note", reg, "--id", "2", "Scope revised."], work)
+    check("wbs: note runs", ok, out)
+    ok, _ = run([wbs, "set", reg, "--id", "2", "--status", "Done"], work)
+    check("wbs: a close without a closure note is refused", not ok)
+    ok, out = run([wbs, "set", reg, "--id", "2", "--status", "Done", "--closure",
+                   "What happened: shipped. AC: (1) met. Follow-up: none."], work)
+    check("wbs: a close with a closure note runs", ok, out)
+    row = [r for r in json.load(io.open(reg, encoding="utf-8"))["items"] if r["ID"] == 2][0]
+    comments = row.get("Comments") or ""
+    check("wbs: the closure note is pinned above the note",
+          comments.startswith("Closure ") and "Scope revised." in comments, comments[:120])
+    check("wbs: the carried sprint is recorded",
+          row.get("Sprint Carried") == ["S26.Q3.7"], str(row.get("Sprint Carried")))
+    ok, out = run([wbs, "metrics", reg, "--sprint", "S26.Q3.7", "--json"], work)
+    try:
+        m = json.JSONDecoder().raw_decode(out[out.index("{"):])[0] if ok else {}
+    except ValueError:
+        m = {}
+    check("wbs: a carried row counts as committed to its new sprint",
+          (m.get("committed") or {}).get("n") == 1, out[:200])
+    ok, out = run([wbs, "deliverables", reg, "--sprint", "S26.Q3.7"], work)
+    check("wbs: deliverables names the open Key Deliverable", ok and "Website" in out, out[:200])
+
+    # --- RAID, and the reference refined reads -------------------------------
+    raid = os.path.join(work, "RAID Atlas.json")
+    ok, out = run([os.path.join(raid_dir, "create_raid.py"), raid, "Atlas"], work)
+    if not check("raid: create runs", ok, out):
+        return
+    data = json.load(io.open(raid, encoding="utf-8"))
+    data["entries"] = [{"RAID.ID": 1, "Type": "Risk", "Status": "Open",
+                        "Detail": "Design late", "WBS Ref": "Atlas 2"}]
+    io.open(raid, "w", encoding="utf-8").write(json.dumps(data))
+    ok, out = run([os.path.join(raid_dir, "raid.py"), "check", raid], work)
+    check("raid: a WBS Ref that is not project#id is reported", "WBS Ref" in out, out[:200])
+    data["entries"][0]["WBS Ref"] = "Atlas#2"
+    io.open(raid, "w", encoding="utf-8").write(json.dumps(data))
+    ok, out = run([wbs, "refined", reg, "--ids", "1,2", "--raid", raid], work)
+    check("wbs: refined shows the open RAID entry against its row",
+          ok and "Design late" in out, out[:300])
+
+    # --- TSP: a retired control is not due ------------------------------------
+    treg = os.path.join(work, "TSP Register.json")
+    for label, cmd in [
+            ("create", [os.path.join(tsp_dir, "create_tsp.py"), treg]),
+            ("register two tools", [os.path.join(tsp_dir, "tsp.py"), "register", treg,
+                                    "Old Tool", "--type", "Tool"]),
+            ("", [os.path.join(tsp_dir, "tsp.py"), "register", treg, "Live Tool", "--type", "Tool"]),
+            ("retire one", [os.path.join(tsp_dir, "tsp.py"), "retire", treg, "--id", "1"])]:
+        ok, out = run(cmd, work)
+        if not ok or label:
+            if not check("tsp: %s" % (label or "register"), ok, out):
+                return
+    data = json.load(io.open(treg, encoding="utf-8"))
+    data["control_activities"] = [
+        {"ID": 1, "Activity Name": "Check the old tool", "Frequency": "Monthly",
+         "Importance": "Important", "Linked Tool": "Old Tool", "Next Due": "2020-01-01"},
+        {"ID": 2, "Activity Name": "Check the live tool", "Frequency": "Monthly",
+         "Importance": "Important", "Linked Tool": "Live Tool", "Next Due": "2020-01-01"}]
+    io.open(treg, "w", encoding="utf-8").write(json.dumps(data))
+    ok, out = run([os.path.join(tsp_dir, "tsp.py"), "due", treg], work)
+    check("tsp: due lists the live tool's control",
+          ok and "Check the live tool" in out, out[:300])
+    check("tsp: due leaves out the retired tool's control",
+          ok and "Check the old tool" not in out, out[:300])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -670,6 +775,7 @@ def main():
         test_reconciliation(root, scratch)
         test_catalogue(root, scratch)
         test_tsp_fields(root, scratch)
+        test_sync_commands(root, scratch)
         test_content_system(root, scratch)
         test_notebook_manager(root, scratch)
         test_shared_modules(root, scratch)
