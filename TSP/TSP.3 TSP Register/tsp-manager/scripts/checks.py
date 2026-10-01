@@ -24,6 +24,21 @@ def _date(value):
 def is_obsolete(status):
     return S.clean(status).lower() in OBSOLETE_HINTS
 
+def control_retired(data, row):
+    """A control nobody should be asked to perform.
+
+    Retired in its own right (Importance obsolete), or through its tool: a
+    control linked to a retired tool has nothing left to control. Either way it
+    stays in the register as history, and drops out of everything that asks
+    what is due - otherwise a retired control reads as overdue forever.
+    """
+    if is_obsolete(row.get("Importance")):
+        return True
+    linked = S.clean(row.get("Linked Tool"))
+    return bool(linked) and any(is_obsolete(t.get("Status"))
+                                for t in R.rows(data, S.TOOLS)
+                                if S.tool_name(t) == linked)
+
 
 def run(data, tools_root=None, skill_roots=(), today=None):
     """Check a TSP register. Returns (errors, warnings, stats)."""
@@ -116,8 +131,12 @@ def run(data, tools_root=None, skill_roots=(), today=None):
                              S.tool_name(row),
                              "never reviewed" if age is None else "%d days" % age))
 
+    retired = [row for row in controls if control_retired(data, row)]
+    stats["controls_retired"] = len(retired)
     due = []
     for row in controls:
+        if row in retired:
+            continue
         nxt = _date(row.get("Next Due"))
         if nxt and nxt < today:
             due.append((row, (today - nxt).days))

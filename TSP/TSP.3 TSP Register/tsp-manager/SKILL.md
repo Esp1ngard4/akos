@@ -78,9 +78,19 @@ The values above are the defaults `create_tsp.py --vocabulary en` produces. The 
 
 Set Status to `Obsolete` and append a Change Log row naming what replaced it. **Do not delete the row and do not move the tool's folder unless the user asks** — a tool's number and history stay in the register permanently, and old file formats sometimes still hold data worth recovering.
 
+**Retire a control** by setting its `Importance` to the obsolete term, with a line in its `Description` saying why. A control is also retired when its linked tool is. Either way the row stays as history, and it drops out of everything that asks what is due: `tsp.py due`, the audit and the dashboard all apply the same rule (`checks.control_retired`).
+
 ### Record a review
 
 Set `Last Reviewed` on the Tools Register row. For a control activity: append to Activity Log, set `Last Done`, and set `Next Due = Last Done + Frequency days` using the Lookups `Days` column.
+
+### What is due
+
+```
+python scripts/tsp.py due <register> [--on YYYY-MM-DD]
+```
+
+Read-only. Every active control activity whose `Next Due` has passed, most overdue first, with how long it has been and when it was last done. It deliberately does not rank or recommend: a control years overdue may be dead and worth retiring, or the one that matters most, and only the person choosing can tell. Use it when deciding which controls to perform in a period.
 
 ### Create a new register
 

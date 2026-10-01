@@ -124,7 +124,7 @@ const inProgress = TOOLS.filter(t => statusIs(t, ['progress', 'execu'])).length;
 const isObsolete = t => statusIs(t, ['obsolet', 'absolet']);
 const obsolete = TOOLS.filter(isObsolete).length;
 const critical = TOOLS.filter(t => t.Relevancy === 'Critical').length;
-const overdueActs = ACTIVITIES.filter(a => a['Next Due'] && a['Next Due'] < TODAY).length;
+const overdueActs = ACTIVITIES.filter(a => !a.Retired && a['Next Due'] && a['Next Due'] < TODAY).length;
 const automated = TOOLS.filter(t => t.Skill).length;
 
 document.getElementById('kpis').innerHTML = [
@@ -173,7 +173,7 @@ new Chart(document.getElementById('relevancyChart'), {
 
 // Overdue grid
 const overdueData = ACTIVITIES
-  .filter(a => a['Next Due'] && a['Next Due'] < TODAY)
+  .filter(a => !a.Retired && a['Next Due'] && a['Next Due'] < TODAY)
   .sort((a,b) => a['Next Due'].localeCompare(b['Next Due']))
   .map(a => {
     const days = Math.floor((new Date(TODAY) - new Date(a['Next Due'])) / 86400000);

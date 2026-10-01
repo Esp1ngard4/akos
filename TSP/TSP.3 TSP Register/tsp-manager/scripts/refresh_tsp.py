@@ -19,6 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import registry as R                                            # noqa: E402
+import checks                                                   # noqa: E402
 
 COLLECTIONS = {
     "TOOLS": "tools",
@@ -64,6 +65,11 @@ def main():
                 if name not in fields:
                     fields.append(name)
         data[key] = [dict((f, cell(row.get(f))) for f in fields) for row in rows]
+        if collection == "control_activities":
+            # The dashboard cannot resolve a control's tool itself, so the one
+            # rule for "retired" is applied here and handed over as a field.
+            for rec, row in zip(data[key], rows):
+                rec["Retired"] = "Y" if checks.control_retired(register, row) else ""
 
     if not os.path.isfile(TEMPLATE):
         raise SystemExit(

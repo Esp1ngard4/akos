@@ -187,6 +187,57 @@ def cmd_done(args):
                      S.clean(row.get("Frequency")), days, nxt))
 
 
+def cmd_due(args):
+    """What is due, and how long it has been. Facts, not a verdict.
+
+    Choosing which controls to perform this month needs the list in front of
+    you. It deliberately does not rank, filter
+    or recommend: a control nine years overdue may be dead and worth retiring,
+    or may be the one that matters most, and nothing here can tell which. The
+    person choosing can.
+    """
+    data = R.load(args.register)
+    rows = R.rows(data, S.CONTROLS)
+    as_of = dt.date.fromisoformat(today_iso(args.on))
+
+    rows = [row for row in rows if not checks.control_retired(data, row)]
+    due = []
+    for row in rows:
+        stamp = S.clean(row.get("Next Due"))
+        try:
+            when = dt.date.fromisoformat(stamp)
+        except ValueError:
+            due.append((None, row))
+            continue
+        if when <= as_of:
+            due.append(((as_of - when).days, row))
+    due.sort(key=lambda pair: (pair[0] is None, -(pair[0] or 0)))
+
+    if not due:
+        print("No control activity is due as of %s." % as_of)
+        return 0
+
+    years = sum(1 for days, _ in due if days and days > 365)
+    print("%d of %d active control activities are due as of %s."
+          % (len(due), len(rows), as_of))
+    if years:
+        print("%d of them by more than a year.\n" % years)
+    else:
+        print("")
+
+    for days, row in due:
+        overdue = ("%5.1f yr" % (days / 365.0)) if days and days > 365 else (
+            "%5d d" % days if days else "   due")
+        print("  %s  ID %-4s [%-11s] last %-10s  %s"
+              % (overdue, row.get("ID"), S.clean(row.get("Frequency")) or "?",
+                 S.clean(row.get("Last Done")) or "never",
+                 S.clean(row.get("Activity Name"))[:52]))
+    print("\n  Which of these to perform is a decision for the session, not for"
+          "\n  this command.")
+    return 0
+
+
+
 def cmd_change(args):
     data = R.load(args.register)
     log = R.rows(data, S.CHANGES)
@@ -240,6 +291,11 @@ def main():
     s.add_argument("--control", required=True)
     s.add_argument("--notes")
     s.set_defaults(func=cmd_done)
+
+    s = subs.add_parser("due", help="which control activities are due, and how long they have been")
+    s.add_argument("register")
+    s.add_argument("--on", metavar="YYYY-MM-DD", help="as of this date (default: today)")
+    s.set_defaults(func=cmd_due)
 
     s = subs.add_parser("change", help="append a change log entry")
     shared(s)

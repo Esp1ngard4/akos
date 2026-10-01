@@ -127,8 +127,25 @@ structural edit anyway.
 3. Check SKILL.md for dated or historical language.
 4. Check that the "what the skill covers" pointer has not itself drifted into
    duplicating the real SKILL.md.
-5. Report findings. Do not silently fix beyond what was asked — a full audit
+5. **Check that every skill name the SKILL.md mentions still resolves to an
+   installed skill.** A skill renamed or never built leaves pointers behind,
+   and they send a reader looking for something with no author.
+6. Report findings. Do not silently fix beyond what was asked — a full audit
    turns up more than the request.
+
+#### Checking cross-references
+
+Grep for the names; do **not** rely on backticks. A skill can carry dead references for months — the names of skills that were renamed or never built — and a scan that only looks inside backticks misses every one that was not formatted as code.
+
+```bash
+grep -rnoE "[a-z][a-z0-9]*(-[a-z0-9]+){1,4}" <skill>/SKILL.md | cut -d: -f3 | sort -u
+```
+
+Read the list against the installed skills. It is short enough to eye, and eyeing it is the point.
+
+**Do not automate this into the audit.** Matching candidates against the installed skill names flags mostly noise: filenames (`strategy-file-format`), placeholders (`my-skill`, `path-to-skill`), English compounds (`bi-weekly-sprint`, `per-post`) and legitimate historical references (an old skill name recording the rename that replaced it). In the estate this came from it flagged 56 candidates across 17 skills and found nothing real. A check that is wrong 56 times out of 56 trains its reader to skip the whole class, which costs more than the check saves.
+
+Three outcomes per dead reference, and all three are fine: **correct it** where the skill was renamed, **drop it** where the capability moved elsewhere, or **keep it and say plainly that the skill does not exist** where the gap is real and worth recording.
 
 ## Verification discipline
 

@@ -30,7 +30,8 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("register")
     p.add_argument("--tools-root", help="folder holding the TSP.<n> directories")
-    p.add_argument("--repo-root", default=".", help="for discovering .claude/skills")
+    p.add_argument("--repo-root", help="for discovering .claude/skills (default: the folder above "
+                   "the tools root, so the audit gives the same answer wherever it is run from)")
     p.add_argument("--skills", action="append", default=[],
                    help="explicit skill root (repeatable)")
     p.add_argument("--summary", action="store_true",
@@ -39,7 +40,16 @@ def main():
 
     data = R.load(args.register)
     root = args.tools_root or S.infer_root(args.register)
-    roots = args.skills or S.find_skill_roots(args.repo_root, root)
+    # Skills are found relative to the repository, not to wherever the audit was
+    # started: run from inside a tool folder, a "." default found no skills and
+    # reported every one as missing.
+    if args.repo_root:
+        repo_root = args.repo_root
+    elif root:
+        repo_root = os.path.dirname(os.path.abspath(root))
+    else:
+        repo_root = "."
+    roots = args.skills or S.find_skill_roots(repo_root, root)
 
     print("TSP Register audit - %s" % os.path.basename(args.register))
     errors, warnings, stats = checks.run(data, tools_root=root,
