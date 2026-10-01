@@ -18,7 +18,7 @@ CHANGES = "change_log"
 
 FIELDS = {
     TOOLS: ["ID", "Name", "Description", "Type", "Status",
-            "Relevancy", "Primary AF", "Other AFs", "Doc Aux", "Links",
+            "Relevancy", "Primary Area", "Other Areas", "Doc Aux", "Links",
             "Notes", "Last Reviewed", "Skill"],
     CONTROLS: ["ID", "Activity Name", "Frequency", "Duration (min)",
                "Importance", "Commitment", "Linked Tool", "Description",
@@ -49,6 +49,10 @@ REVIEW_DAYS = 365          # a tool is due an annual review
 # "Name". Accepting both means adopting this tool does not require renaming a
 # column across a register you already keep.
 NAME_FIELDS = ("Name", "Tool/System Name")
+
+# The same for the area column: "Primary Area" is what this tool writes, and an
+# established register may call it something else. The dashboard reads either.
+AREA_FIELDS = ("Primary Area", "Primary AF")
 
 
 def tool_name(row):

@@ -78,7 +78,7 @@ def cmd_register(args):
            "Status": args.status, "Doc Aux": "No",
            "Last Reviewed": today_iso(args.on)}
     for key, value in (("Description", args.description), ("Type", args.type),
-                       ("Relevancy", args.relevancy), ("Primary AF", args.area),
+                       ("Relevancy", args.relevancy), ("Primary Area", args.area),
                        ("Skill", args.skill), ("Links", args.links)):
         if value:
             row[key] = value
@@ -215,7 +215,7 @@ def main():
     s.add_argument("--type")
     s.add_argument("--status", default="Implemented")
     s.add_argument("--relevancy")
-    s.add_argument("--area", help="Primary AF")
+    s.add_argument("--area", help="Primary Area")
     s.add_argument("--skill")
     s.add_argument("--links")
     s.add_argument("--reason", help="change log entry")

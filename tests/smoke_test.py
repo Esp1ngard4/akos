@@ -608,6 +608,40 @@ def test_notebook_manager(root, scratch):
           ", ".join(absent) or "SKILL.md names no assets/ path")
 
 
+def test_tsp_fields(root, scratch):
+    """A row written by tsp.py must be a row the dashboard can show.
+
+    An empty register cannot catch this, which is why test_tool did not: the
+    script wrote one column name and the dashboard read another, and every
+    tool rendered with a blank name. So register a tool, then check what was
+    written against what the template reads.
+    """
+    print("\nTSP.3 field names")
+    skill = os.path.join(root, "TSP", "TSP.3 TSP Register", "tsp-manager")
+    register = os.path.join(scratch, "fields", "TSP Register.json")
+    os.makedirs(os.path.dirname(register), exist_ok=True)
+    ok, out = run([os.path.join(skill, "scripts", "create_tsp.py"), register], scratch)
+    if not check("create runs", ok, out):
+        return
+    ok, out = run([os.path.join(skill, "scripts", "tsp.py"), "register", register,
+                   "Probe Tool", "--type", "Tool", "--area", "Probe Area"], scratch)
+    if not check("register a tool", ok, out):
+        return
+    import json
+    row = json.load(io.open(register, encoding="utf-8"))["tools"][0]
+    check("the area is written as Primary Area",
+          row.get("Primary Area") == "Probe Area" and "Primary AF" not in row,
+          str(row))
+    template = io.open(os.path.join(skill, "templates", "dashboard.html"),
+                       encoding="utf-8").read()
+    reads = [l for l in template.splitlines() if "Tool/System Name" in l]
+    check("the dashboard reads the Name column it is given",
+          reads and all("t.Name" in l for l in reads),
+          "; ".join(l.strip()[:80] for l in reads))
+    check("the dashboard reads the Primary Area column it is given",
+          "t['Primary Area']" in template)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -635,6 +669,7 @@ def main():
         test_installer(root, scratch)
         test_reconciliation(root, scratch)
         test_catalogue(root, scratch)
+        test_tsp_fields(root, scratch)
         test_content_system(root, scratch)
         test_notebook_manager(root, scratch)
         test_shared_modules(root, scratch)

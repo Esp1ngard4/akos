@@ -210,9 +210,9 @@ function getFilteredTools() {
     if (st && t.Status !== st) return false;
     if (ty && t.Type !== ty) return false;
     if (re && t.Relevancy !== re) return false;
-    if (q && !(t['Tool/System Name']||'').toLowerCase().includes(q) && !(t.Description||'').toLowerCase().includes(q) && !(t.Notes||'').toLowerCase().includes(q) && !(t.Skill||'').toLowerCase().includes(q)) return false;
+    if (q && !(t.Name||t['Tool/System Name']||'').toLowerCase().includes(q) && !(t.Description||'').toLowerCase().includes(q) && !(t.Notes||'').toLowerCase().includes(q) && !(t.Skill||'').toLowerCase().includes(q)) return false;
     return true;
-  }).map(t => [t.ID, t['Tool/System Name'], t.Type||'', t.Status||'', t.Relevancy||'', t['Primary Area']||'', t['Doc Aux'], t.Skill||'', t['Last Reviewed']||'']);
+  }).map(t => [t.ID, t.Name||t['Tool/System Name']||'', t.Type||'', t.Status||'', t.Relevancy||'', t['Primary Area']||t['Primary AF']||'', t['Doc Aux'], t.Skill||'', t['Last Reviewed']||'']);
 }
 
 let toolsGrid = new gridjs.Grid({
