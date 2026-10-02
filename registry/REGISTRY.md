@@ -27,6 +27,7 @@ python install.py add <skill> --into <your-project>
 | TSP.5 | **Artifact Register** | Implemented | `artifact-register` | [TD.5](../TSP/TSP.5%20Artifact%20Register/TD.5%20-%20Artifact%20Register.md) |
 | TSP.6 | **Content System** | In Progress | `content-idea-capture`, `content-plan-author`, `content-post-writer`, `content-review`, `content-strategy-author` | [TD.6](../TSP/TSP.6%20Content%20System/TD.6%20-%20Content%20System.md) |
 | TSP.7 | **Notebook Manager** | In Progress | `notebook-capture` | [TD.7](../TSP/TSP.7%20Notebook%20Manager/TD.7%20-%20Notebook%20Manager.md) |
+| TSP.8 | **Sprint Ceremonies** | In Progress | `sprint-facilitator`, `sprint-planning-precheck` | [TD.8](../TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) |
 
 ## What each is for
 
@@ -44,6 +45,8 @@ python install.py add <skill> --into <your-project>
 
 **TSP.7 Notebook Manager** — Plain-Markdown notebooks the agent keeps: a diary, notebooks scoped to a project, an area of focus or an area of interest, and meeting notes, with an index per notebook. Raw entries worth more than a note can be crystallized into static HTML posts that link back to the entry they came from. No app, no search index, no database - files only.
 
+**TSP.8 Sprint Ceremonies** — The four sprint ceremonies - backlog grooming, the sprint close-out, the retrospective and sprint planning - run on the WBS, RAID and TSP registers alone, with one Markdown record per sprint written by sprint_record.py. Sprint state lives on WBS rows: staged by Horizon, committed by Sprint Planned, closed with a closure note. A task tracker and a calendar are described as adaptations, not configured.
+
 ## Status meanings
 
 | Status | Meaning |
@@ -55,4 +58,4 @@ python install.py add <skill> --into <your-project>
 
 ---
 
-Generated from `registry/TSP Register.json` on 2026-10-01.
+Generated from `registry/TSP Register.json` on 2026-10-02.

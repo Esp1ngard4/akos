@@ -36,6 +36,12 @@
       "Description": "Registered as TSP.7. Second tool with no code. Ships an empty notebooks tree and a post template as assets/, so a fresh install builds what it needs on first use.",
       "ID": 6,
       "Tool": "Notebook Manager"
+    },
+    {
+      "Changed On": "2026-10-02",
+      "Description": "Registered as TSP.8. The first ceremony tool: two skills and a record script, using TSP.1-3 together. Ships register-only; TD.8 says where a tracker and a calendar plug in.",
+      "ID": 7,
+      "Tool": "Sprint Ceremonies"
     }
   ],
   "control_activities": [],
@@ -86,8 +92,8 @@
         ]
       }
     },
-    "updated": "2026-10-01T16:09:13",
-    "values_hash": "sha256:f8d4e30c411888863cde9f6ea226c66eed43341db844cea924bf99315fd0dc4b",
+    "updated": "2026-10-02T09:37:26",
+    "values_hash": "sha256:d9744c72e9f695afb63c2b4746e5a08097a21e990ac751230b8534971ba25751",
     "version": 1
   },
   "tools": [
@@ -187,6 +193,20 @@
       "Skill": "notebook-capture",
       "Status": "In Progress",
       "Type": "Tool"
+    },
+    {
+      "Description": "The four sprint ceremonies - backlog grooming, the sprint close-out, the retrospective and sprint planning - run on the WBS, RAID and TSP registers alone, with one Markdown record per sprint written by sprint_record.py. Sprint state lives on WBS rows: staged by Horizon, committed by Sprint Planned, closed with a closure note. A task tracker and a calendar are described as adaptations, not configured.",
+      "Doc Aux": "Yes",
+      "ID": 8,
+      "Last Reviewed": "2026-10-02",
+      "Links": "TSP/TSP.8 Sprint Ceremonies/TD.8 - Sprint Ceremonies.md",
+      "Name": "Sprint Ceremonies",
+      "Notes": "Usable: the ceremonies run fortnightly on real work in their original setting. Register-only mode, as shipped, has been exercised on a scratch workspace but not yet on real work - see TD.8, Status. Needs wbs-manager; raid-manager and tsp-manager are optional.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "sprint-facilitator, sprint-planning-precheck",
+      "Status": "In Progress",
+      "Type": "Work instruction"
     }
   ]
 }

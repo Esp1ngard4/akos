@@ -608,6 +608,137 @@ def test_notebook_manager(root, scratch):
           ", ".join(absent) or "SKILL.md names no assets/ path")
 
 
+SPRINT_TOOL = "TSP.8 Sprint Ceremonies"
+SPRINT_SKILLS = ["sprint-facilitator", "sprint-planning-precheck"]
+
+
+def test_sprint_ceremonies(root, scratch):
+    """TSP.8: the record script driven through a sprint, and the skills' claims.
+
+    The script is the one part that writes, so every command and every refusal
+    is run for real against a seeded calendar. The skills are prose that names
+    commands in other tools; a renamed subcommand there would leave a ceremony
+    step that fails only when someone runs it, so each one named is checked to
+    exist.
+    """
+    import json
+    print("\nTSP.8 Sprint Ceremonies")
+    tool = os.path.join(root, "TSP", SPRINT_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    texts = {}
+    for name in SPRINT_SKILLS:
+        path = os.path.join(tool, name, "SKILL.md")
+        if not check("%s has SKILL.md" % name, os.path.isfile(path), path):
+            return
+        texts[name] = io.open(path, encoding="utf-8").read()
+        check("%s declares name and description" % name,
+              "name: %s" % name in texts[name][:600]
+              and "description:" in texts[name][:600], texts[name][:120])
+    check("TD.8 present", any(n.startswith("TD.8") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool),
+          "; ".join(broken_links(tool)[:5]))
+
+    # Every wbs.py / tsp.py subcommand the skills name must exist.
+    scripts = {
+        "wbs.py": os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager",
+                               "scripts", "wbs.py"),
+        "tsp.py": os.path.join(root, "TSP", "TSP.3 TSP Register", "tsp-manager",
+                               "scripts", "tsp.py"),
+    }
+    prose = "\n".join(texts.values())
+    unknown = []
+    for script, path in scripts.items():
+        src = io.open(path, encoding="utf-8").read()
+        offered = set(re.findall(r'add_parser\(\s*"([a-z-]+)"', src))
+        for cmd in set(re.findall(r"%s\s+([a-z][a-z-]+)" % re.escape(script), prose)):
+            if cmd not in offered:
+                unknown.append("%s %s" % (script, cmd))
+    check("every wbs.py / tsp.py command the skills name exists", not unknown,
+          ", ".join(sorted(unknown)))
+
+    # --- the record, through one sprint and into the next ---------------------
+    sr = os.path.join(tool, "sprint-facilitator", "scripts", "sprint_record.py")
+    wbs = scripts["wbs.py"]
+    work = os.path.join(scratch, "sprints")
+    rec = os.path.join(work, "records")
+    conv = os.path.join(work, "conventions.json")
+    os.makedirs(work, exist_ok=True)
+    ok, out = run([wbs, "sprints", "seed", conv, "--scope", "Atlas", "--year", "2026",
+                   "--anchor", "2026-07-19"], work)
+    if not check("seed a sprint calendar", ok, out):
+        return
+
+    ok, out = run([sr, "status", rec], work)
+    check("status: an empty folder says nothing was ever planned",
+          ok and "No sprint has ever been recorded" in out, out[:200])
+    ok, out = run([sr, "plan", rec, "S26.Q3.6", "--calendar", conv], work)
+    if not check("plan creates the record", ok, out):
+        return
+    record = os.path.join(rec, "S26.Q3.6.md")
+    first = io.open(record, encoding="utf-8").readline().strip()
+    check("plan dates the heading from the calendar",
+          first == "# Sprint S26.Q3.6 (13-Sep / 26-Sep)", first)
+    ok, _ = run([sr, "plan", rec, "S26.Q3.6"], work)
+    check("planning a sprint twice is refused", not ok)
+
+    ok, out = run([sr, "status", rec, "--calendar", conv, "--as-of", "2026-09-10"], work)
+    check("status: quiet mid-sprint", ok and "No ceremony is due" in out, out[:200])
+    ok, out = run([sr, "status", rec, "--calendar", conv, "--as-of", "2026-09-25"], work)
+    check("status: the close-out is due near the end",
+          ok and "close-out is due" in out, out[:200])
+    ok, out = run([sr, "status", rec, "--calendar", conv, "--as-of", "2026-09-29"], work)
+    check("status: a missed close-out is overdue",
+          ok and "no close-out - 3 days overdue" in out, out[:200])
+
+    ok, out = run([sr, "review", rec, "S26.Q3.6"], work)
+    check("review appends", ok, out)
+    ok, _ = run([sr, "review", rec, "S26.Q3.6"], work)
+    check("a second review is refused", not ok)
+    ok, out = run([sr, "retro", rec, "S26.Q3.6"], work)
+    check("retro appends", ok, out)
+    ok, _ = run([sr, "retro", rec, "S26.Q3.6"], work)
+    check("a second retro is refused", not ok)
+    ok, _ = run([sr, "review", rec, "S26.Q3.9"], work)
+    check("a ceremony on a sprint never planned is refused", not ok)
+
+    text = io.open(record, encoding="utf-8").read()
+    order = [text.find(h) for h in ("## Planning", "## Review", "## Retrospective",
+                                    "## Noticed", "## Next sprint - draft")]
+    check("the arc reads Planning, Review, Retro, then the living sections",
+          -1 not in order and order == sorted(order), str(order))
+    ok, out = run([sr, "status", rec, "--calendar", conv, "--as-of", "2026-09-29"], work)
+    check("status: a closed sprint with nothing after it needs planning",
+          ok and "No sprint has been planned since" in out, out[:200])
+
+    io.open(record, "w", encoding="utf-8").write(
+        text.replace("### Draft goals", "### Draft goals\n\n- Ship the login page", 1))
+    ok, out = run([sr, "plan", rec, "S26.Q3.7", "--calendar", conv], work)
+    nxt = io.open(os.path.join(rec, "S26.Q3.7.md"), encoding="utf-8").read() if ok else ""
+    check("plan carries the last sprint's draft goals in",
+          "| draft: Ship the login page |" in nxt, out[:200])
+
+    bad = os.path.join(work, "empty.json")
+    io.open(bad, "w", encoding="utf-8").write(u"{}")
+    ok, _ = run([sr, "status", rec, "--calendar", bad], work)
+    check("a calendar with no sprints is refused", not ok)
+
+    # --- installed the way the TD says, together with what they need -----------
+    project = os.path.join(scratch, "sprint-project")
+    os.makedirs(project, exist_ok=True)
+    for name in SPRINT_SKILLS + ["wbs-manager"]:
+        ok, out = run([os.path.join(root, "install.py"), "add", name,
+                       "--into", project, "--catalogue", root], root)
+        if not check("install.py add %s" % name, ok, out):
+            return
+    installed = os.path.join(project, ".github", "skills", "sprint-facilitator",
+                             "scripts", "sprint_record.py")
+    check("the record script arrives with the skill", os.path.isfile(installed), installed)
+    lock = json.load(io.open(os.path.join(project, "tools.lock.json"), encoding="utf-8"))
+    check("both skills recorded in the lock",
+          all(n in lock.get("tools", {}) for n in SPRINT_SKILLS), str(sorted(lock.get("tools", {}))))
+
+
 def test_tsp_fields(root, scratch):
     """A row written by tsp.py must be a row the dashboard can show.
 
@@ -778,6 +909,7 @@ def main():
         test_sync_commands(root, scratch)
         test_content_system(root, scratch)
         test_notebook_manager(root, scratch)
+        test_sprint_ceremonies(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
 
@@ -790,7 +922,8 @@ def main():
         print("All checks passed (%d tools, plus the installer, the "
               "reconciliation case, the catalogue, the shared modules, the "
               "docs-versus-code pass, "
-              "the content system and the notebook manager)." % len(TOOLS))
+              "the content system, the notebook manager and the sprint "
+              "ceremonies)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

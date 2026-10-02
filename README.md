@@ -9,7 +9,7 @@ a rule exists, whether a tool is still used, and where something came from if yo
 have to reinstall it. Those questions don't matter on day one. They matter at tool
 number thirty, when you no longer remember building the first ten.
 
-AKOS is the set of conventions that answer them, plus five working tools that
+AKOS is the set of conventions that answer them, plus working tools that
 demonstrate the conventions on something real.
 
 ## The idea in one paragraph
@@ -62,10 +62,19 @@ has described.
 | TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) — the inventory of tools itself | `tsp-manager`, `td-author` |
 | TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) — vendoring, drift detection, three-way updates | *(none — see below)* |
 | TSP.5 | [Artifact Register](TSP/TSP.5%20Artifact%20Register/) — what you have, where it lives, who governs it | `artifact-register` |
+| TSP.6 | [Content System](TSP/TSP.6%20Content%20System/) — ideas, strategy, plans and posts, written to contract | five `content-*` skills |
+| TSP.7 | [Notebook Manager](TSP/TSP.7%20Notebook%20Manager/) — plain-Markdown notebooks and a diary | `notebook-capture` |
+| TSP.8 | [Sprint Ceremonies](TSP/TSP.8%20Sprint%20Ceremonies/) — grooming, close-out, retrospective, planning | `sprint-facilitator`, `sprint-planning-precheck` |
 
 TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with
 no worked example is just an opinion.
+
+TSP.8 is what uses them together. The sprint lives on the WBS rows, the retro routes to
+RAID, planning commits control activities from the TSP register, and nothing else is
+needed. Most teams already run a task tracker and a calendar, each in its own way, so
+[TD.8](TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) says where
+they plug in and what to watch for, rather than pretending one setting fits all.
 
 TSP.3 has **two** skills, which is the same claim from the other direction: one owns
 the register row, the other owns the tool definition documents, and neither does the
