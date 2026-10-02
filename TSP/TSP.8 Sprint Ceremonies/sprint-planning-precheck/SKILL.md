@@ -64,7 +64,7 @@ For each committed row **still open**, offer a lean and ask the user to classify
   python <skills>/wbs-manager/scripts/wbs.py refined "<register>" --ids 21,83,99 [--execution "<folder>"] [--raid "<RAID register>"]
   ```
 
-  A missing acceptance criterion or estimate is a gap, and so is a description too thin to state a problem. `refined` does not check `Description`, so read it on each candidate. A missing action plan or spec is solution space, which is sprint work, so it is **not** a gap. A missing parent or Type is register hygiene: worth a line, not a readiness finding. An open RAID item against a candidate is context, not a blocker; surface it so the commitment is made knowing about it.
+  A missing or thin description, a missing acceptance criterion or a missing estimate is a gap. Whether what is written names something concrete is still read, not computed. A missing action plan or spec is solution space, which is sprint work, so it is **not** a gap. A missing parent or Type is register hygiene: worth a line, not a readiness finding. An open RAID item against a candidate is context, not a blocker; surface it so the commitment is made knowing about it.
 
 Refinement lives in three places: the row itself, any spec in the execution folder that names it, and the RAID entries that point at it (`WBS Ref`). A candidate can look complete in one and be bare in the others. If the team also tracks work in a task tracker, that is a fourth place, and TD.8 explains how to add it.
 

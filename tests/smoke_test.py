@@ -872,6 +872,15 @@ def test_sync_commands(root, scratch):
         ok, out = run(cmd, work)
         if not check("wbs: %s" % label, ok, out):
             return
+    ok, out = run([wbs, "set", reg, "--id", "2", "--planned-end", "2026-Sep-26"], work)
+    check("wbs: a first planned date needs no reason", ok, out)
+    ok, _ = run([wbs, "set", reg, "--id", "2", "--planned-end", "2026-Oct-10"], work)
+    check("wbs: moving a planned date without a reason is refused", not ok)
+    ok, out = run([wbs, "set", reg, "--id", "2", "--planned-end", "2026-Oct-10",
+                   "--reason", "design slipped"], work)
+    log = json.load(io.open(reg, encoding="utf-8")).get("schedule_log") or []
+    check("wbs: a move with a reason is logged, the first value is not",
+          ok and len(log) == 1 and log[0].get("From") == "2026-Sep-26", str(log)[:200])
     ok, _ = run([wbs, "set", reg, "--id", "2", "--sprint-carried", "S26.Q3.7"], work)
     check("wbs: a carried sprint without a reason is refused", not ok)
     ok, out = run([wbs, "set", reg, "--id", "2", "--sprint-carried", "S26.Q3.7",
@@ -916,6 +925,8 @@ def test_sync_commands(root, scratch):
     ok, out = run([wbs, "refined", reg, "--ids", "1,2", "--raid", raid], work)
     check("wbs: refined shows the open RAID entry against its row",
           ok and "Design late" in out, out[:300])
+    check("wbs: refined reports a row with no description",
+          ok and "no description" in out, out[:300])
 
     # --- TSP: a retired control is not due ------------------------------------
     treg = os.path.join(work, "TSP Register.json")

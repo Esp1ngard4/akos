@@ -120,7 +120,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Status | Yes | Portfolio Backlog / Funnel / Not Started / Implementing / Done / Cancelled |
 | Priority | No | Must / Should / Could / Won't (MoSCoW) |
 | Baseline Start / End | No | The original commitment. **Write-once** — `set` refuses to overwrite one; `rebaseline` is the verb. A parent may carry its own. |
-| Planned Start / End | No | The current expectation. **Derived on any row with children** and refused there. Every change needs `--reason` and appends to `schedule_log`. |
+| Planned Start / End | No | The current expectation. **Derived on any row with children** and refused there. The first value needs no reason; every later change, clearing included, needs `--reason` and appends to `schedule_log`. |
 | Actual Start / End | No | What happened. Derived on a parent. `check` holds them against Status. |
 | Horizon | No | `Next` / `Future` — how soon this is wanted. Not a status and not a priority: an item can be `Could` and `Next`, or `Must` and `Future`. Cleared by a real sprint or by closure; `check` enforces both. |
 | Sprint Planned / Added / Ended | No | Sprint IDs from the register's `sprints` calendar (e.g. `S26.Q3.5`), and nothing else. `check` rejects an ID the calendar does not hold. |
@@ -360,7 +360,7 @@ python <skill-path>/scripts/wbs.py rebaseline "<register>" --id 42     --baselin
 
 ### Every planned move is logged
 
-`set --planned-end` requires `--reason` and appends to `schedule_log`. This is the point of the whole feature: today's variance says a deliverable is late, but the log says it has moved right three times, and the second is the more useful signal. The **slip count** is how many log entries moved `Planned End` later.
+Moving or clearing a planned date requires `--reason` and appends to `schedule_log`. Setting one for the first time does not: nothing was promised before it, so there is nothing to explain, and a log of filler reasons would bury the real ones. This is the point of the whole feature: today's variance says a deliverable is late, but the log says it has moved right three times, and the second is the more useful signal. The **slip count** is how many log entries moved `Planned End` later.
 
 ### Parents derive, leaves carry
 
@@ -442,7 +442,7 @@ Read-only. Per open row with `Key Deliverable = Y`, across every register given:
 python <skill-path>/scripts/wbs.py refined "<register>" --ids 12,14,15 [--execution "<project>/1. Execution"] [--raid "<RAID register>"]
 ```
 
-Read-only. For each candidate a grooming draft names, it reports what is absent: acceptance criteria, an action plan, an estimate, a parent, a Type. With `--execution`, also whether any Markdown file in that folder names the row (`ID <n>`); with `--raid`, the open RAID entries whose `WBS Ref` points at it (`<scope>#<id>`, matched against this register's `meta.scope`). A gap is a flag, not a veto: a Task may reasonably have no spec, and what counts as ready is the session's call. Run it at grooming, so planning starts from rows that are ready rather than refining them on the spot.
+Read-only. For each candidate a grooming draft names, it reports what is absent: a description stating the problem (or one too thin to, under 20 characters), acceptance criteria, an action plan, an estimate, a parent, a Type. With `--execution`, also whether any Markdown file in that folder names the row (`ID <n>`); with `--raid`, the open RAID entries whose `WBS Ref` points at it (`<scope>#<id>`, matched against this register's `meta.scope`). A gap is a flag, not a veto: a Task may reasonably have no spec, and what counts as ready is the session's call. Run it at grooming, so planning starts from rows that are ready rather than refining them on the spot.
 
 Whether rows and their tasks agree is **reconciliation**, and it is deliberately not here: it depends on the task tracker a project uses. TD.1 says what it checks and where to build it.
 

@@ -60,6 +60,9 @@ import create_wbs as C                                          # noqa: E402
 ITEMS = "items"
 SPRINTS = "sprints"
 SCHEDULE_LOG = "schedule_log"
+# Below this many characters a Description cannot state a problem; `refined`
+# reports it as thin rather than as present.
+THIN_DESCRIPTION = 20
 # --flag -> field. The six schedule dates; see dates.py for what a value
 # may look like and why precision is derived rather than stored.
 DATE_ARGS = [(f.lower().replace(" ", "_"), f) for f in C.DATE_FIELDS]
@@ -229,7 +232,11 @@ def apply_dates(data, row, args, changed, creating=False):
                      "span of its descendants, computed at render time. Set it "
                      "on the leaves instead. (A baseline may be carried on a "
                      "parent; a plan may not.)" % (field, row.get("ID")))
-        if field in C.PLANNED_FIELDS and not creating and str(before or "") != str(value):
+        # A first plan is not a move: nothing was promised before it, so
+        # there is no "why it moved" to log. Asking anyway taught callers to
+        # type filler, and refused the whole edit - a planning commit lost
+        # its Sprint Planned and baseline with it.
+        if field in C.PLANNED_FIELDS and not creating and before not in (None, "")                 and str(before) != str(value):
             if not getattr(args, "reason", None):
                 sys.exit("Moving %s needs --reason. The log of why a date moved "
                          "is the point of keeping one." % field)
@@ -1239,10 +1246,10 @@ def cmd_refined(args):
 
     A different question from whether a row and its tasks agree, which is
     reconciliation and belongs to the project's own tracker. This asks whether
-    the row itself is ready: planning should start from items that have
-    acceptance criteria and an action plan, and a candidate missing either will
-    be refined during planning instead of before it, which is what grooming
-    exists to prevent.
+    the row itself is ready: it states the problem (Description), what good
+    looks like (Acceptance Criteria) and an effort guess, and a candidate
+    missing any of them will be refined during planning instead of before it,
+    which is what grooming exists to prevent.
 
     Deliberately not a verdict. A Task may reasonably have no spec and a small
     Story no action plan; what counts as ready is the session's call. This
@@ -1296,6 +1303,13 @@ def cmd_refined(args):
             missing_any += 1
             continue
         gaps = []
+        # The ready rule's first half: the problem the row addresses. A
+        # description too short to say one has not stated it.
+        description = str(row.get("Description") or "").strip()
+        if not description:
+            gaps.append("no description (no problem stated)")
+        elif len(description) < THIN_DESCRIPTION:
+            gaps.append("description too thin to state a problem")
         if not str(row.get("Acceptance Criteria") or "").strip():
             gaps.append("no acceptance criteria")
         if not row.get("Estimated Effort (h)"):

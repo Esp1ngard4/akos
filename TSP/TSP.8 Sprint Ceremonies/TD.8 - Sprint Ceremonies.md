@@ -13,7 +13,7 @@ It is the tool that uses the registers together. `wbs.py metrics`, `deliverables
 | | |
 |---|---|
 | The ceremonies | Run fortnightly on real work in their original setting, where sprint state sat in a task tracker and the triggers on a calendar |
-| Register-only, as shipped here | **Not yet used on real work.** Walked through once on a scratch workspace: a sprint groomed, closed out, prechecked and reviewed in a retro, then the next one planned with spillover carried in. It found that a first `Planned End` needs a `--reason` (the skill now passes one), and the two gaps under *Open items* |
+| Register-only, as shipped here | **Not yet used on real work.** Walked through once on a scratch workspace: a sprint groomed, closed out, prechecked and reviewed in a retro, then the next one planned with spillover carried in. It found that a first `Planned End` was refused without a `--reason`, and that `refined` never checked the description; both fixed in `wbs.py` (TD.1 v1.5). Estimates still lack a flag (*Open items*) |
 | `sprint_record.py` | Ported unchanged in behaviour from the original. Sprint windows now come from the sprint calendar |
 
 ## Components
@@ -190,11 +190,11 @@ What is **not** tested is whether the agent runs a ceremony well. No test assert
 | Item | Detail |
 |---|---|
 | Register-only mode unexercised on real work | See *Status*. The first real sprint run this way is what moves the tool to `Implemented` |
-| `wbs.py refined` does not check `Description` | The first half of the ready rule (the problem stated) is read by the agent, not computed. Both skills say so |
 | Estimates and acceptance criteria have no `wbs.py` flag | Grooming sets them as plain field edits. A flag would let the register's rules apply to them as well |
 
 ## Version history
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-02 | The two `wbs.py` gaps the dry run found are fixed at the source (TD.1 v1.5): a first `Planned End` needs no reason, and `refined` checks the description. The workarounds the skills carried for both are gone. |
 | v1.0 | 2026-10-02 | Published as TSP.8. The four ceremonies run on the WBS, RAID and TSP registers alone; a task tracker and a calendar are described as adaptations rather than configured. `sprint_record.py` reads sprint windows from the sprint calendar. |

@@ -89,7 +89,7 @@ Grooming produces enough refined work to fill a sprint. Choosing among it is pla
    python <skills>/wbs-manager/scripts/wbs.py refined "<register>" --ids 12,14 [--execution "<folder>"] [--raid "<RAID register>"]
    ```
 
-   Read the output against the ready rule. A missing acceptance criterion or estimate is a gap. A missing action plan or spec is solution space, so it is not a gap. An open RAID item against a candidate is context, not a blocker. **`refined` does not check `Description`**, so read it yourself: an empty or thin one has not stated the problem.
+   Read the output against the ready rule. A missing or thin description, acceptance criterion or estimate is a gap. A missing action plan or spec is solution space, so it is not a gap. An open RAID item against a candidate is context, not a blocker.
 6. **Estimate as you refine**, not in a batch at the end, on the no-AI baseline. If the user is unsure, mark it *needs sizing* rather than forcing a number. `Description`, `Acceptance Criteria` and `Estimated Effort (h)` have no `wbs.py` flag; they are plain field edits (`wbs-manager`, *Critical Design Rules*).
 7. **Set `Horizon`** the moment a row is ready: `Next` for the coming sprint, `Future` for the one after. Anything further out gets its `Planned End` and no Horizon. A horizon is a claim about the next four weeks.
 8. **Close against the draft with two figures**, written into the draft's footer line:
@@ -148,7 +148,7 @@ On the next sprint's first day. The close-out and the retro ran the day before.
    - 2b. **Controls**, if a TSP register is in use: show `tsp.py due` and ask which to commit. The default is three, but the user decides, and retiring dead ones (`tsp.py retire`) is a legitimate answer. A committed control goes into the committed-items table as `control <ID>`. When it is done, it is recorded with `tsp.py done`.
    - 2c. **A `Planned End` already passed on a candidate is a decision, not clean-up**: re-plan it with a `--reason`, or cancel the row with a closure note.
 3. **Confirm each committed row is ready**, top priority first. A row committed with a gap is still committed; note the gap so the close-out can say what became of it.
-4. **Record the commitment on each row.** For a new commitment: `--sprint-planned <sprint ID> --horizon ""`, plus `--reason "committed at planning <sprint ID>"` whenever the same edit sets `--planned-end`. `wbs.py` asks for a reason on any `Planned End` it writes, including the first, and refuses the whole edit without one. For a row carried from an earlier sprint and not Done: `--sprint-carried <sprint ID> --reason "<why it did not finish>"`, so the earlier sprint keeps its carryover. **Set the baseline if the row has none**: commitment is the moment it becomes real, it is written once, and `rebaseline` moves it afterwards. Set `Planned End` at the precision the commitment actually has.
+4. **Record the commitment on each row.** For a new commitment: `--sprint-planned <sprint ID> --horizon ""`. For a row carried from an earlier sprint and not Done: `--sprint-carried <sprint ID> --reason "<why it did not finish>"`, so the earlier sprint keeps its carryover. **Set the baseline if the row has none**: commitment is the moment it becomes real, it is written once, and `rebaseline` moves it afterwards. Set `Planned End` at the precision the commitment actually has.
 5. **Decide two or three iteration goals**, starting from any `draft:` goals the record carries in. Record confidence as a fist of five, per participant.
 6. **Write the record**:
 
