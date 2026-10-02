@@ -98,8 +98,8 @@
         ]
       }
     },
-    "updated": "2026-10-02T10:01:58",
-    "values_hash": "sha256:5af9e2ee2bb07f026f3a70eb953c7027587f77874bcc6454401a3211668e9f43",
+    "updated": "2026-10-02T11:38:19",
+    "values_hash": "sha256:db4a8549c3b03176e41a7a03c85904f3e06f8a78049909d4bf7fd68c077b9b91",
     "version": 1
   },
   "tools": [
@@ -176,14 +176,14 @@
       "Description": "Turns thinking into finished, publish-ready pieces through interview rather than one-shot generation. Holds a position per scope, plans that commit it to dated or rate-based work, an inbox for sparks, an interview-led writer, and a review that reports delivery against what was promised. It is deliberately not a publisher: it stops at the finished piece and transmits to no platform.",
       "Doc Aux": "Yes",
       "ID": 6,
-      "Last Reviewed": "2026-09-01",
+      "Last Reviewed": "2026-10-02",
       "Links": "TSP/TSP.6 Content System/TD.6 - Content System.md",
       "Name": "Content System",
-      "Notes": "Usable, and the only tool here that ships no code. Its 27 quickstart scenarios have never been run and no full month has been reviewed against a plan - see TD.6, What is not proven.",
+      "Notes": "Implemented as a first version: used on real work, and improved as it is used. Not everything is proven - its 27 quickstart scenarios have not all been run and no full month has been reviewed against a plan; see TD.6, What is not proven.",
       "Primary Area": "Writing and publishing",
       "Relevancy": "Often",
       "Skill": "content-idea-capture, content-plan-author, content-post-writer, content-review, content-strategy-author",
-      "Status": "In Progress",
+      "Status": "Implemented",
       "Type": "Tool"
     },
     {

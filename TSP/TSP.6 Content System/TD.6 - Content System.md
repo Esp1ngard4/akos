@@ -8,9 +8,9 @@ It is deliberately **not a publisher**. Its responsibility ends at the finished 
 
 **It holds no audience-response data** — no impressions, reach, followers or engagement, and no proxy invented in their place. Whether the writing is landing is a judgement this tool cannot make and must not pretend to.
 
-## Status: In Progress
+## Status: Implemented, as a first version
 
-This is the honest label, not a modest one. Read [What is not proven](#what-is-not-proven) before adopting it.
+The skills are in real use, and the tool is improved as it is used rather than held back until every path has been exercised. That is a choice, not a claim that it is proven: [What is not proven](#what-is-not-proven) lists what has not yet run, and is worth reading before adopting it.
 
 ## Components
 
@@ -20,7 +20,7 @@ This is the honest label, not a modest one. Read [What is not proven](#what-is-n
 | Format contracts | `_shared/contracts/` | `strategy-file-format.md`, `posts-format.md`, `ideas-inbox-format.md`. Each is the **sole owner** of its format; skills embed only what is short enough to never be wrong and read the rest from here. |
 | Voice material | `_shared/personas/`, `_shared/writing-principles.md` | Four craft personas and the principles that bind all of them. |
 
-There is no code. This is the only tool in this repository that ships none, which is why the test checks cross-references rather than behaviour.
+There is no code, which is why the test checks cross-references rather than behaviour.
 
 ## The `_shared/` folder, and why installing works
 
@@ -107,13 +107,13 @@ What is **not** tested is whether an interview produces a good piece. No test as
 ## Relationship to other tools
 
 - **TSP.4 Tool Installer** — `_shared/` support was added to `install.py` for this tool. Any future tool with several skills and material between them gets it for free.
-- **TSP.3 TSP Register** — row 6. Type `Tool`; Status `In Progress`; Doc Aux `Yes`.
+- **TSP.3 TSP Register** — row 6. Type `Tool`; Status `Implemented`; Doc Aux `Yes`.
 - **No coupling to anything else, by design.** `content-review` never infers a sprint window from a sprint system, a calendar or a task manager; the author names the window. This is not an integration gap to close later — the folder has to stay copyable into any context, and a dependency whose degradation is its normal case is worse than no dependency.
 
 ## Open items
 
 - **The 27 scenarios need running.** Each needs a real interview or a real draft, so this is author time, not a scripted job. Until then the consistency claim is inspection, not evidence.
-- **One month reviewed end to end** would move this to `Implemented` faster than anything else.
+- **One month reviewed end to end** is the evidence most worth having: `content-review` has not yet scored a month that actually ran.
 - **The skills carry no tool prefix.** They were built as a portable system first. Renaming touches every skill folder, its frontmatter, the contracts that name it, and this document — a deliberate scoped piece of work, not a silent fix.
 - **`update` does not cascade.** Updating a skill does not update `_shared/`; run `update` on the shared entry too. Both are named in `status`.
 
@@ -121,4 +121,5 @@ What is **not** tested is whether an interview produces a good piece. No test as
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.1 | 2026-10-02 | **Implemented, as a first version.** The skills are in real use and improve as they are used; *What is not proven* stays, unchanged, so the label does not claim more than has run. No change to any skill or contract. |
 | 1.0 | 2026-09-01 | Published as TSP.6. Contracts, personas and writing principles moved to `_shared/`; `install.py` extended to carry it beside the skill; smoke test added for links, contract references, installed layout and shared reuse. Personal strategies, posts, ideas and voice archive not published — the tool ships, the author's data does not. |

@@ -25,7 +25,7 @@ python install.py add <skill> --into <your-project>
 | TSP.3 | **TSP Register** | Implemented | `tsp-manager`, `td-author` | [TD.3](../TSP/TSP.3%20TSP%20Register/TD.3%20-%20TSP%20Register.md) |
 | TSP.4 | **Tool Installer** | Implemented | _none_ | [TD.4](../TSP/TSP.4%20Tool%20Installer/TD.4%20-%20Tool%20Installer.md) |
 | TSP.5 | **Artifact Register** | Implemented | `artifact-register` | [TD.5](../TSP/TSP.5%20Artifact%20Register/TD.5%20-%20Artifact%20Register.md) |
-| TSP.6 | **Content System** | In Progress | `content-idea-capture`, `content-plan-author`, `content-post-writer`, `content-review`, `content-strategy-author` | [TD.6](../TSP/TSP.6%20Content%20System/TD.6%20-%20Content%20System.md) |
+| TSP.6 | **Content System** | Implemented | `content-idea-capture`, `content-plan-author`, `content-post-writer`, `content-review`, `content-strategy-author` | [TD.6](../TSP/TSP.6%20Content%20System/TD.6%20-%20Content%20System.md) |
 | TSP.7 | **Notebook Manager** | In Progress | `notebook-capture` | [TD.7](../TSP/TSP.7%20Notebook%20Manager/TD.7%20-%20Notebook%20Manager.md) |
 | TSP.8 | **Sprint Ceremonies** | In Progress | `sprint-facilitator`, `sprint-planning-precheck` | [TD.8](../TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) |
 | TSP.9 | **Daily Loop** | In Progress | `standup-facilitator`, `morning-planner` | [TD.9](../TSP/TSP.9%20Daily%20Loop/TD.9%20-%20Daily%20Loop.md) |
