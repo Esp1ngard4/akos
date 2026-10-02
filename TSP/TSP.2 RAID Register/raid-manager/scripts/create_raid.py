@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Create an empty RAID register for a project.
 
-    python create_raid.py "RAID P.208.json" "AKOS"
+    python create_raid.py "RAID Atlas.json" "Atlas"
 
 Built programmatically, so the schema has exactly one definition.
 """

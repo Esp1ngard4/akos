@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Create an empty WBS register for a project.
 
-    python create_wbs.py "WBS P.208.json" "AKOS"
+    python create_wbs.py "WBS Atlas.json" "Atlas"
 
 Built programmatically rather than copied from a template, so the schema has one
 definition and a fresh register can never carry another project's rows across.
