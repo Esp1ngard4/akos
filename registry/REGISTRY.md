@@ -28,6 +28,7 @@ python install.py add <skill> --into <your-project>
 | TSP.6 | **Content System** | In Progress | `content-idea-capture`, `content-plan-author`, `content-post-writer`, `content-review`, `content-strategy-author` | [TD.6](../TSP/TSP.6%20Content%20System/TD.6%20-%20Content%20System.md) |
 | TSP.7 | **Notebook Manager** | In Progress | `notebook-capture` | [TD.7](../TSP/TSP.7%20Notebook%20Manager/TD.7%20-%20Notebook%20Manager.md) |
 | TSP.8 | **Sprint Ceremonies** | In Progress | `sprint-facilitator`, `sprint-planning-precheck` | [TD.8](../TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) |
+| TSP.9 | **Daily Loop** | In Progress | `standup-facilitator`, `morning-planner` | [TD.9](../TSP/TSP.9%20Daily%20Loop/TD.9%20-%20Daily%20Loop.md) |
 
 ## What each is for
 
@@ -46,6 +47,8 @@ python install.py add <skill> --into <your-project>
 **TSP.7 Notebook Manager** — Plain-Markdown notebooks the agent keeps: a diary, notebooks scoped to a project, an area of focus or an area of interest, and meeting notes, with an index per notebook. Raw entries worth more than a note can be crystallized into static HTML posts that link back to the entry they came from. No app, no search index, no database - files only.
 
 **TSP.8 Sprint Ceremonies** — The four sprint ceremonies - backlog grooming, the sprint close-out, the retrospective and sprint planning - run on the WBS, RAID and TSP registers alone, with one Markdown record per sprint written by sprint_record.py. Sprint state lives on WBS rows: staged by Horizon, committed by Sprint Planned, closed with a closure note. A task tracker and a calendar are described as adaptations, not configured.
+
+**TSP.9 Daily Loop** — The morning plan and the evening stand-up as one tool, sharing one Markdown record per day. The evening reviews the day from git, the WBS and the day's notes, raises a sprint ceremony that is due, chooses one to three frogs for tomorrow and closes the record; the morning confirms the frogs and opens the next. A calendar, a task tracker and inboxes are described as adaptations, not shipped.
 
 ## Status meanings
 

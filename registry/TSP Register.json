@@ -42,6 +42,12 @@
       "Description": "Registered as TSP.8. The first ceremony tool: two skills and a record script, using TSP.1-3 together. Ships register-only; TD.8 says where a tracker and a calendar plug in.",
       "ID": 7,
       "Tool": "Sprint Ceremonies"
+    },
+    {
+      "Changed On": "2026-10-02",
+      "Description": "Registered as TSP.9. Second ceremony tool: two skills and a shared day record, no code. The evening runs TSP.8's status check each day.",
+      "ID": 8,
+      "Tool": "Daily Loop"
     }
   ],
   "control_activities": [],
@@ -92,8 +98,8 @@
         ]
       }
     },
-    "updated": "2026-10-02T09:37:26",
-    "values_hash": "sha256:d9744c72e9f695afb63c2b4746e5a08097a21e990ac751230b8534971ba25751",
+    "updated": "2026-10-02T10:01:58",
+    "values_hash": "sha256:5af9e2ee2bb07f026f3a70eb953c7027587f77874bcc6454401a3211668e9f43",
     "version": 1
   },
   "tools": [
@@ -205,6 +211,20 @@
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "sprint-facilitator, sprint-planning-precheck",
+      "Status": "In Progress",
+      "Type": "Work instruction"
+    },
+    {
+      "Description": "The morning plan and the evening stand-up as one tool, sharing one Markdown record per day. The evening reviews the day from git, the WBS and the day's notes, raises a sprint ceremony that is due, chooses one to three frogs for tomorrow and closes the record; the morning confirms the frogs and opens the next. A calendar, a task tracker and inboxes are described as adaptations, not shipped.",
+      "Doc Aux": "Yes",
+      "ID": 9,
+      "Last Reviewed": "2026-10-02",
+      "Links": "TSP/TSP.9 Daily Loop/TD.9 - Daily Loop.md",
+      "Name": "Daily Loop",
+      "Notes": "Usable: the loop runs daily on real work in its original setting. Register-only mode, as shipped, has been exercised on a scratch workspace but not yet on real work - see TD.9, Status. No code; wbs-manager, sprint-facilitator and notebook-capture are each optional.",
+      "Primary Area": "Personal productivity",
+      "Relevancy": "Often",
+      "Skill": "standup-facilitator, morning-planner",
       "Status": "In Progress",
       "Type": "Work instruction"
     }

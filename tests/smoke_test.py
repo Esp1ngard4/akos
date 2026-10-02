@@ -739,6 +739,71 @@ def test_sprint_ceremonies(root, scratch):
           all(n in lock.get("tools", {}) for n in SPRINT_SKILLS), str(sorted(lock.get("tools", {}))))
 
 
+DAILY_TOOL = "TSP.9 Daily Loop"
+DAILY_SKILLS = ["standup-facilitator", "morning-planner"]
+DAY_SECTIONS = ["## Today's update", "## Next steps", "## Risks/Blockers",
+                "## Notes", "### Morning"]
+
+
+def test_daily_loop(root, scratch):
+    """TSP.9 has no code; what can break is the contract between its halves.
+
+    The morning creates the day's record from a template the evening owns, and
+    each half reads what the other wrote: the morning reads `status: closed`
+    and the evening's frogs, the evening reads `### Morning`. If one skill's
+    wording drifts from the other's, a record one writes is one the other
+    cannot read, and nothing fails until a real morning. So the shared terms
+    are asserted to appear in both.
+    """
+    print("\nTSP.9 Daily Loop")
+    tool = os.path.join(root, "TSP", DAILY_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    texts = {}
+    for name in DAILY_SKILLS:
+        path = os.path.join(tool, name, "SKILL.md")
+        if not check("%s has SKILL.md" % name, os.path.isfile(path), path):
+            return
+        texts[name] = io.open(path, encoding="utf-8").read()
+        check("%s declares name and description" % name,
+              "name: %s" % name in texts[name][:600]
+              and "description:" in texts[name][:600], texts[name][:120])
+    check("TD.9 present", any(n.startswith("TD.9") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool),
+          "; ".join(broken_links(tool)[:5]))
+
+    evening, morning = texts["standup-facilitator"], texts["morning-planner"]
+    block = re.search(r"```markdown\n(---\nkind: day-record.*?)```", evening, re.S)
+    if not check("the stand-up owns a day-record template", bool(block)):
+        return
+    template = block.group(1)
+    missing = [s for s in DAY_SECTIONS if s not in template]
+    check("the template holds the four sections and ### Morning", not missing,
+          ", ".join(missing))
+    for term in ("kind: day-record", "status: closed", "### Morning",
+                 "standup-facilitator"):
+        check("both halves name %r" % term, term in evening and term in morning,
+              "evening: %s, morning: %s" % (term in evening, term in morning))
+    check("the morning reads the evening's frogs where the evening writes them",
+          "Next steps" in morning and "**Frogs for tomorrow:**" in evening)
+    check("the evening reads the morning's frogs where the morning writes them",
+          "### Morning" in evening and "**Frogs:**" in morning)
+
+    sr = os.path.join(root, "TSP", "TSP.8 Sprint Ceremonies", "sprint-facilitator",
+                      "scripts", "sprint_record.py")
+    named = re.findall(r"sprint_record\.py\s+([a-z]+)", evening)
+    offered = set(re.findall(r'add_parser\(\s*"([a-z]+)"', io.open(sr, encoding="utf-8").read()))
+    check("the ceremony command the stand-up names exists",
+          named and all(c in offered for c in named), str(named))
+
+    project = os.path.join(scratch, "daily-project")
+    os.makedirs(project, exist_ok=True)
+    for name in DAILY_SKILLS:
+        ok, out = run([os.path.join(root, "install.py"), "add", name,
+                       "--into", project, "--catalogue", root], root)
+        check("install.py add %s" % name, ok, out)
+
+
 def test_tsp_fields(root, scratch):
     """A row written by tsp.py must be a row the dashboard can show.
 
@@ -910,6 +975,7 @@ def main():
         test_content_system(root, scratch)
         test_notebook_manager(root, scratch)
         test_sprint_ceremonies(root, scratch)
+        test_daily_loop(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
 
@@ -922,8 +988,8 @@ def main():
         print("All checks passed (%d tools, plus the installer, the "
               "reconciliation case, the catalogue, the shared modules, the "
               "docs-versus-code pass, "
-              "the content system, the notebook manager and the sprint "
-              "ceremonies)." % len(TOOLS))
+              "the content system, the notebook manager, the sprint "
+              "ceremonies and the daily loop)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

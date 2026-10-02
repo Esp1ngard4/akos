@@ -65,6 +65,7 @@ has described.
 | TSP.6 | [Content System](TSP/TSP.6%20Content%20System/) — ideas, strategy, plans and posts, written to contract | five `content-*` skills |
 | TSP.7 | [Notebook Manager](TSP/TSP.7%20Notebook%20Manager/) — plain-Markdown notebooks and a diary | `notebook-capture` |
 | TSP.8 | [Sprint Ceremonies](TSP/TSP.8%20Sprint%20Ceremonies/) — grooming, close-out, retrospective, planning | `sprint-facilitator`, `sprint-planning-precheck` |
+| TSP.9 | [Daily Loop](TSP/TSP.9%20Daily%20Loop/) — the morning plan and the evening stand-up, one record per day | `morning-planner`, `standup-facilitator` |
 
 TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with
@@ -74,7 +75,9 @@ TSP.8 is what uses them together. The sprint lives on the WBS rows, the retro ro
 RAID, planning commits control activities from the TSP register, and nothing else is
 needed. Most teams already run a task tracker and a calendar, each in its own way, so
 [TD.8](TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) says where
-they plug in and what to watch for, rather than pretending one setting fits all.
+they plug in and what to watch for, rather than pretending one setting fits all. TSP.9 is
+the same idea at the scale of a day, and its evening stand-up is what notices a sprint
+ceremony that was due.
 
 TSP.3 has **two** skills, which is the same claim from the other direction: one owns
 the register row, the other owns the tool definition documents, and neither does the
