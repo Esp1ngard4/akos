@@ -48,6 +48,12 @@
       "Description": "Registered as TSP.9. Second ceremony tool: two skills and a shared day record, no code. The evening runs TSP.8's status check each day.",
       "ID": 8,
       "Tool": "Daily Loop"
+    },
+    {
+      "Changed On": "2026-10-07",
+      "Description": "TD.6 v2.0: content runs on the WBS. Plans name the goal they serve; a committed piece has a row in the WBS of that goal's owner and carries a dated status and a WBS Ref; start, publish and drop propose the matching WBS change. Stage, activation, commitment write-back, campaign scoring and sprints.md retired. New dependency on TSP.1.",
+      "ID": 9,
+      "Tool": "Content System"
     }
   ],
   "control_activities": [],
@@ -98,8 +104,8 @@
         ]
       }
     },
-    "updated": "2026-10-02T11:38:19",
-    "values_hash": "sha256:db4a8549c3b03176e41a7a03c85904f3e06f8a78049909d4bf7fd68c077b9b91",
+    "updated": "2026-10-07T08:53:44",
+    "values_hash": "sha256:7689b21562657c6379fd3274254ea32558607fd09f908281dd451e1bf6edf0c2",
     "version": 1
   },
   "tools": [
@@ -173,13 +179,13 @@
       "Type": "Tool"
     },
     {
-      "Description": "Turns thinking into finished, publish-ready pieces through interview rather than one-shot generation. Holds a position per scope, plans that commit it to dated or rate-based work, an inbox for sparks, an interview-led writer, and a review that reports delivery against what was promised. It is deliberately not a publisher: it stops at the finished piece and transmits to no platform.",
+      "Description": "Turns thinking into finished, publish-ready pieces through interview rather than one-shot generation. Holds a position per scope, plans that name the goal they serve and hold a rate or an arc of pieces, an inbox for sparks, an interview-led writer, and a review that reports what was published against the rate and checks content against the WBS. Committed pieces run on the WBS Register (TSP.1). It is deliberately not a publisher: it stops at the finished piece and transmits to no platform.",
       "Doc Aux": "Yes",
       "ID": 6,
       "Last Reviewed": "2026-10-02",
       "Links": "TSP/TSP.6 Content System/TD.6 - Content System.md",
       "Name": "Content System",
-      "Notes": "Implemented as a first version: used on real work, and improved as it is used. Not everything is proven - its 27 quickstart scenarios have not all been run and no full month has been reviewed against a plan; see TD.6, What is not proven.",
+      "Notes": "Implemented: used on real work, and improved as it is used. Runs on the WBS since v2.0 and needs wbs-manager installed beside it to commit pieces. Not everything is proven - its 27 quickstart scenarios predate the WBS design and have not been run, and no piece has yet gone through the full lifecycle; see TD.6, What is not proven.",
       "Primary Area": "Writing and publishing",
       "Relevancy": "Often",
       "Skill": "content-idea-capture, content-plan-author, content-post-writer, content-review, content-strategy-author",

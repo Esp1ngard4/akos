@@ -53,15 +53,17 @@ Remove the entry from the inbox and create a bundle folder:
 content-system/posts/YYYY-MM-DD-slug/backbone.md
 ```
 
-with frontmatter carrying `from-idea:` (the ID and the original text) and `scope:` if known, then `## Idea` — the capture, verbatim — and `## Notes`.
+with frontmatter carrying `from-idea:` (the ID and the original text), `scope:` if known, `wbs:`, `status: drafting` and `drafting: <today>`, then `## Idea` — the capture, verbatim — and `## Notes`.
+
+**Promotion needs the piece's WBS Ref first.** A bundle folder is a committed piece being worked, so the row that commits it exists before the folder does. Getting the Ref — from an arc row, from the author, or by creating the row on the author's yes — and moving the WBS row to `Implementing` belong to `content-post-writer` (*The piece and its WBS row*). **Promoting is therefore always a hand-off to that skill**; this one never creates the folder on its own. Format: [`posts-format.md`](../_shared/contracts/posts-format.md).
 
 **If the entry has context, it becomes the opening `## Notes`.** It travels with the idea and leaves `ideas.md` with it - copying it would leave two versions to disagree. With no context, `## Notes` starts empty as before.
 
-**No angle is required. No plan. No commitment to finish.** This is the point of promotion: an idea being actively worked is neither waiting nor written, and without a place to sit it would have to stay in the inbox pretending to be untouched. The bundle folder is where refinement happens — notes now, angle when it settles, and the rest as `content-post-writer` fills it in.
+**No angle is required. No plan.** A WBS row is: an idea being actively worked is neither waiting nor written, and it is work, so it is committed like any other. The bundle folder is where refinement happens — notes now, angle when it settles, and the rest as `content-post-writer` fills it in. **Thinking about an idea before committing to it** belongs in the entry's context, here in the inbox.
 
-**A promoted idea may be abandoned.** The folder stays where it is, counted as in-progress. Nothing drags it back to the inbox, and nothing needs cleaning up.
+**A promoted idea may be abandoned.** It becomes a dropped piece — `content-post-writer`'s *Dropping a piece*: the folder stays as the record, with the reason, and the WBS row is proposed for `Cancelled`. Nothing drags it back to the inbox.
 
-**Drafting straight from an inbox idea is a promotion** — it creates the folder and removes the row in one step. Hand off to `content-post-writer` from there.
+**Drafting straight from an inbox idea is a promotion** — the same hand-off: `content-post-writer` gets the WBS Ref, creates the folder and removes the entry in one step.
 
 ### Never route to the assessment pipeline
 

@@ -1,17 +1,19 @@
 ---
 name: content-plan-author
-description: Interview the author to turn a scope's decided position into dated, trackable work — audience, objective, the pillars in play, channels, and either a cadence or a set of commitments that can actually be missed. Use when a strategy exists and someone wants a plan, a campaign, a content calendar, or a commitment they can be held to, and when adding or amending a commitment on an existing plan. Runs only against an existing strategy file; it never invents a position.
+description: Interview the author to turn a scope's decided position into a plan — the goal it serves, audience, objective, the pillars in play, channels, and either a monthly rate or the arc of pieces a campaign is made of — and commit pieces from that arc by creating their WBS rows. Use when a strategy exists and someone wants a plan, a campaign, a content series or calendar, to add or amend a piece or a rate on an existing plan, or to commit a piece so it can be worked. Runs only against an existing strategy file; it never invents a position.
 user-invocable: true
 disable-model-invocation: true
 ---
 
 # Author a content plan
 
-Turn a decided position into **dated work that can be missed**.
+Turn a decided position into **a plan, and pieces that can be committed**.
 
-A strategy says what a scope is for. A plan says what will be published, when, to whom, and on which channel. They are separate decisions made at separate times, and this skill only ever makes the second one.
+A strategy says what a scope is for. A plan says which goal it serves, to whom, on which channels, and either the rhythm it holds or the arc of pieces it is made of. They are separate decisions made at separate times, and this skill only ever makes the second one.
 
-Format: [`_shared/contracts/strategy-file-format.md`](../_shared/contracts/strategy-file-format.md). It is the source of truth — where this file and the contract disagree, **this file is the defect**.
+**When a piece is due, how much it takes and whether it is done live in the WBS**, in the row that commits it. This skill writes the arc and creates those rows; it never copies their dates or status into the plan.
+
+Format: [`_shared/contracts/strategy-file-format.md`](../_shared/contracts/strategy-file-format.md). It is the source of truth — where this file and the contract disagree, **this file is the defect**. The WBS Ref and how a register is found: [`posts-format.md`](../_shared/contracts/posts-format.md), *WBS Ref*.
 
 ## Before starting
 
@@ -36,17 +38,13 @@ Conversational, one checkpoint at a time. Never a form.
 | Ask for | Notes |
 |---|---|
 | **Plan name** | Short. Becomes the `## Plan: <name>` heading. Must be unique within the scope — it is how the plan is picked later. |
-| **Shape** | Pick-list. `campaign` = a finite push with dated commitments. `always-on` = an ongoing rhythm with a cadence and no dates. Describe both; do not assume the words land. |
-| **Stage** | Campaign only, asked immediately after shape. `refining` = a backlog: candidates, no dates required, nothing scored. `active` = promises: every row scoreable, the fraction is real. |
+| **Serves** | *"Which goal does this plan serve?"* — an objective, a key result, a project's goal, in the author's own words or identifier. It decides which WBS the plan's pieces are committed in: the register of the project or area that owns that goal. **If the author cannot name one, say so plainly and write the plan without it** — the review will keep flagging it, and that is the point. Never fill it from anywhere else. |
+| **Shape** | Pick-list. `campaign` = a finite arc of pieces, each committed on its own. `always-on` = an ongoing rhythm with a monthly target. Describe both; do not assume the words land. |
 | **Audience** | Free text. Lives here, never in the house — one position, many audiences beneath it. |
 | **Objective** | One combined checkpoint: what should this audience know, feel, and do by the end of it? |
 | **Pillars in play** | Multi-select **from that strategy file's own pillars**. References them; never redefines them. |
-| **Channels** | Multi-select from the open set — `blog`, `linkedin`, `instagram`, `site`, and others as needed. This is the set the plan draws from, not something each commitment inherits silently. |
-| **Branch** | `campaign, active` → end date, then commitments. `campaign, refining` → candidates, end date optional. `always-on` → cadence, free text, then monthly target, then the month the rate starts, and **no commitment table**. |
-
-**Refining collects candidates, not commitments.** One open checkpoint, and **`Working title` is the only thing you may insist on**. A row may point at an already-published piece — `Date` blank, `Piece` linked — which is never scored; say so as you write it.
-
-**The scoreability gate does not apply while refining**, and applies in full the moment the plan activates.
+| **Channels** | Multi-select from the open set — `blog`, `linkedin`, `instagram`, `site`, and others as needed. This is the set the plan draws from, not something each piece inherits silently. |
+| **Branch** | `campaign` → the arc of pieces. `always-on` → cadence, free text, then monthly target, then the month the rate starts, and **no arc table**. |
 
 **The always-on monthly target is asked once, per channel in play** — *"how many a month on each, as a number I can score you against?"* Optional: declining leaves a plan that is counted but never scored, and the author decides that knowing it.
 
@@ -54,7 +52,7 @@ Conversational, one checkpoint at a time. Never a form.
 
 **Never derive the target or the start month from the cadence sentence.** `~2/month, floor 1/month` is prose holding two numbers; ask which one counts.
 
-> **Why each of these is shaped this way** — what months before `Started` mean, why a candidate cannot be missed, why a prose cadence is never parsed, why an already-published row stays unscored — is in [`strategy-file-format.md`](../_shared/contracts/strategy-file-format.md). This file says what to ask; that one says why. Where they disagree, this file is the defect.
+> **Why each of these is shaped this way** — what months before `Started` mean, why a prose cadence is never parsed, why a context row stays unscored — is in [`strategy-file-format.md`](../_shared/contracts/strategy-file-format.md). This file says what to ask; that one says why. Where they disagree, this file is the defect.
 
 **Never a blank prompt where candidates are enumerable.** Shape, pillars and channels are all pick-lists.
 
@@ -62,32 +60,30 @@ Conversational, one checkpoint at a time. Never a form.
 
 **A field the author never answered is never written.** Checkpoints get skipped — an author answers the next question and moves on, and the objective is the one this happens to, because it is the one that takes thought. If drafting a version keeps things moving, say it is your draft, show it in full, and get an explicit yes before it enters the file. **Silence is not confirmation**, and neither is the author answering something else.
 
-**Infer nothing structural.** Shape, channel, objective, audience and pillars are always asked, even where a plausible default is sitting right there. Getting one wrong silently is the failure this whole flow exists to prevent. The single system-chosen value anywhere is `Status: pending` at row creation, and that is an initialisation value write-back already expects. Offering a default is not choosing one: `**Started:**` defaults to the current month in the prompt, and the author still answers it.
+**Infer nothing structural.** Serves, shape, channel, objective, audience and pillars are always asked, even where a plausible default is sitting right there. Getting one wrong silently is the failure this whole flow exists to prevent. Offering a default is not choosing one: `**Started:**` defaults to the current month in the prompt, and the author still answers it.
 
-**The author never types a structural token** — not a header, a field label, a table row, or a status value. They supply content; structure is your job.
+**The author never types a structural token** — not a header, a field label, a table row, or a WBS Ref. They supply content; structure is your job.
 
-## Commitments — the only free-form input
+## The arc — the only free-form input
 
-Campaign plans only. One open checkpoint: *"give me the dates and working titles you want to commit to, one per line — and what each one is and where it goes."*
+Campaign plans only. One open checkpoint: *"give me the pieces this campaign is made of — working titles, one per line, and what each one is and where it goes if you know yet."*
 
-Then parse into rows:
+Then parse into rows. **Every row starts as a candidate**: `WBS` and `Piece` blank.
 
-- **`Type` is always asked**, never inferred. Nothing else in the plan implies whether something is an article, a short post, a carousel, a video, a deck, or a poster.
-- **`Channel`** may be inferred only when the plan draws on exactly one. Otherwise ask, per row.
-- **`Pillar`** may be inferred only when the plan has exactly one in play. Otherwise ask, per row.
-- **`Bundle`** — offer a shared label when several rows are plainly one deliverable (a blog post, the LinkedIn post pointing at it, the video). Default it to the post slug the author will use, so no second identifier gets invented. Blank for standalone artifacts, which is most of them.
+- **`Working title` is the only thing you may insist on.** A candidate is promised to no one, and its type and channel may still be open.
+- **`Type` is never inferred.** Nothing else in the plan implies whether something is an article, a short post, a carousel, a video, a deck, or a poster. Record it if given; leave it blank if not.
+- **`Channel`** may be inferred only when the plan draws on exactly one. Otherwise record it if given.
+- **`Pillar`** may be inferred only when the plan has exactly one in play. Otherwise record it if given.
+- **`Bundle`** — offer a shared label when several rows are plainly one piece (a blog post, the LinkedIn post pointing at it, the video). Default it to the post slug the author will use, so no second identifier gets invented. Blank for standalone artifacts, which is most of them.
+- **A piece already published** goes in as a context row — `Piece` linked, `WBS` blank — so the arc reads whole. Say so as you write it.
 
-### The scoreability gate
-
-**Reject a row missing a date, working title, type, or channel.** Ask for the missing part rather than writing it.
-
-This is the standard the whole feature rests on. *"Post regularly on LinkedIn"* cannot be missed, so it cannot be scored, so it is an intention — not a commitment. The delivered fraction only means something if every row in the denominator could genuinely have failed.
+**Committing is a separate step**, below. Offer it once after the write — *"want to commit any of these now?"* — and take no for an answer.
 
 ## Playback, then one write
 
 **Render the complete assembled section back** — fields and table, exactly as it will appear in the file — and ask once whether it is right.
 
-This is where a parsing slip gets caught. Commitment parsing is the only point in this flow where you interpret rather than record, so it is the only place a silent error can enter.
+This is where a parsing slip gets caught. Arc parsing is the only point in this flow where you interpret rather than record, so it is the only place a silent error can enter.
 
 **Then write, once, after confirmation.**
 
@@ -109,35 +105,31 @@ The write is not done until you have read it back.
 
 This is not a schema validator and must not become one. You are both writer and reader of the same rule; there is no excuse for the two disagreeing, and catching it now is far cheaper than discovering three sessions later that a plan silently stopped resolving.
 
-## Adding or amending a commitment
+## Committing a piece
+
+**A separate action, asked for explicitly**, run **one row at a time**: *"commit the ceremonies piece"*, or at sprint planning, *"which of these are we committing?"*. It is how a candidate becomes work: committing a piece **is** creating its WBS row.
+
+For the row the author names:
+
+1. **The row must say what it is and where it goes.** `Type` and `Channel` are required now; ask for whichever is blank rather than committing without it.
+2. **Find the register.** The plan's `**Serves:**` names the goal; the row goes in the WBS of the project or area that owns it. Ask which register that is if the goal does not settle it, and find the file by shape as the contract says. A plan with no `**Serves:**` cannot say where its pieces belong — ask the author to name the goal first, and write it into the plan in the same turn.
+3. **Create the row** with the WBS tool (`wbs.py add`, in the `wbs-manager` skill's `scripts/`): a Story titled with the working title, Status `Not Started`, under the campaign's own WBS row if the author names one. Its estimate goes on the row if the author gives one. When it is due — a sprint, a planned date — is set on the row by the planning that commits it, not here.
+4. **Write the new Ref into the row's `WBS` cell**, and verify by reading the file back.
+
+**Run it row by row, never in bulk.** "Shall I commit the rest for you?" is the one question this action must never ask — pieces committed to clear a list are exactly the promises that get missed.
+
+**A committed piece that is dropped before it is started** — `WBS` set, `Piece` blank — leaves the arc: propose its WBS row for `Cancelled` with the author's reason as the closure note, run it on their yes, and remove the row. Nothing was written, so the WBS row is the whole record. A piece dropped after it started belongs to `content-post-writer`, which keeps the folder as the record.
+
+## Adding or amending the arc or the rate
 
 A **separate, smaller action** — not a re-run of the interview.
 
-One combined checkpoint: date, working title, type, channel, pillar (from *that plan's* `Pillars in play`, not the whole strategy's list), and an optional bundle label. `Status: pending`, `Piece` blank. Rows are appended after the last existing row and **never reordered by date**.
+- **Add a candidate**: one combined checkpoint — working title, and type, channel, pillar (from *that plan's* `Pillars in play`) and bundle label if known. Appended after the last existing row and **never reordered**.
+- **Edit a row's** working title, type, channel, pillar or bundle: the same action, run against the row the author names.
+- **Drop a candidate**: remove its row. Candidates are allowed to die.
+- **Amend an always-on plan's `**Monthly target:**`** or its `**Serves:**`: the same small action, run against the plan the author names. Raising or lowering a rate held for months is a normal thing to want, and it does not require re-running the interview.
 
-Editing an existing row's date, title, type, channel, pillar or bundle is the same action, run against the row the author names.
-
-Amending an always-on plan's `**Monthly target:**` is the same small action, run against the plan the author names. Raising or lowering a rate you have been holding for months is a normal thing to want, and it does not require re-running the interview.
-
-**`Status` is not editable through this action, in either direction.** `pending` → `delivered` belongs to write-back alone, and a `missed` the author wants visible stays a manual markdown edit. This action does not take authority over a field another mechanism owns, even though it would be trivial to allow.
-
-## Activation — the grooming pass
-
-**A separate action, asked for explicitly**, that moves a campaign from `refining` to `active` — where accumulated thinking gets resolved instead of accumulating further.
-
-Walk the table row by row. Each one takes exactly one of three exits:
-
-1. **Committed** — supply date, working title, type and channel.
-2. **Dropped** — removed from the table. Candidates are allowed to die.
-3. **Kept as context** — an already-published piece, `Date` blank and `Piece` linked. Never scored.
-
-Then ask for the `End date`, required from here on, and rewrite `**Stage:**` to `active`.
-
-**A plan cannot activate with a half-specified row left in it.**
-
-**Run it row by row, never in bulk.** "Shall I date the rest for you?" is the one question this action must never ask — dates chosen to clear a list are exactly the promises that get missed.
-
-**Nothing offers the reverse.** An active plan hand-edited back to `refining` is read as written, but no action performs it: reverting would erase the missed rows that are the entire value of having committed.
+**The `WBS` and `Piece` cells are not editable through this action.** `WBS` is written by committing a piece, and `Piece` by `content-post-writer` when the bundle folder is created. This action does not take authority over a field another mechanism owns, even though it would be trivial to allow.
 
 ## What this must never become
 
@@ -147,4 +139,5 @@ Then ask for the `End date`, required from here on, and rewrite `**Stage:**` to 
 - A flow that infers a structural field.
 - A combined strategy-and-plan interview. They are sequential, always.
 - Anything that edits the house — mission, pillars, credibility signals, topics to avoid all belong to `content-strategy-author`.
-- A reader of anything outside `content-system/`.
+- A second home for a piece's dates, effort or done-state. The WBS row holds them.
+- A reader of anything outside `content-system/` other than a WBS register, through the WBS tool.

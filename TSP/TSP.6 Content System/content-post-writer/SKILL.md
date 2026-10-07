@@ -1,6 +1,6 @@
 ---
 name: content-post-writer
-description: Interview-led writer that turns notes into finished content without generic AI voice. Use when the user wants to (1) turn notes or drafts into a clean blog post, LinkedIn post, video storyboard, deck skeleton or poster copy, (2) interview themselves into a strong angle, (3) rewrite a draft to be plainer and more specific, (4) cut fluff and remove templated phrases, or (5) refine a draft over multiple rounds until final. Resolves the scope, plan and any due commitment before proposing an angle, and credits that commitment when the piece is locked. Saves to content-system/posts/YYYY-MM-DD-slug/ as a bundle — one backbone.md plus one file per artifact.
+description: Interview-led writer that turns notes into finished content without generic AI voice. Use when the user wants to (1) turn notes or drafts into a clean blog post, LinkedIn post, video storyboard, deck skeleton or poster copy, (2) interview themselves into a strong angle, (3) rewrite a draft to be plainer and more specific, (4) cut fluff and remove templated phrases, or (5) refine a draft over multiple rounds until final. Resolves the scope, the plan and any committed piece before proposing an angle. Tracks each piece's status (drafting, locked, published, dropped) and moves the piece's WBS row with it, on the author's word. Also use when the author says a piece went live (record publication) or wants to drop a piece. Saves to content-system/posts/YYYY-MM-DD-slug/ as a bundle — one backbone.md plus one file per artifact.
 ---
 
 # Content Post Writer
@@ -65,7 +65,7 @@ Run the full workflow when the user is creating a post from notes or a draft. Fo
 
 Take the answer as given and record it in `backbone.md`.
 
-**Candidates come from `content-system/strategies/`, and nowhere else.** Not an external registry, not a notebook tree, not a sibling system — see "Resolving a scope" in [`_shared/contracts/strategy-file-format.md`](../_shared/contracts/strategy-file-format.md). If the source idea already carries a scope, use it silently and ask nothing.
+**Candidates come from `content-system/strategies/`, and nowhere else.** Not an external registry, not a notebook tree, not a sibling system — see "Resolving a scope" in [`contracts/strategy-file-format.md`](../_shared/contracts/strategy-file-format.md). If the source idea already carries a scope, use it silently and ask nothing.
 
 **Scope is recorded in path form** — `areaOfFocus/product-craft`, never `AF.6 Widgets`. The path form is what joins a post to its strategy; a display form joins to nothing.
 
@@ -75,7 +75,7 @@ This exists because it already went wrong. Six posts were scoped by surface topi
 
 If the author is unsure, offer to proceed as `default` and revisit at lock time. Do not resolve the ambiguity for them.
 
-**Once scope resolves to a strategy file, read it** — for the plan, the pillars, and any commitment that is due. See "Resolution" below. Where there is no strategy file, this step works exactly as it always has.
+**Once scope resolves to a strategy file, read it** — for the plan, its goal, the pillars, and any committed piece waiting to be written. See "Resolution" below. Where there is no strategy file, this step works exactly as it always has.
 
 ### If the resolved scope has no strategy file
 
@@ -103,15 +103,57 @@ Reached only when the scope has a strategy file. Full detail in [references/work
 |---|---|
 | 0 | Proceed on the strategy alone — angles consistent with its pillars, avoiding its topics-to-avoid. Offer once, declinably, to set up a plan with `content-plan-author`. |
 | 1 | Adopt silently. **Ask nothing about which plan.** |
-| 2+ | Ask once, as a pick-list naming each plan with its shape, its audience, and — for a campaign — its stage. A refining plan is offered like any other, labelled so that *nothing in it is committed* is visible **before** the choice, not discovered after it. |
+| 2+ | Ask once, as a pick-list naming each plan with its shape, its audience, and — for a campaign — how many committed pieces are waiting in it. |
 
-**Angle.** An **active** campaign plan with a `pending` commitment dated today or earlier surfaces that row's working title as the **default** angle — labelled as coming from an existing commitment, and fully overridable. Every other case falls back to the normal 2–3 angle proposal, constrained to the plan's `Pillars in play` and the strategy's `Topics to avoid`.
+**Piece.** A campaign whose arc table holds **committed rows not yet started** (`WBS` set, `Piece` blank) offers them as a pick-list, plus "something else". A row chosen gives the piece its WBS Ref, its type and channel, and its working title as the **default** angle — labelled as coming from the arc, and fully overridable. Every other case falls back to the normal 2–3 angle proposal, constrained to the plan's `Pillars in play` and the strategy's `Topics to avoid`.
 
-**A campaign at `Stage: refining` holds candidates, not commitments.** Nothing is surfaced from it, no pointer is written against it, and no row in it is ever credited at lock. A missing `**Stage:**` reads as `active`.
-
-**If the author accepts a surfaced commitment**, record the pointer in `backbone.md` immediately — not at lock time. If they override it, reject it, or nothing was due, **no pointer is written, ever**, even if the finished piece plainly fits a pillar.
+**Candidates are never offered as committed.** A row with no `WBS` is promised to no one; writing it means committing it first (see *The piece and its WBS row*).
 
 **Every step degrades to behaviour that already works.** No source link, no strategy file, zero plans, and an unresolvable scope are four independent soft-fail points. None is an error state, and no-strategy is the expected case for most scopes.
+
+## The piece and its WBS row
+
+A bundle is a **piece**, and a piece is worked only once it is committed: it has a row in the WBS of the project or area that owns the goal it serves. Status, the WBS Ref and how a register is found are owned by [`contracts/posts-format.md`](../_shared/contracts/posts-format.md) — *Piece status* and *WBS Ref*. This section is what this skill does with them.
+
+### Getting the WBS Ref, before the folder exists
+
+In this order, stopping at the first that answers:
+
+1. **The arc row the author picked** at Resolution carries it.
+2. **The author names it** — *"which WBS row is this piece? (`<scope>#<ID>`)"*.
+3. **No row exists yet** — offer, once, to create it: a Story titled with the working title, in the register of the goal's owner (the plan's `**Serves:**` says which goal; ask which register if that does not settle it). Run it with the WBS tool and write the new Ref back. If the piece is a candidate in an arc, write the Ref into that row's `WBS` cell in the same turn.
+
+**Declined, or no register can be found** — say plainly that the piece is not committed and nothing will track it, and do not create the folder. A piece with no row is the thing this design exists to prevent, and quietly writing it anyway is how content fell outside every sprint before.
+
+**Resolve the Ref to its register by shape**, as the contract says: no match or more than one is reported, never guessed.
+
+### The four transitions
+
+| Transition | This skill writes | Then proposes, in one line |
+|---|---|---|
+| **Start** — promotion, or a new folder at Phase 1 | `wbs`, `status: drafting`, `drafting: <today>` in the frontmatter; the arc row's `Piece` cell, if there is one | `wbs.py set <register> --id <ID> --status Implementing --sprint-added <sprint holding today>` — skipped if the row is already `Implementing` |
+| **Lock** — the last artifact named in `## Artifacts` is locked | `status: locked`, `locked: <today>` | nothing: the WBS row stays `Implementing` |
+| **Publish** — see *Recording publication* | `Published` in the index; once every artifact has one, `status: published`, `published: <last of those dates>` | `wbs.py set <register> --id <ID> --status Done --sprint-ended <sprint holding that date> --actual-end <that date> --closure "Published <date>: <title> — <channels>."` |
+| **Drop** — the author drops the piece | `status: dropped`, `dropped: <today>`, the reason as one line in `## Notes` | `wbs.py set <register> --id <ID> --status Cancelled --closure "Dropped <date>: <reason>"` |
+
+**The WBS tool is `wbs.py`, in the `wbs-manager` skill's `scripts/` folder.** The sprint holding a date is read from the register's own `sprints` calendar; if no sprint holds it, leave the sprint flag off and say so.
+
+**Run the WBS change only on the author's yes.** If they decline, the content status moves anyway — it is the content system's own record — and `content-review` will list the mismatch until someone settles it. Never change the WBS without asking, and never skip writing the content status because the WBS change was declined.
+
+**`published` and `dropped` are final.** Once there, nothing about the piece is kept in line again.
+
+### Recording publication
+
+**A separate action, on the author's word**: *"the blog post went live today"*, *"published the LinkedIn one on the 14th"*.
+
+1. Find the artifact's index row. If the author's words match more than one, ask which.
+2. Write its `Published` date — the date they give, or today if they say "today". **Never infer it** from the lock, the file dates or anything else.
+3. If every artifact in the bundle now has a `Published` date, move the piece to `published` and propose the WBS change above. If not, say which artifacts are still to go live, and change nothing else.
+4. Verify by reading back the index row and the frontmatter.
+
+### Dropping a piece
+
+Ask for the reason in one line if it was not given; it goes in `## Notes` and in the WBS closure note. The folder stays — it is the record of what was dropped and why. Any locked artifact keeps its index row.
 
 **Six Questions** (Phase 2): (1) Most important point, (2) Why it matters, (3) Why readers should care, (4) Easiest way to understand (analogy/example/structure), (5) Desired reader feeling, (6) Reader’s next action.
 
@@ -134,24 +176,24 @@ content-system/posts/YYYY-MM-DD-slug/
   instagram-video.md       <- a storyboard; the .mp4 never lives here
 ```
 
-- **Folder**: today's date and a short kebab-case slug. Created once the angle is set, or earlier when an idea is promoted from `content-system/ideas.md` — a folder holding only `## Idea` and `## Notes` is a valid, expected state.
+- **Folder**: today's date and a short kebab-case slug. Created once the angle is set, or earlier when an idea is promoted from `content-system/ideas.md` — a folder holding only `## Idea` and `## Notes` is a valid, expected state. **Either way, only once the WBS Ref is known** (see *The piece and its WBS row*).
 - **Promoting an idea that carries context**: it becomes the backbone's opening `## Notes`, and the entry is **removed from `ideas.md`** in the same write. Context travels with its idea; copied instead of moved it becomes two versions that disagree.
-- **`backbone.md`**: thin YAML frontmatter (`scope`, optional `from-idea`, optional `commitments`), then sections accruing in order as work progresses — `## Idea`, `## Notes`, `## Angle`, `## Audience`, `## Artifacts`, `## Persona`, `## Six Questions`, `## Outline`, `## Claims`. Absent sections are omitted, never left empty.
+- **`backbone.md`**: thin YAML frontmatter (`scope`, optional `from-idea`, `wbs`, `status`, and a date for each state reached), then sections accruing in order as work progresses — `## Idea`, `## Notes`, `## Angle`, `## Audience`, `## Artifacts`, `## Persona`, `## Six Questions`, `## Outline`, `## Claims`. Absent sections are omitted, never left empty.
 - **Artifacts**: `<channel>-<type>.md`. Both dimensions, always, including in a single-artifact bundle — two LinkedIn artifacts of different types, or one type across two channels, are ordinary cases that either half alone cannot distinguish.
 
 **A bundle of one is the normal case.** Nothing about the layout changes.
 
 **Why both dimensions and one backbone**: the index has always permitted `Format: both` while this skill stored exactly one `draft.md`, so a blog post and its LinkedIn version had nowhere to both live. The thinking is shared — angle, Six Questions, claims — and only the rendering differs.
 
-**Each artifact is finished independently.** Its own date, its own index row, its own lock, its own claim check and anti-AI voice check. Shared thinking does not mean shared prose. Locking one artifact writes back only its own commitment.
+**Each artifact is finished independently.** Its own date, its own index row, its own lock, its own claim check and anti-AI voice check. Shared thinking does not mean shared prose. Locking the last of them moves the piece to `locked`.
 
 **For types this system cannot produce** — video, deck, poster — write the **source artifact** that enables the final: a storyboard, a deck skeleton, poster copy. Never a rendered `.mp4`, `.pptx` or image.
 
 ### The index
 
-**`content-system/posts/index.md`** — one row per artifact: `| Date | Title | Type | Channel | Scope | Commitment | Published | Link |`. **Add the row in the same turn the artifact is locked — never later, never batched.** `backbone.md` is the source of truth; the index is a cache, so if the two disagree the backbone wins.
+**`content-system/posts/index.md`** — one row per artifact: `| Date | Title | Type | Channel | Scope | Published | Link |`. **Add the row in the same turn the artifact is locked — never later, never batched.** `backbone.md` is the source of truth; the index is a cache, so if the two disagree the backbone wins.
 
-**`Published` is left blank at lock.** It is a date the author records when the piece actually goes live. Write-back marks a commitment `delivered` when the *source artifact* is finished — for a video, the storyboard exists and the video does not. Filling `Published` at lock would report produced work as published, which is the one number this system exists to be honest about.
+**`Published` is left blank at lock.** It is written only by *Recording publication*, when the author says the artifact went live. A locked artifact is a finished *source* — for a video, the storyboard exists and the video does not. Filling `Published` at lock would report produced work as published, which is the one number this system exists to be honest about.
 
 **Why posts have an index and strategies do not**: artifacts accumulate chronologically without bound, which is exactly the case an index is for. Strategy files are bounded by how many scopes one person runs, so walking that folder costs the same as reading a cache — and a cache that costs the same as the thing it caches is pure liability.
 

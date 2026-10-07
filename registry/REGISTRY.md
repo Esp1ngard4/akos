@@ -42,7 +42,7 @@ python install.py add <skill> --into <your-project>
 
 **TSP.5 Artifact Register** — Inventory of the artifacts belonging to a scope - documents, folders, tools and physical items - recording what each is, where it lives digitally and physically, what contains it, and which tool governs its contents. The register assigns an ID that is written onto the artifact itself, so its claims about the filesystem can be checked.
 
-**TSP.6 Content System** — Turns thinking into finished, publish-ready pieces through interview rather than one-shot generation. Holds a position per scope, plans that commit it to dated or rate-based work, an inbox for sparks, an interview-led writer, and a review that reports delivery against what was promised. It is deliberately not a publisher: it stops at the finished piece and transmits to no platform.
+**TSP.6 Content System** — Turns thinking into finished, publish-ready pieces through interview rather than one-shot generation. Holds a position per scope, plans that name the goal they serve and hold a rate or an arc of pieces, an inbox for sparks, an interview-led writer, and a review that reports what was published against the rate and checks content against the WBS. Committed pieces run on the WBS Register (TSP.1). It is deliberately not a publisher: it stops at the finished piece and transmits to no platform.
 
 **TSP.7 Notebook Manager** — Plain-Markdown notebooks the agent keeps: a diary, notebooks scoped to a project, an area of focus or an area of interest, and meeting notes, with an index per notebook. Raw entries worth more than a note can be crystallized into static HTML posts that link back to the entry they came from. No app, no search index, no database - files only.
 
@@ -61,4 +61,4 @@ python install.py add <skill> --into <your-project>
 
 ---
 
-Generated from `registry/TSP Register.json` on 2026-10-02.
+Generated from `registry/TSP Register.json` on 2026-10-07.

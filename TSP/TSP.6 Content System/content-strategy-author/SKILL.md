@@ -120,7 +120,7 @@ This is not a schema validator, and you must not build one. It is you applying, 
 
 ## Plans are a separate flow
 
-This authors the **house only**. `## Plan:` sections — audience, objective, shape, channel, commitments — are authored separately and sequentially, never inside this interview.
+This authors the **house only**. `## Plan:` sections — the goal they serve, audience, objective, shape, channel, and a campaign's arc of pieces — are authored separately and sequentially, never inside this interview.
 
 A strategy with zero plans is the common and correct end state, not a step to push someone past.
 

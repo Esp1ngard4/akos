@@ -61,13 +61,15 @@ The reason context belongs here and not in a promoted `backbone.md`: a bundle fo
 
 ### Leaving the inbox
 
-**Promotion is the moment an idea starts becoming a piece** — an angle forming, an outline, notes about the writing rather than about the idea. It does not require an angle, a plan, or a commitment to finish. It creates a bundle folder with a `backbone.md` carrying the idea text and whatever context exists — see [`posts-format.md`](posts-format.md). That folder is where refinement lives: notes, the angle once it settles, Six Questions, outline.
+**Promotion is the moment an idea starts becoming a piece**: an angle forming, an outline, notes about the writing rather than about the idea. It does not require an angle or a plan. **It does require a WBS Ref**: a piece is worked only once it is committed, and committing it is creating its WBS row (see [`posts-format.md`](posts-format.md)). Promotion creates a bundle folder with a `backbone.md` carrying the idea text, whatever context exists, the WBS Ref and `status: drafting`. That folder is where refinement lives: notes, the angle once it settles, Six Questions, outline.
 
 This is deliberate: an idea being actively developed is neither "waiting" nor "written", and without promotion it would have to sit in the inbox pretending to be untouched. The three pipeline stages depend on the distinction being real.
 
+**Thinking about an idea before committing to it stays in the inbox**, as the entry's context. Recording why an idea matters is the capture finishing itself, and it needs no row anywhere.
+
 **On promotion**: the entry is removed, and the new `backbone.md` records `from-idea:` with the ID and the original text. **Any context becomes the backbone's opening `## Notes`** — it moves with the idea, so there are never two live copies. Traceability runs piece → idea; there is no backlink from the inbox into the piece, because the entry no longer exists.
 
-**A promoted idea can be abandoned.** Delete the bundle folder, or leave it — an unfinished folder with no locked artifact is a normal, visible state, and it is what the middle pipeline stage counts. Nothing forces it back into the inbox.
+**A promoted idea can be abandoned.** It is then a dropped piece: its `backbone.md` reads `status: dropped` with the date and a one-line reason, and its WBS row is `Cancelled`. The folder stays as the record. Nothing forces it back into the inbox.
 
 **On dropping**: the idea moves to the `## Dropped` table with a date and a one-line reason; its context goes with it and may be pruned. That section stays a table because a dropped idea is a one-liner with a reason, it never carries prose, and nothing reads it.
 
@@ -93,6 +95,7 @@ No file per idea. No status field. No priority, tags, or scoring. No automatic p
 
 | Date | Change |
 |---|---|
+| 2026-10-06 | Promotion requires a WBS Ref: a bundle folder is a committed piece being worked, so the row that commits it exists first. An abandoned promotion is a dropped piece, kept as a record, not a deleted folder. Thinking before commitment stays in the entry's context. |
 | 2026-09-01 | Table replaced by one `###` entry per idea, so that context sits with the idea it belongs to. The first attempt kept the table and put context in a separate `## Context` section keyed by ID; it needed a verify rule for orphaned blocks, which was the tell that one thing had been split across two places. Nothing parses this file — the tool ships no code — so the table was a convention, not a schema. |
 | 2026-09-01 | Optional context added at capture time. Six ideas captured as one-liners split cleanly on re-reading: the ones carrying a number or a named failure would survive a week, the ones naming a topic and promising a payoff would not, and the payoff was the part being lost. Promotion was the existing answer and is the wrong instrument — a bundle folder under `posts/` reads as a commitment to write the thing, and recording why an idea matters is the capture finishing itself, not the start of work. |
 | 2026-08-13 | Batch capture and announced batch scope stated explicitly. First real use captured five ideas into a non-existent inbox and applied one scope across them — all reasonable, none sanctioned, so the next agent had no way to know which of those behaviours was intended. |
