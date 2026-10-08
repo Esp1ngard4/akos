@@ -740,68 +740,70 @@ def test_sprint_ceremonies(root, scratch):
 
 
 DAILY_TOOL = "TSP.9 Daily Loop"
-DAILY_SKILLS = ["standup-facilitator", "morning-planner"]
+DAILY_SKILL = "daily-loop-facilitator"
+DAILY_RETIRED = ["standup-facilitator", "morning-planner"]
 DAY_SECTIONS = ["## Today's update", "## Next steps", "## Risks/Blockers",
                 "## Notes", "### Morning"]
 
 
 def test_daily_loop(root, scratch):
-    """TSP.9 has no code; what can break is the contract between its halves.
+    """TSP.9 has no code; what can break is the contract between its flows.
 
-    The morning creates the day's record from a template the evening owns, and
-    each half reads what the other wrote: the morning reads `status: closed`
-    and the evening's frogs, the evening reads `### Morning`. If one skill's
-    wording drifts from the other's, a record one writes is one the other
-    cannot read, and nothing fails until a real morning. So the shared terms
-    are asserted to appear in both.
+    The morning creates the day's record from the skill's template, and each
+    flow reads what the other wrote: the morning reads `status: closed` and the
+    evening's frogs, the evening reads `### Morning`. If one flow's wording
+    drifts from the other's, a record one writes is one the other cannot read,
+    and nothing fails until a real morning. So the skill is split at its flow
+    headings and each marker is asserted where it is written and where it is
+    read.
     """
     print("\nTSP.9 Daily Loop")
     tool = os.path.join(root, "TSP", DAILY_TOOL)
     if not check("tool folder present", os.path.isdir(tool), tool):
         return
-    texts = {}
-    for name in DAILY_SKILLS:
-        path = os.path.join(tool, name, "SKILL.md")
-        if not check("%s has SKILL.md" % name, os.path.isfile(path), path):
-            return
-        texts[name] = io.open(path, encoding="utf-8").read()
-        check("%s declares name and description" % name,
-              "name: %s" % name in texts[name][:600]
-              and "description:" in texts[name][:600], texts[name][:120])
+    path = os.path.join(tool, DAILY_SKILL, "SKILL.md")
+    if not check("%s has SKILL.md" % DAILY_SKILL, os.path.isfile(path), path):
+        return
+    text = io.open(path, encoding="utf-8").read()
+    check("%s declares name and description" % DAILY_SKILL,
+          "name: %s" % DAILY_SKILL in text[:300] and "description:" in text[:300],
+          text[:120])
+    stale = [n for n in DAILY_RETIRED if os.path.exists(os.path.join(tool, n))]
+    check("the skills it replaced no longer ship", not stale, ", ".join(stale))
     check("TD.9 present", any(n.startswith("TD.9") for n in os.listdir(tool)))
     check("links resolve in the catalogue", not broken_links(tool),
           "; ".join(broken_links(tool)[:5]))
 
-    evening, morning = texts["standup-facilitator"], texts["morning-planner"]
-    block = re.search(r"```markdown\n(---\nkind: day-record.*?)```", evening, re.S)
-    if not check("the stand-up owns a day-record template", bool(block)):
+    block = re.search(r"```markdown\n(---\nkind: day-record.*?)```", text, re.S)
+    if not check("the skill owns a day-record template", bool(block)):
         return
     template = block.group(1)
     missing = [s for s in DAY_SECTIONS if s not in template]
     check("the template holds the four sections and ### Morning", not missing,
           ", ".join(missing))
-    for term in ("kind: day-record", "status: closed", "### Morning",
-                 "standup-facilitator"):
-        check("both halves name %r" % term, term in evening and term in morning,
-              "evening: %s, morning: %s" % (term in evening, term in morning))
+    flows = re.search(r"\n## Morning\n(.*?)\n## Evening\n(.*?)\n## ", text, re.S)
+    if not check("the skill has a Morning and an Evening flow", bool(flows)):
+        return
+    morning, evening = flows.group(1), flows.group(2)
     check("the morning reads the evening's frogs where the evening writes them",
           "Next steps" in morning and "**Frogs for tomorrow:**" in evening)
     check("the evening reads the morning's frogs where the morning writes them",
           "### Morning" in evening and "**Frogs:**" in morning)
+    check("the morning reads whether the evening closed the record",
+          "status: closed" in morning)
 
     sr = os.path.join(root, "TSP", "TSP.8 Sprint Ceremonies", "sprint-facilitator",
                       "scripts", "sprint_record.py")
     named = re.findall(r"sprint_record\.py\s+([a-z]+)", evening)
     offered = set(re.findall(r'add_parser\(\s*"([a-z]+)"', io.open(sr, encoding="utf-8").read()))
-    check("the ceremony command the stand-up names exists",
+    check("the ceremony command the evening names exists",
           named and all(c in offered for c in named), str(named))
 
     project = os.path.join(scratch, "daily-project")
     os.makedirs(project, exist_ok=True)
-    for name in DAILY_SKILLS:
-        ok, out = run([os.path.join(root, "install.py"), "add", name,
-                       "--into", project, "--catalogue", root], root)
-        check("install.py add %s" % name, ok, out)
+    ok, out = run([os.path.join(root, "install.py"), "add", DAILY_SKILL,
+                   "--into", project, "--catalogue", root], root)
+    check("install.py add %s" % DAILY_SKILL, ok, out)
 
 
 def test_tsp_fields(root, scratch):

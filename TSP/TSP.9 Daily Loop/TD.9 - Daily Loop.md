@@ -9,7 +9,7 @@ The two daily routines, morning and evening, and the one record they share.
 
 A **frog** is the most important thing to complete that day, one to three of them (after Brian Tracy's *Eat That Frog*). It belongs to its day. Every evening the frogs are put down, done or not, and tomorrow's are chosen fresh. A frog that is never cleared becomes a label nobody believes.
 
-**The pairing is the point.** The evening chooses while the day's context is still loaded, and the morning confirms after a night's distance. Each half catches what the other cannot. One is a tool with two skills, not two tools, because the record is what joins them. The morning's decision is the one thing the evening cannot otherwise see: a frog swapped in the morning looks, by evening, exactly like a frog not done.
+**The pairing is the point.** The evening chooses while the day's context is still loaded, and the morning confirms after a night's distance. Each half catches what the other cannot. They are one tool, and one skill with two flows, because the record is what joins them. The morning's decision is the one thing the evening cannot otherwise see: a frog swapped in the morning looks, by evening, exactly like a frog not done.
 
 **The evening is also a watchdog.** A routine that runs every day is where a missed fortnightly ceremony surfaces by itself. Each evening the stand-up asks the sprint records whether a ceremony is due, and raises one before proposing frogs. It reports and hands over; it never runs the ceremony.
 
@@ -18,25 +18,25 @@ A **frog** is the most important thing to complete that day, one to three of the
 | | |
 |---|---|
 | The loop | Runs daily on real work in its original setting, where frogs were task-tracker labels and the evening read a calendar |
-| Register-only, as shipped here | **Not yet used on real work.** Walked through once on a scratch workspace: a first morning, a day's work committed, and an evening that closed the record and chose the next frogs. It found three gaps, now fixed in the skills. The first morning was treated as a missed evening. The evening had nothing to propose once the sprint's committed work was done. And the register's date form, `2026-Oct-2`, has to be matched as written |
+| Register-only, as shipped here | **Not yet used on real work.** Walked through once on a scratch workspace: a first morning, a day's work committed, and an evening that closed the record and chose the next frogs. It found three gaps, now fixed in the skill. The first morning was treated as a missed evening. The evening had nothing to propose once the sprint's committed work was done. And the register's date form, `2026-Oct-2`, has to be matched as written |
 
 ## Components
 
 | Component | Location | Purpose |
 |---|---|---|
 | This document | `TSP.9 Daily Loop/` | What the loop is for and why; how to adapt it |
-| `standup-facilitator` | `standup-facilitator/SKILL.md` | The evening. **Owns the record's template** and closes the record; also takes notes during the day |
-| `morning-planner` | `morning-planner/SKILL.md` | The morning. Opens the record and writes only its `### Morning` |
+| `daily-loop-facilitator` | `daily-loop-facilitator/SKILL.md` | Both moments. **Owns the record's template**. The Morning flow opens the record, the Evening flow closes it, and it also takes notes during the day |
 | Your day records | wherever you keep them; found by `kind: day-record` | **Source of truth**: one Markdown file per day |
 
 **Dependencies, all optional.** `wbs-manager` (TSP.1) lets both halves read the work in flight. `sprint-facilitator` (TSP.8) provides the ceremony check. `notebook-capture` (TSP.7) takes the diary offer. Without any of them, the loop still runs on git and the user's own account of the day.
 
-## What the skills cover (and this document doesn't repeat)
+## What the skill covers (and this document doesn't repeat)
 
-`standup-facilitator/SKILL.md` owns the evening's steps, the record template, and the rules for what the record keeps. `morning-planner/SKILL.md` owns the morning's steps and the day's shape. This document covers why the loop is shaped this way, how to adapt it, relationships and history.
+`daily-loop-facilitator/SKILL.md` owns both flows' steps, the frog, the day's shape, the record template, and the rules for what the record keeps. This document covers why the loop is shaped this way, how to adapt it, relationships and history.
 
 ## Design decisions
 
+- **One skill, not two.** The morning and the evening share the frog, the day's shape, the record, the voice and the ground rules. As two skills, each of those was written twice, and the record's template lived in one skill while the other borrowed it: a contract between files that only a test held together. Where each half carries heavy tool-specific steps of its own (a calendar for each, labels, separate triggering events), two skills can earn their keep. Stripped to the registers, the morning is four steps around a record, and one file is the honest shape.
 - **The record is the product; the conversation is scaffolding.** The screen shows only what must be decided now. The record keeps only what no register already holds. Git holds what changed, the WBS holds status, effort and dates, and RAID holds the risk. A record that restates them writes the day out twice and is read once. What is left is what was believed and turned out wrong, and why a premise was rejected. A stand-up record that ran to ninety lines by restating commit messages is where this rule came from.
 - **`status: closed`, not the file's existence, is the evidence the stand-up ran.** The morning opens the record, so a file can exist for a day whose evening never ran.
 - **"What did I do today" is read from where the work leaves a trace.** A task tracker sees only work tracked as tasks. Building a tool or writing a document leaves no trace there. One day that took a governance document through four revisions and published a tool showed zero events in the tracker's activity log, so a stand-up reading only the tracker reports an empty day and is confidently wrong. Git, the registers and the day's own notes are read first.
@@ -78,7 +78,7 @@ The reminder can name them: "email, chat, the paper notebook". Keep it a reminde
 
 ### Anything before the morning plan
 
-A routine that comes first (exercise, priming, reading) belongs before `morning-planner` and outside it. If you want it in the record, add a line to your copy of the morning skill, not a step.
+A routine that comes first (exercise, priming, reading) belongs before the Morning flow and outside it. If you want it in the record, add a line to the Morning flow in your copy, not a step.
 
 ### A weekly review
 
@@ -86,7 +86,7 @@ Not shipped in AKOS yet. Where one exists, the evening checks its records the sa
 
 ## How it is tested
 
-`tests/smoke_test.py` installs both skills into an empty project and checks the record contract the two share. The morning creates the record from the template the stand-up owns, so both must name the same `kind`, the same `status` values and the same four sections. It also checks the ceremony command the stand-up names exists in TSP.8.
+`tests/smoke_test.py` installs the skill into an empty project and checks the record each flow reads from the other: the template holds the four sections and `### Morning`, and each frog marker one flow writes is one the other reads (`**Frogs for tomorrow:**` under `Next steps`, `**Frogs:**` under `### Morning`). It checks that the ceremony command the evening names exists in TSP.8, and that neither of the two skills this one replaced still ships beside it.
 
 What is **not** tested is whether the agent drafts a good day or chooses good frogs. No test asserts that, and none can.
 
@@ -101,7 +101,7 @@ What is **not** tested is whether the agent drafts a good day or chooses good fr
 
 **Daily:** the routines themselves.
 
-**On any change to the routine:** what it is and why changes here; how it runs changes in the skill that owns the step. The record template changes only in `standup-facilitator`.
+**On any change to the routine:** what it is and why changes here; how it runs changes in the skill.
 
 ## Open items
 
@@ -114,4 +114,5 @@ What is **not** tested is whether the agent drafts a good day or chooses good fr
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-08 | `morning-planner` and `standup-facilitator` merged into one skill, `daily-loop-facilitator`, with a Morning and an Evening flow. v1.0 justified one tool but never two skills, and the split cost a second copy of every shared rule (the frog, the day's shape, the voice, the ground rules) and a template one skill owned and the other borrowed. Behaviour is unchanged. **To move an installed copy:** `install.py add daily-loop-facilitator`, then delete the two old folders and their entries in `tools.lock.json`; `update` on either old name reports that it no longer exists upstream. |
 | v1.0 | 2026-10-02 | Published as TSP.9. The morning and evening routines as one tool with two skills and a shared day record, run on git and the registers alone. Calendar time blocks, tracker labels and inbox reads are described as adaptations rather than shipped. |

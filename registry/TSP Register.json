@@ -224,13 +224,13 @@
       "Description": "The morning plan and the evening stand-up as one tool, sharing one Markdown record per day. The evening reviews the day from git, the WBS and the day's notes, raises a sprint ceremony that is due, chooses one to three frogs for tomorrow and closes the record; the morning confirms the frogs and opens the next. A calendar, a task tracker and inboxes are described as adaptations, not shipped.",
       "Doc Aux": "Yes",
       "ID": 9,
-      "Last Reviewed": "2026-10-02",
+      "Last Reviewed": "2026-10-08",
       "Links": "TSP/TSP.9 Daily Loop/TD.9 - Daily Loop.md",
       "Name": "Daily Loop",
       "Notes": "Usable: the loop runs daily on real work in its original setting. Register-only mode, as shipped, has been exercised on a scratch workspace but not yet on real work - see TD.9, Status. No code; wbs-manager, sprint-facilitator and notebook-capture are each optional.",
       "Primary Area": "Personal productivity",
       "Relevancy": "Often",
-      "Skill": "standup-facilitator, morning-planner",
+      "Skill": "daily-loop-facilitator",
       "Status": "In Progress",
       "Type": "Work instruction"
     }
