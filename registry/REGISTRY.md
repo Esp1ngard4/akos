@@ -29,6 +29,7 @@ python install.py add <skill> --into <your-project>
 | TSP.7 | **Notebook Manager** | In Progress | `notebook-capture` | [TD.7](../TSP/TSP.7%20Notebook%20Manager/TD.7%20-%20Notebook%20Manager.md) |
 | TSP.8 | **Sprint Ceremonies** | In Progress | `sprint-facilitator`, `sprint-planning-precheck` | [TD.8](../TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) |
 | TSP.9 | **Daily Loop** | In Progress | `daily-loop-facilitator` | [TD.9](../TSP/TSP.9%20Daily%20Loop/TD.9%20-%20Daily%20Loop.md) |
+| TSP.10 | **Reporting** | In Progress | `reporting` | [TD.10](../TSP/TSP.10%20Reporting/TD.10%20-%20Reporting.md) |
 
 ## What each is for
 
@@ -50,6 +51,8 @@ python install.py add <skill> --into <your-project>
 
 **TSP.9 Daily Loop** — The morning plan and the evening stand-up as one tool, sharing one Markdown record per day. The evening reviews the day from git, the WBS and the day's notes, raises a sprint ceremony that is due, chooses one to three frogs for tomorrow and closes the record; the morning confirms the frogs and opens the next. A calendar, a task tracker and inboxes are described as adaptations, not shipped.
 
+**TSP.10 Reporting** — The project status report and the sprint update, each a JSON record and an HTML view generated from the WBS, RAID and the sprint records. The status report proposes the Essential 4 (On Time, On Scope, On Quality, Resources) with their evidence for the owner to confirm or override with a reason; the sprint update sets the last sprint's outcome beside the new sprint's commitments across projects, with the sprint's cards as a board on its own tab. Both open with an executive summary drafted in plain language and confirmed by the owner.
+
 ## Status meanings
 
 | Status | Meaning |
@@ -61,4 +64,4 @@ python install.py add <skill> --into <your-project>
 
 ---
 
-Generated from `registry/TSP Register.json` on 2026-10-08.
+Generated from `registry/TSP Register.json` on 2026-10-12.

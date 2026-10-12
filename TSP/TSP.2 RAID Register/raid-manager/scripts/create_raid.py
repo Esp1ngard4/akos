@@ -16,14 +16,21 @@ import registry as R                                            # noqa: E402
 FIELDS = ["RAID.ID", "Detail", "Type", "DRI", "Urgency (1-5)",
           "Consequences (1-5)", "Feasibility", "Probability of Occurrence (1-5)",
           "Severity (1-5)", "Response Strategy", "Mitigation Target %",
-          "Residual Risk Score", "MoSCoW", "Status", "Last Review", "Review On",
+          "Residual Risk Score", "MoSCoW", "Status", "Outcome", "Trend",
+          "Last Review", "Review On",
           "Next Review On", "Description", "Action Plan", "Acceptance Criteria",
           "Action Log", "Category", "Tracked Externally", "WBS Ref", "Opened On",
           "Requested By", "Involve", "Has AuxMat", "Estimated Effort", "ETC",
           "ETC Renegotiated", "Closed On", "Closed By"]
 
-TYPES = ["Risk", "Action", "Issue", "Decision", "Idea"]
+TYPES = ["Risk", "Action", "Issue", "Decision", "Idea", "Change"]
 STATUSES = ["Open", "Closed"]
+# Outcome answers a Change; Trend is the DRI's read of an entry's direction
+# since its last review, stored as the arrow every reader shows.
+OUTCOMES = ["Approved", "Rejected", "Withdrawn"]
+TRENDS = [u"↑", u"↗", u"→", u"↘", u"↓"]
+VOCABULARIES = {"type": TYPES, "status": STATUSES, "outcome": OUTCOMES,
+                "trend": TRENDS}
 
 # Priority and Target Residual Risk are not fields: they are computed from the
 # scores when the dashboard is rendered, so a stored copy cannot go stale.
@@ -46,7 +53,7 @@ def main():
 
     data = R.new("raid-register", args.project, {"entries": []},
                  settings={"fields": {"entries": FIELDS},
-                           "vocabularies": {"type": TYPES, "status": STATUSES}})
+                           "vocabularies": dict((k, list(v)) for k, v in VOCABULARIES.items())})
     if args.author:
         data["meta"]["settings"]["author"] = args.author
     R.save(args.output, data)

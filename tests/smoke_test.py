@@ -773,6 +773,122 @@ def test_sprint_ceremonies(root, scratch):
           all(n in lock.get("tools", {}) for n in SPRINT_SKILLS), str(sorted(lock.get("tools", {}))))
 
 
+REPORT_TOOL = "TSP.10 Reporting"
+
+
+def test_reporting(root, scratch):
+    """Both reports, end to end, on a project built with AKOS's own tools.
+
+    Nothing is copied from anywhere: the WBS, the RAID register and the sprint
+    records are made by their own scripts, the way a new user would make them,
+    so a report that runs here runs on anything those tools produce.
+    """
+    import json
+    print("\nTSP.10 Reporting")
+    tool = os.path.join(root, "TSP", REPORT_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    check("TD.10 present", any(n.startswith("TD.10") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool), str(broken_links(tool))[:200])
+    report = os.path.join(tool, "reporting", "scripts", "report.py")
+    wbs_dir = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs = os.path.join(wbs_dir, "wbs.py")
+    raid = os.path.join(root, "TSP", "TSP.2 RAID Register", "raid-manager", "scripts", "raid.py")
+    sr = os.path.join(root, "TSP", SPRINT_TOOL, "sprint-facilitator", "scripts", "sprint_record.py")
+
+    work = os.path.join(scratch, "reporting")
+    project, records = os.path.join(work, "atlas"), os.path.join(work, "records")
+    os.makedirs(project)
+    reg, conv = os.path.join(project, "WBS Atlas.json"), os.path.join(work, "conventions.json")
+    raid_reg = os.path.join(project, "RAID Atlas.json")
+    for label, cmd in [
+            ("create the WBS", [os.path.join(wbs_dir, "create_wbs.py"), reg, "Atlas"]),
+            ("seed and import a calendar", [wbs, "sprints", "seed", conv, "--scope", "Atlas",
+                                            "--year", "2026", "--anchor", "2026-07-19"]),
+            ("", [wbs, "sprints", "import", reg, "--from", conv]),
+            ("a key deliverable", [wbs, "add", reg, "Website", "--type", "Deliverable",
+                                   "--key-deliverable", "Y", "--baseline-end", "2026-Nov-30"]),
+            ("two stories committed", [wbs, "add", reg, "Login page", "--parent", "1",
+                                       "--sprint-planned", "S26.Q4.1"]),
+            ("", [wbs, "add", reg, "Signup page", "--parent", "1", "--sprint-planned", "S26.Q4.1"]),
+            ("one of them done", [wbs, "set", reg, "--id", "2", "--status", "Done", "--closure",
+                                  "What happened: shipped. AC: (1) met. Follow-up: none."]),
+            ("a RAID register with a risk",
+             [os.path.join(os.path.dirname(raid), "create_raid.py"), raid_reg, "Atlas"]),
+            ("", [raid, "add", raid_reg, "Design late", "--type", "Risk",
+                  "--because-of", "a shared designer", "--risk-that", "signup slips",
+                  "--may-result-in", "a late launch"]),
+            ("plan the last sprint and this one", [sr, "plan", records, "S26.Q3.7", "--calendar", conv]),
+            ("", [sr, "plan", records, "S26.Q4.1", "--calendar", conv])]:
+        ok, out = run(cmd, work)
+        if not ok or label:
+            if not check(label or "setup", ok, out[:300]):
+                return
+    path = os.path.join(records, "S26.Q4.1.md")
+    text = io.open(path, encoding="utf-8").read()
+    text = text.replace("**Capacity:** _h available_ · _h planned_", "**Capacity:** 40h available · 30h planned")
+    text = text.replace("|  |  |  |  |  |\n\n### Committed", "| G1 | Signup is live | Signup accepts users |  |  |\n\n### Committed", 1)
+    text = text.replace("| Item | Effort | Area | Goal | Notes |\n|---|---|---|---|---|\n|  |  |  |  |  |",
+                        "| Item | Effort | Area | Goal | Notes |\n|---|---|---|---|---|\n| Atlas#3 Signup page | 4h | Product | G1 |  |")
+    text = text.replace("|  |  |  |\n\n### Iteration goals", "| Sam | 4 |  |\n\n### Iteration goals", 1)
+    io.open(path, "w", encoding="utf-8").write(text)
+
+    ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-14"], work)
+    status = os.path.join(project, "Reports", "Status", "2026-10-14 Status.json")
+    check("status writes a record and a view",
+          ok and os.path.exists(status) and os.path.exists(status[:-5] + ".html"), out[:300])
+    rec = json.load(io.open(status, encoding="utf-8")) if os.path.exists(status) else {}
+    sig = rec.get("signals") or {}
+    check("the four signals are proposed with evidence, and Mood from the fist of five",
+          all(sig.get(k, {}).get("evidence") for k in ("time", "scope", "quality", "resources"))
+          and "mood" in sig, str(sorted(sig))[:200])
+    check("the top risk comes from the RAID register",
+          any(r.get("detail") == "Design late" for r in rec.get("risks") or []), str(rec.get("risks"))[:200])
+    ok, _ = run([report, "confirm", status, "--signal", "time", "--rating", "red"], work)
+    check("an override without a reason is refused", not ok)
+    ok, out = run([report, "confirm", status, "--signal", "all"], work)
+    check("confirm all accepts the proposals", ok, out[:200])
+    ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-14"], work)
+    check("a same-day rerun refuses to drop confirmed ratings", not ok, out[:200])
+
+    ok, out = run([report, "sprint", "--sprint", "S26.Q4.2", "--records", records,
+                   "--project", project], work)
+    check("a sprint not yet planned is refused", not ok and "has not been planned" in out, out[:200])
+    ok, out = run([report, "sprint", "--sprint", "S26.Q4.1", "--records", records,
+                   "--project", project, "--as-of", "2026-10-14"], work)
+    update = os.path.join(work, "Reports", "Sprint Update", "S26.Q4.1 Sprint Update.json")
+    check("the sprint update lands beside the records", ok and os.path.exists(update), out[:300])
+    rec = json.load(io.open(update, encoding="utf-8")) if os.path.exists(update) else {}
+    lanes = [l for p in (rec.get("board") or {}).get("projects") or [] for l in p["lanes"]]
+    check("this sprint's goals, capacity, confidence and hours by area are read",
+          (rec.get("this") or {}).get("goals") and (rec.get("capacity") or {}).get("available") == 40
+          and rec.get("mood") == 4 and (rec.get("area") or {}).get("Product") == 4, str(rec.get("area")))
+    check("the board puts both cards in the deliverable's lane",
+          len(lanes) == 1 and lanes[0]["id"] == 1 and len(lanes[0]["cards"]) == 2, str(lanes)[:300])
+    page = io.open(update[:-5] + ".html", encoding="utf-8").read() if os.path.exists(update) else ""
+    check("the board is on its own tab", 'id="v-board"' in page and "Sprint board" in page)
+    ok, _ = run([report, "confirm", update, "--summary", "Smoke summary."], work)
+    ok, _ = run([report, "sprint", "--sprint", "S26.Q4.1", "--records", records,
+                 "--project", project, "--as-of", "2026-10-15"], work)
+    kept = json.load(io.open(update, encoding="utf-8")).get("summary", {}).get("text") if ok else None
+    check("a rerun mid-sprint keeps the confirmed summary", kept == "Smoke summary.", str(kept))
+
+    # --- installed together with what it needs, it finds its siblings ----------
+    target = os.path.join(scratch, "report-project")
+    os.makedirs(target)
+    for name in ("reporting", "wbs-manager", "sprint-facilitator"):
+        ok, out = run([os.path.join(root, "install.py"), "add", name, "--into", target,
+                       "--catalogue", root], root)
+        if not check("install.py add %s" % name, ok, out[:300]):
+            return
+    installed = os.path.join(target, ".github", "skills", "reporting", "scripts", "report.py")
+    ok, out = run([installed, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-16"], work)
+    check("the installed copy finds wbs-manager and sprint-facilitator beside it", ok, out[:300])
+
+
 DAILY_TOOL = "TSP.9 Daily Loop"
 DAILY_SKILL = "daily-loop-facilitator"
 DAILY_RETIRED = ["standup-facilitator", "morning-planner"]
@@ -1051,6 +1167,7 @@ def main():
         test_notebook_manager(root, scratch)
         test_sprint_ceremonies(root, scratch)
         test_daily_loop(root, scratch)
+        test_reporting(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
 
@@ -1064,7 +1181,7 @@ def main():
               "reconciliation case, the catalogue, the shared modules, the "
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
-              "ceremonies and the daily loop)." % len(TOOLS))
+              "ceremonies, the daily loop and reporting)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

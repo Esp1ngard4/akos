@@ -20,6 +20,7 @@ FIELDS = {
     "Probability of Occurrence (1-5)": "probability", "Severity (1-5)": "severity",
     "Response Strategy": "responseStrategy", "Mitigation Target %": "mitigationTarget",
     "Residual Risk Score": "residualRisk", "MoSCoW": "moscow", "Status": "status",
+    "Outcome": "outcome", "Trend": "trend",
     "Last Review": "lastReview", "Review On": "reviewOn",
     "Next Review On": "nextReviewOn", "Description": "description",
     "Action Plan": "actionPlan", "Acceptance Criteria": "acceptanceCriteria",
@@ -67,6 +68,12 @@ def read_raid(register_path):
                      if isinstance(e, dict) and e.get("on")]
             if dates:
                 entry["updated"] = max(dates)
+            # A Change's decision date is the log entry that set its Outcome;
+            # it is not stored twice.
+            decided = [e.get("on") for e in log if isinstance(e, dict)
+                       and "Outcome" in (e.get("changed") or {}) and e.get("on")]
+            if decided and entry.get("outcome"):
+                entry["decidedOn"] = max(decided)
 
         entries.append(dict((k, v) for k, v in entry.items() if v is not None))
     return entries
@@ -81,6 +88,7 @@ def detect_types(entries):
         "has_issues": "Issue" in types,
         "has_decisions": "Decision" in types,
         "has_ideas": "Idea" in types,
+        "has_changes": "Change" in types,
         "types_present": sorted(t for t in types if t),
     }
 
@@ -171,6 +179,14 @@ tr:hover td {{ background: #f8fafc; }}
 .badge-risk {{ background: #fef3c7; color: #92400e; }}
 .badge-decision {{ background: #e0e7ff; color: #3730a3; }}
 .badge-idea {{ background: #f0fdf4; color: #166534; }}
+.badge-change {{ background: #fce7f3; color: #9d174d; }}
+.trend {{ font-size: 15px; font-weight: 700; }}
+.trend-stale {{ font-size: 11px; color: #9ca3af; font-style: italic; white-space: nowrap; }}
+.outcome-approved {{ color: #16a34a; font-weight: 600; }}
+.outcome-rejected {{ color: #6b7280; font-weight: 600; }}
+.outcome-withdrawn {{ color: #6b7280; font-weight: 600; }}
+.outcome-undecided {{ color: #d97706; font-weight: 600; }}
+.outcome-overdue {{ color: #dc2626; font-weight: 600; }}
 .status-open {{ color: #dc2626; font-weight: 600; }}
 .status-resolved {{ color: #16a34a; font-weight: 600; }}
 .status-closed {{ color: #16a34a; font-weight: 600; }}
@@ -214,6 +230,7 @@ tr:hover td {{ background: #f8fafc; }}
 <div class="kpis" id="kpis"></div>
 <div class="tabs" id="tabs">
   <div class="tab active" data-tab="board">Board</div>
+  <div class="tab" data-tab="changes">Changes</div>
   <div class="tab" data-tab="analytics">Analytics</div>
   <div class="tab" data-tab="reviews">Reviews</div>
 </div>
@@ -224,12 +241,13 @@ tr:hover td {{ background: #f8fafc; }}
       <thead><tr>
         <th data-sort="id">ID</th><th data-sort="detail">Detail</th><th data-sort="type">Type</th>
         <th data-sort="priority">Priority</th><th data-sort="moscow">MoSCoW</th>
-        <th data-sort="status">Status</th><th data-sort="trackedExternally">Tracked</th><th data-sort="hasAuxMat">AuxMat</th><th data-sort="lastReview">Last Review</th><th data-sort="updated">Updated</th>
+        <th data-sort="status">Status</th><th data-sort="trend" title="Direction since the last review, set by the DRI">Trend</th><th data-sort="trackedExternally">Tracked</th><th data-sort="hasAuxMat">AuxMat</th><th data-sort="lastReview">Last Review</th><th data-sort="updated">Updated</th>
       </tr></thead>
       <tbody id="tableBody"></tbody>
     </table>
   </div>
 </div>
+<div class="panel" id="panel-changes"><div id="changesView"></div></div>
 <div class="panel" id="panel-analytics">
   <div class="charts-grid">
     <div class="chart-card"><h3>By Type</h3><div class="chart-container"><canvas id="chartType"></canvas></div></div>
@@ -345,14 +363,15 @@ function renderTable() {{
     return String(av).localeCompare(String(bv)) * sortDir;
   }});
   const rows = items.map(e => {{
+    const trend = trendCell(e);
     const pColor = e.priority >= 80 ? '#dc2626' : e.priority >= 60 ? '#d97706' : '#16a34a';
     const typeClass = 'badge-'+(e.type||'').toLowerCase();
     const statusClass = 'status-'+(e.status||'').toLowerCase();
-    return '<tr><td><strong>R.'+e.id+'</strong></td><td><a class="detail-link" onclick="showDetail('+e.id+')">'+e.detail+'</a></td><td><span class="badge '+typeClass+'">'+(e.type||'—')+'</span></td><td><div class="priority-bar"><div class="priority-fill" style="width:'+e.priority+'%;background:'+pColor+'"></div></div>'+e.priority+'%</td><td>'+(e.moscow||'—').replace(/^\\d\\./,'')+'</td><td><span class="'+statusClass+'">'+(e.status||'—')+'</span></td><td style="text-align:center">'+(e.trackedExternally==='Y'?'✓':'—')+'</td><td style="text-align:center">'+(e.hasAuxMat==='Y'?'📁':'—')+'</td><td>'+(e.lastReview||'—')+'</td><td>'+(e.updated||'—')+'</td></tr>';
+    return '<tr><td><strong>R.'+e.id+'</strong></td><td><a class="detail-link" onclick="showDetail('+e.id+')">'+e.detail+'</a></td><td><span class="badge '+typeClass+'">'+(e.type||'—')+'</span></td><td><div class="priority-bar"><div class="priority-fill" style="width:'+e.priority+'%;background:'+pColor+'"></div></div>'+e.priority+'%</td><td>'+(e.moscow||'—').replace(/^\\d\\./,'')+'</td><td><span class="'+statusClass+'">'+(e.status||'—')+'</span></td><td style="text-align:center">'+trend+'</td><td style="text-align:center">'+(e.trackedExternally==='Y'?'✓':'—')+'</td><td style="text-align:center">'+(e.hasAuxMat==='Y'?'📁':'—')+'</td><td>'+(e.lastReview||'—')+'</td><td>'+(e.updated||'—')+'</td></tr>';
   }}).join('');
   const nHidden = withClosed ? 0 : closedCount();
   document.getElementById('tableBody').innerHTML = rows ||
-    '<tr><td colspan="10" style="text-align:center;color:#666;padding:20px">No entries match'
+    '<tr><td colspan="11" style="text-align:center;color:#666;padding:20px">No entries match'
     + (nHidden ? ', and '+nHidden+' closed one'+(nHidden===1?' is':'s are')+' hidden — use <em>Show closed</em> above.' : '.')
     + '</td></tr>';
 }}
@@ -363,6 +382,44 @@ document.querySelector('thead').addEventListener('click', e => {{
   if (sortCol === col) sortDir *= -1; else {{ sortCol = col; sortDir = col === 'priority' ? -1 : 1; }}
   renderTable();
 }});
+
+// Trend is the DRI's judgement, never guessed. An open risk or issue without
+// one says how long it has gone without an update instead.
+const TREND_COLOR = {{'↑':'#dc2626','↗':'#d97706','→':'#6b7280','↘':'#65a30d','↓':'#16a34a'}};
+const TREND_NAME = {{'↑':'Worsening fast','↗':'Worsening','→':'Stable','↘':'Improving','↓':'Improving fast'}};
+function daysSince(iso) {{ return iso ? Math.floor((new Date() - new Date(iso)) / 86400000) : null; }}
+function trendCell(e) {{
+  if (e.trend) return '<span class="trend" style="color:'+(TREND_COLOR[e.trend]||'#6b7280')+'" title="'+(TREND_NAME[e.trend]||'')+'">'+e.trend+'</span>';
+  if ((e.type === 'Risk' || e.type === 'Issue') && !isClosed(e)) {{
+    const d = daysSince(e.updated);
+    return '<span class="trend-stale">'+(d === null ? 'never updated' : 'no update in '+d+'d')+'</span>';
+  }}
+  return '—';
+}}
+
+function renderChanges() {{
+  const changes = DATA.entries.filter(e => e.type === 'Change');
+  if (!changes.length) {{
+    document.getElementById('changesView').innerHTML = '<p style="color:#666;font-size:13px">No Change entries. A request to alter agreed scope, schedule or cost is added with <code>raid.py add --type Change</code>.</p>';
+    return;
+  }}
+  const today = new Date().toISOString().slice(0,10);
+  const undecided = changes.filter(e => !e.outcome);
+  const decided = changes.filter(e => e.outcome).sort((a,b) => String(b.decidedOn||'').localeCompare(String(a.decidedOn||'')));
+  const row = e => {{
+    const review = e.reviewOn || e.nextReviewOn;
+    const late = !e.outcome && review && review < today;
+    const oc = e.outcome ? '<span class="outcome-'+e.outcome.toLowerCase()+'">'+e.outcome+'</span>'
+      : '<span class="outcome-'+(late?'overdue':'undecided')+'">'+(late?'Undecided, due '+review:'Undecided')+'</span>';
+    return '<tr><td><strong>R.'+e.id+'</strong></td><td><a class="detail-link" onclick="showDetail('+e.id+')">'+e.detail+'</a></td><td>'+(e.requestedBy||'—')+'</td><td>'+oc+'</td><td>'+(e.decidedOn||'—')+'</td><td>'+(e.status||'—')+'</td><td>'+(e.description||'')+'</td></tr>';
+  }};
+  const head = '<thead><tr><th>ID</th><th>Detail</th><th>Requested by</th><th>Outcome</th><th>Decided</th><th>Status</th><th>Change</th></tr></thead>';
+  document.getElementById('changesView').innerHTML =
+    '<h3 style="font-size:13px;margin:4px 0 8px">Requested, awaiting a decision ('+undecided.length+')</h3>'
+    + (undecided.length ? '<div class="table-wrap"><table>'+head+'<tbody>'+undecided.map(row).join('')+'</tbody></table></div>' : '<p style="color:#666;font-size:12px">None.</p>')
+    + '<h3 style="font-size:13px;margin:18px 0 8px">Decided ('+decided.length+')</h3>'
+    + (decided.length ? '<div class="table-wrap"><table>'+head+'<tbody>'+decided.map(row).join('')+'</tbody></table></div>' : '<p style="color:#666;font-size:12px">None.</p>');
+}}
 
 function logHtml(log) {{
   if (!log) return '';
@@ -381,7 +438,7 @@ function logHtml(log) {{
 function showDetail(id) {{
   const e = DATA.entries.find(x => x.id === id); if (!e) return;
   const riskFields = e.type === 'Risk' ? [['Probability',e.probability],['Severity',e.severity],['Response Strategy',e.responseStrategy],['Mitigation Target',e.mitigationTarget!=null?e.mitigationTarget+'%':null],['Target Residual Risk',e.targetResidualRisk],['Residual Risk Score',e.residualRisk]] : [];
-  const fields = [['Type',e.type],['DRI',e.dri],['Priority',e.priority+'%'],['Urgency',e.urgency],['Consequences',e.consequences],['Feasibility',e.feasibility],...riskFields,['MoSCoW',e.moscow],['Status',e.status],['Tracked externally',e.trackedExternally==='Y'?'Yes':'No'],['Description',e.description],['Action Plan',e.actionPlan],['Acceptance Criteria',e.acceptanceCriteria],['Opened',e.openedOn],['Last Review',e.lastReview],['Review On',e.reviewOn],['Next Review On',e.nextReviewOn],['Closed On',e.closedOn],['Closed By',e.closedBy],['Requested By',e.requestedBy],['Estimated Effort',e.estimatedEffort],['ETC',e.etc],['ETC Renegotiated',e.etcRenegotiated],['Has AuxMat',e.hasAuxMat==='Y'?'Yes':'No']].filter(([,v])=>v!=null);
+  const fields = [['Type',e.type],['DRI',e.dri],['Priority',e.priority+'%'],['Urgency',e.urgency],['Consequences',e.consequences],['Feasibility',e.feasibility],...riskFields,['MoSCoW',e.moscow],['Status',e.status],['Outcome',e.outcome],['Decided On',e.decidedOn],['Trend',e.trend?e.trend+' '+(TREND_NAME[e.trend]||''):null],['Tracked externally',e.trackedExternally==='Y'?'Yes':'No'],['Description',e.description],['Action Plan',e.actionPlan],['Acceptance Criteria',e.acceptanceCriteria],['Opened',e.openedOn],['Last Review',e.lastReview],['Review On',e.reviewOn],['Next Review On',e.nextReviewOn],['Closed On',e.closedOn],['Closed By',e.closedBy],['Requested By',e.requestedBy],['Estimated Effort',e.estimatedEffort],['ETC',e.etc],['ETC Renegotiated',e.etcRenegotiated],['Has AuxMat',e.hasAuxMat==='Y'?'Yes':'No']].filter(([,v])=>v!=null);
   document.getElementById('modalContent').innerHTML = '<button class="close-btn" onclick="closeModal()">x</button><h2>R.'+e.id+' — '+e.detail+'</h2>'+fields.map(([l,v])=>'<div class="field"><div class="field-label">'+l+'</div><div class="field-value">'+String(v).replace(/\\n/g,'<br>')+'</div></div>').join('')+logHtml(e.actionLog)+'<button class="edit-btn" onclick="requestEdit('+e.id+')">Request Edit via Chat</button>';
   document.getElementById('modalOverlay').classList.add('open');
 }}
@@ -400,7 +457,7 @@ function renderCharts() {{
   const open = DATA.entries.filter(e => e.status !== 'Resolved' && e.status !== 'Closed');
   const typeCounts = {{}};
   DATA.entries.forEach(e => {{ typeCounts[e.type||'Unknown'] = (typeCounts[e.type||'Unknown']||0) + 1; }});
-  new Chart(document.getElementById('chartType'), {{ type:'doughnut', data:{{labels:Object.keys(typeCounts),datasets:[{{data:Object.values(typeCounts),backgroundColor:['#ef4444','#3b82f6','#f59e0b','#8b5cf6','#22c55e']}}]}}, options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{position:'bottom',labels:{{font:{{size:11}}}}}}}}}} }});
+  new Chart(document.getElementById('chartType'), {{ type:'doughnut', data:{{labels:Object.keys(typeCounts),datasets:[{{data:Object.values(typeCounts),backgroundColor:['#ef4444','#3b82f6','#f59e0b','#8b5cf6','#22c55e','#db2777']}}]}}, options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{position:'bottom',labels:{{font:{{size:11}}}}}}}}}} }});
   const statusCounts = {{}};
   DATA.entries.forEach(e => {{ statusCounts[e.status||'Unknown'] = (statusCounts[e.status||'Unknown']||0) + 1; }});
   new Chart(document.getElementById('chartStatus'), {{ type:'doughnut', data:{{labels:Object.keys(statusCounts),datasets:[{{data:Object.values(statusCounts),backgroundColor:['#dc2626','#16a34a','#d97706','#9ca3af']}}]}}, options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{position:'bottom',labels:{{font:{{size:11}}}}}}}}}} }});
@@ -442,6 +499,7 @@ document.getElementById('tabs').addEventListener('click', e => {{
   document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
   if (tab.dataset.tab === 'analytics') renderCharts();
   if (tab.dataset.tab === 'reviews') renderReviews();
+  if (tab.dataset.tab === 'changes') renderChanges();
 }});
 
 renderKPIs(); renderFilters(); renderTable();

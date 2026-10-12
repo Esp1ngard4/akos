@@ -54,6 +54,30 @@
       "Description": "TD.6 v2.0: content runs on the WBS. Plans name the goal they serve; a committed piece has a row in the WBS of that goal's owner and carries a dated status and a WBS Ref; start, publish and drop propose the matching WBS change. Stage, activation, commitment write-back, campaign scoring and sprints.md retired. New dependency on TSP.1.",
       "ID": 9,
       "Tool": "Content System"
+    },
+    {
+      "Changed On": "2026-10-12",
+      "Description": "TD.10 v1.0: published. Needs TSP.1 and TSP.8 (structured goals, TD.8 v1.2); reads TSP.2's Changes and Trend (TD.2 v1.5).",
+      "ID": 10,
+      "Tool": "Reporting"
+    },
+    {
+      "Changed On": "2026-10-12",
+      "Description": "TD.1 v1.6: a Current Sprint board on the dashboard, lanes by the deliverable each card serves; a commitment means Not Started, and check warns on a committed row left in the backlog; add takes set's status stamps. sprint_populations() and sprint_board() are shared with reporting.",
+      "ID": 11,
+      "Tool": "WBS Register"
+    },
+    {
+      "Changed On": "2026-10-12",
+      "Description": "TD.2 v1.5: Change entries answered by Outcome, and the DRI's Trend on risks and issues; a Changes tab and a Trend column on the dashboard; migrate adds both to an older register.",
+      "ID": 12,
+      "Tool": "RAID Register"
+    },
+    {
+      "Changed On": "2026-10-12",
+      "Description": "TD.8 v1.2: sprint goals become data - ID, Done when, Bet, Carried from; committed items carry Area and Goal; the review answers each goal by ID; sprint_record.py goals reads them back. A commitment means Not Started.",
+      "ID": 13,
+      "Tool": "Sprint Ceremonies"
     }
   ],
   "control_activities": [],
@@ -104,8 +128,8 @@
         ]
       }
     },
-    "updated": "2026-10-07T08:53:44",
-    "values_hash": "sha256:7689b21562657c6379fd3274254ea32558607fd09f908281dd451e1bf6edf0c2",
+    "updated": "2026-10-12T08:54:31",
+    "values_hash": "sha256:e1a939b3c3e8b6721acf94fa71d57f9125f6c3c1f7081e4a64e6cdb1a08cd61b",
     "version": 1
   },
   "tools": [
@@ -233,6 +257,20 @@
       "Skill": "daily-loop-facilitator",
       "Status": "In Progress",
       "Type": "Work instruction"
+    },
+    {
+      "Description": "The project status report and the sprint update, each a JSON record and an HTML view generated from the WBS, RAID and the sprint records. The status report proposes the Essential 4 (On Time, On Scope, On Quality, Resources) with their evidence for the owner to confirm or override with a reason; the sprint update sets the last sprint's outcome beside the new sprint's commitments across projects, with the sprint's cards as a board on its own tab. Both open with an executive summary drafted in plain language and confirmed by the owner.",
+      "Doc Aux": "Yes",
+      "ID": 10,
+      "Last Reviewed": "2026-10-12",
+      "Links": "TSP/TSP.10 Reporting/TD.10 - Reporting.md",
+      "Name": "Reporting",
+      "Notes": "Usable: both reports run every sprint on real work in their original setting. As shipped here, exercised end to end on a scratch project built with AKOS's own tools, not yet on real work - see TD.10, Status. Needs wbs-manager and sprint-facilitator; raid-manager is optional.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "reporting",
+      "Status": "In Progress",
+      "Type": "Tool"
     }
   ]
 }

@@ -59,6 +59,11 @@ SKELETONS = {
     "Idea":     (u"If %s, then %s.",
                  ("if_we", "then"),
                  ("the change", "expected benefit")),
+    # A Change is a request that needs a decision, not the decision itself:
+    # the answer goes in Outcome, and its date is the log entry that set it.
+    "Change":   (u"Change %s, requested by %s, because %s; impact: %s.",
+                 ("change", "requested_by", "because", "impact"),
+                 ("what", "who", "why", "on scope, schedule or cost")),
 }
 
 # What a filled-in skeleton looks like from the outside, for `check` to
@@ -70,7 +75,18 @@ SHAPES = {
     "Action":   re.compile(u"^do .+ so that ", re.I | re.S),
     "Decision": re.compile(u"^chose .+ because ", re.I | re.S),
     "Idea":     re.compile(u"^if .+ then ", re.I | re.S),
+    "Change":   re.compile(u"^change .+ requested by .+ because .+ impact: ", re.I | re.S),
 }
+
+# Fields bound to one of the register's vocabularies, by vocabulary name.
+VOCAB_FIELDS = {"Type": "type", "Status": "status", "Outcome": "outcome",
+                "Trend": "trend"}
+
+# Trend is stored as the arrow, which is what every reader shows. The words are
+# accepted as input because an arrow is awkward to type at a prompt.
+TREND_WORDS = {"worsening fast": u"↑", "worsening": u"↗",
+               "stable": u"→", "improving": u"↘",
+               "improving fast": u"↓"}
 
 
 def today_iso(value=None):
@@ -172,16 +188,25 @@ def run_checks(data):
     conventions worth following that no one should be blocked on."""
     errors, warnings = [], []
     known = set(fields_of(data))
-    types, statuses = vocabulary(data, "type"), vocabulary(data, "status")
 
     for row in R.rows(data, ENTRIES):
         rid = R.clean(row.get(ID)) or "?"
         typ, status = R.clean(row.get("Type")), R.clean(row.get("Status"))
 
-        if types and typ and typ not in types:
-            errors.append("R.%s Type %r is not in the vocabulary" % (rid, typ))
-        if statuses and status and status not in statuses:
-            errors.append("R.%s Status %r is not in the vocabulary" % (rid, status))
+        for field, vocab in sorted(VOCAB_FIELDS.items()):
+            allowed, value = vocabulary(data, vocab), R.clean(row.get(field))
+            if allowed and value and value not in allowed:
+                errors.append("R.%s %s %r is not in the vocabulary" % (rid, field, value))
+            elif value and not allowed and field in ("Outcome", "Trend"):
+                errors.append("R.%s has %s, but the register has no %s vocabulary "
+                              "- run `raid.py migrate`" % (rid, field, vocab))
+        # The On Scope signal counts approved Changes; an Outcome anywhere else
+        # would be counted as one, or silently mean nothing.
+        if R.clean(row.get("Outcome")) and typ != "Change":
+            errors.append("R.%s has an Outcome but is a %s - Outcome is for "
+                          "Change entries" % (rid, typ or "row with no Type"))
+        if typ == "Change" and status == "Closed" and not R.clean(row.get("Outcome")):
+            warnings.append("R.%s is a Closed Change with no Outcome" % rid)
         for name in row:
             if known and name not in known:
                 errors.append("R.%s has field %r, which the schema does not "
@@ -316,12 +341,19 @@ def cmd_update(args):
         name, _, value = pair.partition("=")
         name, value = name.strip(), value.strip()
         if known and name not in known:
-            sys.exit("%r is not a field in this register.\n  fields: %s"
-                     % (name, ", ".join(known)))
+            hint = ("\n  It is in the current schema: run `raid.py migrate --apply` first."
+                    if name in ("Outcome", "Trend") else "")
+            sys.exit("%r is not a field in this register.\n  fields: %s%s"
+                     % (name, ", ".join(known), hint))
         if name == LOG:
             sys.exit("The Action Log is append-only. Use `raid.py log` instead.")
-        if name in ("Type", "Status"):
-            check_vocab(data, name.lower(), value)
+        if name == "Trend":
+            value = TREND_WORDS.get(value.lower(), value)
+        if name in VOCAB_FIELDS:
+            if value and name in ("Outcome", "Trend") and not vocabulary(data, VOCAB_FIELDS[name]):
+                sys.exit("This register has no %s vocabulary yet. Run `raid.py "
+                         "migrate --apply` first." % VOCAB_FIELDS[name])
+            check_vocab(data, VOCAB_FIELDS[name], value)
         was = row.get(name)
         if name in NUMERIC and value:
             try:
@@ -337,6 +369,9 @@ def cmd_update(args):
             row.pop(name, None)
     if not changed:
         sys.exit("Nothing changed - every --set already holds that value.")
+    if R.clean(row.get("Outcome")) and R.clean(row.get("Type")) != "Change":
+        sys.exit("Outcome is for Change entries; R.%s is a %s. Nothing written."
+                 % (args.id, R.clean(row.get("Type"))))
 
     # The whole point: a field change and the reason for it are one entry, so
     # the register can never say what changed without saying why.
@@ -350,6 +385,9 @@ def cmd_close(args):
     row = find(data, args.id)
     if R.clean(row.get("Status")) == "Closed":
         sys.exit("R.%s is already Closed." % args.id)
+    if R.clean(row.get("Type")) == "Change" and not R.clean(row.get("Outcome")):
+        sys.exit("R.%s is a Change with no Outcome. Decide it first:\n  raid.py "
+                 "update ... --id %s --set Outcome=Approved -m \"<why>\"" % (args.id, args.id))
     on, by = today_iso(args.on), author(args, data)
     changed = {"Status": [R.clean(row.get("Status")), "Closed"]}
     row["Status"], row["Closed On"], row["Closed By"] = "Closed", on, by
@@ -409,14 +447,56 @@ def split_date(text):
     return None, text.strip()
 
 
-def cmd_migrate(args):
-    """Turn free-text Action Logs into dated entries.
+def schema_gaps(data):
+    """What the register's schema lacks against create_raid's: missing fields,
+    and missing values in each vocabulary. Rows are never touched - a new type
+    or field is something a row may use, not something every row must hold."""
+    import create_raid as C
+    fields = fields_of(data)
+    missing_fields = [f for f in C.FIELDS if f not in fields]
+    vocabs = R.setting(data, "vocabularies", {}) or {}
+    missing_values = {}
+    for name, values in C.VOCABULARIES.items():
+        have = vocabs.get(name) or []
+        lack = [v for v in values if v not in have]
+        if lack:
+            missing_values[name] = lack
+    return missing_fields, missing_values
 
-    Dry by default. The date is only ever taken from the text itself and the
-    author only from the row's DRI - neither is invented, so an entry that
-    carried neither stays undated rather than being given a plausible date.
+
+def apply_schema(data, missing_fields, missing_values):
+    import create_raid as C
+    settings = data["meta"].setdefault("settings", {})
+    fields = settings.setdefault("fields", {}).setdefault(ENTRIES, [])
+    for f in missing_fields:
+        # Keep create_raid's order: insert after the field that precedes it there.
+        at = C.FIELDS.index(f)
+        before = next((p for p in reversed(C.FIELDS[:at]) if p in fields), None)
+        fields.insert(fields.index(before) + 1 if before else len(fields), f)
+    vocabs = settings.setdefault("vocabularies", {})
+    for name, lack in missing_values.items():
+        vocabs.setdefault(name, []).extend(lack)
+
+
+def cmd_migrate(args):
+    """Bring a register up to the current schema, and turn free-text Action Logs
+    into dated entries.
+
+    Dry by default. The schema half adds fields and vocabulary values and never
+    touches a row. In the log half the date is only ever taken from the text
+    itself and the author only from the row's DRI - neither is invented, so an
+    entry that carried neither stays undated rather than being given a
+    plausible date.
     """
     data = R.load(args.register)
+    missing_fields, missing_values = schema_gaps(data)
+    if missing_fields or missing_values:
+        print("Schema:")
+        for f in missing_fields:
+            print("   + field       %s" % f)
+        for name, lack in sorted(missing_values.items()):
+            print("   + vocabulary  %s: %s" % (name, ", ".join(lack)))
+        print()
     plan = []
     for row in R.rows(data, ENTRIES):
         log = row.get(LOG)
@@ -432,8 +512,9 @@ def cmd_migrate(args):
         entry["note"] = note
         plan.append((row, entry))
 
-    if not plan:
-        print("Nothing to migrate - every Action Log is already structured.")
+    if not plan and not (missing_fields or missing_values):
+        print("Nothing to migrate - the schema is current and every Action Log "
+              "is already structured.")
         return 0
     for row, entry in plan:
         print("R.%s  %s" % (R.clean(row.get(ID)), R.clean(row.get("Detail"))))
@@ -441,10 +522,12 @@ def cmd_migrate(args):
         print("   to    on=%s by=%s\n         note=%r"
               % (entry.get("on") or "(none in the text)",
                  entry.get("by") or "(no DRI)", entry["note"][:100]))
-    print("\n%d entr%s to convert." % (len(plan), "y" if len(plan) == 1 else "ies"))
+    if plan:
+        print("\n%d log entr%s to convert." % (len(plan), "y" if len(plan) == 1 else "ies"))
     if not args.apply:
         print("Dry run. Re-run with --apply to write.")
         return 0
+    apply_schema(data, missing_fields, missing_values)
     for row, entry in plan:
         row[LOG] = [entry]
     if args.author and not R.setting(data, "author"):
@@ -471,21 +554,22 @@ def main():
     shared(s)
     s.add_argument("detail", help="short handle, not the full sentence")
     s.add_argument("--type", required=True, choices=sorted(SKELETONS))
-    seen = set()
+    # A slot shared by two types (Decision's and Change's --because) is one
+    # flag; Change's --requested-by is also the Requested By field.
+    helps = {}
     for typ in sorted(SKELETONS):
         shape, slots, labels = SKELETONS[typ]
         for slot, label in zip(slots, labels):
-            flag = "--" + slot.replace("_", "-")
-            if flag not in seen:
-                seen.add(flag)
-                s.add_argument(flag, help="%s: %s" % (typ, label))
+            helps.setdefault("--" + slot.replace("_", "-"), []).append("%s: %s" % (typ, label))
+    helps.setdefault("--requested-by", []).append("also fills Requested By")
+    for flag, texts in helps.items():
+        s.add_argument(flag, help="; ".join(texts))
     s.add_argument("--description", help="freehand, bypassing the type's shape")
     s.add_argument("--dri")
     s.add_argument("--moscow")
     s.add_argument("--category")
     s.add_argument("--action-plan")
     s.add_argument("--acceptance", help="Acceptance Criteria")
-    s.add_argument("--requested-by")
     s.set_defaults(func=cmd_add)
 
     s = subs.add_parser("log", help="append a note to an entry's Action Log")
@@ -519,7 +603,8 @@ def main():
     shared(s, dated=False)
     s.set_defaults(func=cmd_check)
 
-    s = subs.add_parser("migrate", help="free-text Action Logs -> dated entries")
+    s = subs.add_parser("migrate", help="bring the schema up to date; free-text "
+                                        "Action Logs -> dated entries")
     shared(s, dated=False)
     s.add_argument("--apply", action="store_true", help="write (default: dry run)")
     s.add_argument("--author", help="also set meta.settings.author")

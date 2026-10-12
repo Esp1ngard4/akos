@@ -58,7 +58,7 @@ has described.
 | | Tool | Skill |
 |---|---|---|
 | TSP.1 | [WBS Register](TSP/TSP.1%20WBS%20Register/) — work breakdown / backlog | `wbs-manager` |
-| TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) — risks, actions, issues, decisions, ideas | `raid-manager` |
+| TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) — risks, actions, issues, decisions, ideas, changes | `raid-manager` |
 | TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) — the inventory of tools itself | `tsp-manager`, `td-author` |
 | TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) — vendoring, drift detection, three-way updates | *(none — see below)* |
 | TSP.5 | [Artifact Register](TSP/TSP.5%20Artifact%20Register/) — what you have, where it lives, who governs it | `artifact-register` |
@@ -66,6 +66,7 @@ has described.
 | TSP.7 | [Notebook Manager](TSP/TSP.7%20Notebook%20Manager/) — plain-Markdown notebooks and a diary | `notebook-capture` |
 | TSP.8 | [Sprint Ceremonies](TSP/TSP.8%20Sprint%20Ceremonies/) — grooming, close-out, retrospective, planning | `sprint-facilitator`, `sprint-planning-precheck` |
 | TSP.9 | [Daily Loop](TSP/TSP.9%20Daily%20Loop/) — the morning plan and the evening stand-up, one record per day | `daily-loop-facilitator` |
+| TSP.10 | [Reporting](TSP/TSP.10%20Reporting/) — project status with the Essential 4, and the sprint update with its board | `reporting` |
 
 TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with

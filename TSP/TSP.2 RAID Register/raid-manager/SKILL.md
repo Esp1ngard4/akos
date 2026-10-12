@@ -1,6 +1,6 @@
 ---
 name: raid-manager
-description: Manages a RAID register - Risks, Actions, Issues, Decisions and Ideas - stored as a JSON register, and generates an interactive HTML dashboard with analytics and a risk heat map. Use whenever the user mentions "RAID", "risk register", "issue log", "decision log", or asks to add, edit or close a risk, action, issue or decision, to log an update or progress note against one, or wants a view of project risks and how the project is tracking.
+description: Manages a RAID register - Risks, Actions, Issues, Decisions, Ideas and Changes - stored as a JSON register, and generates an interactive HTML dashboard with analytics and a risk heat map. Use whenever the user mentions "RAID", "risk register", "issue log", "decision log", or asks to add, edit or close a risk, action, issue or decision, to log an update or progress note against one, or wants a view of project risks and how the project is tracking.
 ---
 
 # RAID Manager
@@ -65,8 +65,19 @@ Every entry's `Description` follows one sentence shape, fixed per type. The shap
 | **Action** | Do `<the work>`, by `<when>`, so that `<outcome it buys>`. |
 | **Decision** | Chose `<option taken>`, over `<alternatives rejected>`, because `<reason>`. |
 | **Idea** | If `<the change>`, then `<expected benefit>`. |
+| **Change** | Change `<what>`, requested by `<who>`, because `<why>`; impact: `<on scope, schedule or cost>`. |
 
 Risk and Issue deliberately share their slots. An issue is a risk that already happened, so promoting one is a change of tense rather than a rewrite.
+
+**A Change is a request, not a decision.** It asks to alter what was agreed, and needs an answer before anyone acts on it. The answer goes in `Outcome`, never in a second, Decision entry:
+
+| State | Fields | Verb |
+|---|---|---|
+| Requested | `Status = Open`, no `Outcome`; `Review On` is when it must be decided | `raid.py add --type Change` (fills `Requested By` too) |
+| Decided | `Outcome` = Approved, Rejected or Withdrawn | `raid.py update --set Outcome=… -m "<why>"` |
+| Done | `Status = Closed` | `raid.py close` — Rejected and Withdrawn at once; Approved once the WBS reflects it |
+
+**The decision date is the log entry that set `Outcome`**, so there is no field for it. `close` refuses a Change with no `Outcome`, and `update` refuses an `Outcome` on any other type: reports count approved Changes, and an Outcome elsewhere would be counted or would mean nothing. `WBS Ref` names the rows a Change alters; a rebaseline it causes names the Change in its `--reason`.
 
 Two rules that make the shapes work:
 
@@ -94,6 +105,24 @@ Two rules that make the shapes work:
 - Newest last in the file, newest first in the dashboard.
 
 **Never write a field change straight to the JSON.** Doing so loses the reason, which is the only part that cannot be reconstructed later.
+
+## Trend
+
+`Trend` is the DRI's read of an entry's direction since its last review, recorded with a reason, and **never computed**: guessing it from the wording of a log note is how a board ends up confidently wrong. The register stores the arrow; `update` also takes the word, case-insensitive:
+
+| Arrow | Word |
+|---|---|
+| ↑ | Worsening fast |
+| ↗ | Worsening |
+| → | Stable |
+| ↘ | Improving |
+| ↓ | Improving fast |
+
+```bash
+python <skill-path>/scripts/raid.py update "<register.json>" --id 5 --set Trend=worsening -m "Vendor slipped again."
+```
+
+Set it at a review, for Risks and Issues. An open risk or issue with none shows *no update in N days* instead of an arrow.
 
 ## Core operations
 
@@ -134,7 +163,7 @@ python <skill-path>/scripts/raid.py add "<register.json>" "Junction breaks on cl
   --may-result-in "silent no-ops that look like the agent ignoring the request"
 ```
 
-Claims the next ID, writes the shaped Description, sets Status to Open and Opened On to today, and logs the opening. Each type takes its own slot flags (`--do/--by-when/--so-that`, `--chose/--over/--because`, `--if-we/--then`, `--because-of/--happened/--resulting-in`); `raid.py add --help` lists them. `--description` writes one freehand when an entry genuinely does not fit its shape.
+Claims the next ID, writes the shaped Description, sets Status to Open and Opened On to today, and logs the opening. Each type takes its own slot flags (`--do/--by-when/--so-that`, `--chose/--over/--because`, `--if-we/--then`, `--because-of/--happened/--resulting-in`, `--change/--requested-by/--because/--impact`); `raid.py add --help` lists them. `--description` writes one freehand when an entry genuinely does not fit its shape.
 
 **Priority % and Target Residual Risk are not fields.** They are computed from the scores when the dashboard renders — Priority as `(Urgency * 1.5 + Consequences) / 12.5 * 100`, Target Residual Risk as `Probability * Severity * (1 - Mitigation Target / 100)`. Never store either: a stored copy goes stale the moment a score changes.
 
@@ -168,7 +197,7 @@ The dashboard is a snapshot, not a live view — regenerate it after any change.
 python <skill-path>/scripts/raid.py check "<register.json>"
 ```
 
-Read-only. Reports vocabulary violations, fields the schema does not define, malformed or unattributed log entries, Descriptions that do not follow their type's shape, closed entries with no Closed On, risks with no Probability/Severity, and stale dashboards. Run it before a review ceremony, and after any hand-edit of the JSON.
+Read-only. Reports vocabulary violations (`Type`, `Status`, `Outcome`, `Trend`), an `Outcome` on a non-Change entry, a closed Change with no `Outcome`, fields the schema does not define, malformed or unattributed log entries, Descriptions that do not follow their type's shape, closed entries with no Closed On, risks with no Probability/Severity, and stale dashboards. Run it before a review ceremony, and after any hand-edit of the JSON.
 
 ### 6. Create new RAID register
 
@@ -178,13 +207,13 @@ python <skill-path>/scripts/create_raid.py "<output-path>.json" "<project-name>"
 
 Builds an empty register — schema, field order and vocabularies, zero rows — and creates the `AuxMat/` folder beside it. Set `meta.settings.author` so log entries are attributed consistently.
 
-A register whose Action Log is still free text converts with:
+A register built before the current schema, or whose Action Log is still free text, is brought up to date with:
 
 ```bash
 python <skill-path>/scripts/raid.py migrate "<register.json>" [--apply]
 ```
 
-Dry by default. It takes the date only from the text itself and the author only from the row's DRI — an entry carrying neither stays undated rather than being given a plausible date.
+Dry by default. It adds the fields and vocabulary values the register lacks (the `Change` type, `Outcome`, `Trend`) and **never touches a row**. For a free-text log it takes the date only from the text itself and the author only from the row's DRI — an entry carrying neither stays undated rather than being given a plausible date.
 
 ### 7. External tracking flag
 
@@ -212,7 +241,7 @@ One collection, `entries`. `registry.py` owns the `meta` envelope; `create_raid.
 |-------|-------|
 | RAID.ID | Sequential integer |
 | Detail | Short handle — a few words, not the full sentence |
-| Type | Risk, Action, Issue, Decision, Idea |
+| Type | Risk, Action, Issue, Decision, Idea, Change |
 | DRI | Person responsible |
 | Urgency (1-5) | General scoring input, drives Priority % |
 | Consequences (1-5) | General scoring input, drives Priority % |
@@ -236,6 +265,8 @@ Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of 
 |-------|-------|
 | MoSCoW | 1.Must, 2.Should, 3.Could, 4.Won't |
 | Status | Open, Closed |
+| Outcome | Approved, Rejected, Withdrawn — Change entries only; empty means undecided |
+| Trend | ↑ ↗ → ↘ ↓ — the DRI's read since the last review; see "Trend" |
 | Last Review | Date |
 | Review On | Date |
 | Next Review On | Fallback review date if Review On isn't filled |
@@ -247,7 +278,7 @@ Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of 
 | Tracked Externally | Y/N flag, see operation 7 |
 | WBS Ref | Optional. The WBS row the entry bears on, as `<project>#<id>` (e.g. `Atlas#24`) — always scope-qualified. `check` validates the shape only; `wbs.py refined --raid` resolves it. Leave it empty for an entry that is not about a deliverable |
 | Opened On | |
-| Requested By | |
+| Requested By | Filled by a Change's `--requested-by` |
 | Involve | Other stakeholders |
 | Has AuxMat | Y/N flag, see AuxMat section above |
 | Estimated Effort | |
@@ -260,6 +291,8 @@ Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of 
 
 - **Board tab**: sortable table, filters for Type/Status/MoSCoW/Category/DRI/tracked, a "Clear all" button, and an active-filter count badge. The **Updated** column is the newest Action Log date, derived at render time — sort on it to find items that have gone quiet. Filter state persists across reloads via localStorage (keyed per project name).
 - **Closed entries are hidden from the board by default.** They stay in the register permanently and stay in the KPI counts — they are history, and history should not compete with open work for attention. A `Show closed (N)` button brings them back, and the choice persists like any other filter. Filtering explicitly for `Status = Closed` overrides the hide, so that combination shows the closed entries rather than an empty board. When a filter matches nothing, the empty state says how many closed entries are hidden.
+- **Trend column** on the board: the arrow where one is set; on an open risk or issue without one, *no update in N days* from the Action Log.
+- **Changes tab**: requested Changes awaiting a decision (red once `Review On` has passed), then decided ones by outcome and decision date.
 - **Item detail**: the Action Log renders as a timeline, newest first, each entry showing its date, author, field changes and note.
 - **Analytics tab**: KPIs, by-type and by-status charts, priority distribution, MoSCoW breakdown, items-over-time timeline, and — when risk items are present — a risk heat map.
 - **Risk heat map**: Probability x Severity scatter with a green/amber/red zone background (green <6, amber 6-14, red >=15 on Probability x Severity). Only renders when >=3 open risk items have both fields scored.
