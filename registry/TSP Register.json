@@ -78,6 +78,12 @@
       "Description": "TD.8 v1.2: sprint goals become data - ID, Done when, Bet, Carried from; committed items carry Area and Goal; the review answers each goal by ID; sprint_record.py goals reads them back. A commitment means Not Started.",
       "ID": 13,
       "Tool": "Sprint Ceremonies"
+    },
+    {
+      "Changed On": "2026-10-12",
+      "Description": "TD.10 v1.1: the status report opens with the project's outcome and measures, read from its brief (templates/Project-Brief-template.md, new); On Outcome proposed and confirmed like the four, not counted in Overall.",
+      "ID": 14,
+      "Tool": "Reporting"
     }
   ],
   "control_activities": [],
@@ -128,8 +134,8 @@
         ]
       }
     },
-    "updated": "2026-10-12T08:54:31",
-    "values_hash": "sha256:e1a939b3c3e8b6721acf94fa71d57f9125f6c3c1f7081e4a64e6cdb1a08cd61b",
+    "updated": "2026-10-12T11:26:19",
+    "values_hash": "sha256:01d5b81d2831623bb4141cf1bb6269c718b6bd167558d1b11d0d4511b83be826",
     "version": 1
   },
   "tools": [

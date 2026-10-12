@@ -875,6 +875,47 @@ def test_reporting(root, scratch):
     kept = json.load(io.open(update, encoding="utf-8")).get("summary", {}).get("text") if ok else None
     check("a rerun mid-sprint keeps the confirmed summary", kept == "Smoke summary.", str(kept))
 
+    # --- the brief: outcome and measures in the status report -----------------
+    brief = os.path.join(project, "Project Brief.md")
+    template = io.open(os.path.join(root, "templates", "Project-Brief-template.md"), encoding="utf-8").read()
+    io.open(brief, "w", encoding="utf-8").write(template)
+    ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-17"], work)
+    rec = json.load(io.open(os.path.join(project, "Reports", "Status", "2026-10-17 Status.json"),
+                            encoding="utf-8")) if ok else {}
+    check("the brief template, unfilled, reads as findings to fix, not a failure",
+          ok and (rec.get("outcome") or {}).get("findings"), out[:300])
+    filled = (u"# Atlas — Project Brief\n\n**Size:** full · **Written:** 2026-10-01 · **Serves:** OBJ-1\n\n"
+              u"> **To** ship the website **so that** customers can sign up.\n\n## Outcome and done-when\n\n"
+              u"Customers sign up on their own.\n\nDone when:\n\n1. Signup is live.\n\n### Measures\n\n"
+              u"| ID | Measure | Role | Kind | C/A | Baseline | From | Target | By | How measured | Every | Current | As of | Source | WBS |\n"
+              u"|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+              u"| M1 | Signups | lag | N | C | 0 | 2026-10-01 | 100 | 2026-12-31 | count | month | 30 | 2026-10-15 | measured | |\n"
+              u"| M2 | Launch | lead | M | C | not done | 2026-10-01 | done | 2026-10-10 | release | month | not done | 2026-10-15 | asked | 3 |\n")
+    io.open(brief, "w", encoding="utf-8").write(filled)
+    ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-18"], work)
+    rec = json.load(io.open(os.path.join(project, "Reports", "Status", "2026-10-18 Status.json"),
+                            encoding="utf-8")) if ok else {}
+    o = rec.get("outcome") or {}
+    ms = {m["id"]: m for m in o.get("measures") or []}
+    check("the outcome, what it serves and the done-when come from the brief",
+          o.get("outcome") == "Customers sign up on their own." and o.get("serves") == "OBJ-1"
+          and o.get("done_when") == ["Signup is live."], str(o)[:300])
+    check("measures are scored, and a milestone past its date makes On Outcome red",
+          (ms.get("M1") or {}).get("score") == 0.3 and "past due" in (ms.get("M2") or {}).get("flags", [])
+          and (rec.get("signals") or {}).get("outcome", {}).get("proposed") == "red", str(ms)[:300])
+    page = io.open(os.path.join(project, "Reports", "Status", "2026-10-18 Status.html"), encoding="utf-8").read() if ok else ""
+    check("the view opens with the Outcome section", "<h2>Outcome</h2>" in page and "On Outcome" in page)
+    io.open(brief, "w", encoding="utf-8").write(filled.split("### Measures")[0])
+    ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-19"], work)
+    rec = json.load(io.open(os.path.join(project, "Reports", "Status", "2026-10-19 Status.json"),
+                            encoding="utf-8")) if ok else {}
+    check("a lean brief, with no Measures table, proposes no On Outcome",
+          ok and "outcome" not in rec.get("signals", {}) and not rec["outcome"]["present"], out[:300])
+    os.remove(brief)
+
     # --- installed together with what it needs, it finds its siblings ----------
     target = os.path.join(scratch, "report-project")
     os.makedirs(target)

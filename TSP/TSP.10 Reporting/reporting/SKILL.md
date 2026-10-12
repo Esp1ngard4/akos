@@ -21,7 +21,7 @@ Python 3, standard library only. Uses sibling skills, found beside this one in t
 | Report | Command | Writes to |
 |---|---|---|
 | **Sprint update**, after planning: the last sprint (goals and verdicts, what was delivered) beside this sprint (goals, committed items largest first, capacity, confidence); each project's overall status when several; key deliverables by month; goal history and focus; top risks; hours by area; and, on its own **Sprint board** tab, every project's cards by project and deliverable, To do / Doing / Done, as of the run (rerun mid-sprint to refresh it). The overview is the page that opens and prints; the board is the deep dive | `report.py sprint --sprint <the sprint being started> --records "<sprint records>" --project "<project folder>" [--project ...]` | `Reports/Sprint Update/<sprint ID> Sprint Update.*`, beside the records folder (`--out-dir` to choose) |
-| **Project status**, at the close-out or on demand: Essential 4 with evidence and trend, decisions and help required, key deliverables by month (delivered and due), top risks | `report.py status "<project folder>" [--records "<sprint records>"] [--sprint <ID>] [--as-of YYYY-MM-DD]` | `<project folder>/Reports/Status/<date> Status.*` |
+| **Project status**, at the close-out or on demand: the **Outcome** (what the project is for, its measures scored against their pace, and *On Outcome*), the Essential 4 with evidence and trend, decisions and help required, key deliverables by month (delivered and due), top risks | `report.py status "<project folder>" [--records "<sprint records>"] [--sprint <ID>] [--as-of YYYY-MM-DD]` | `<project folder>/Reports/Status/<date> Status.*` |
 
 A project folder is any folder holding the project's WBS register and, optionally, its RAID register; they are found by their `meta.kind`, so their file names do not matter. Pass every project the sprint spans to `sprint`; it refuses a sprint not yet planned, since nothing is committed. Without `--records`, `status` cannot read the sprint's capacity or confidence, and says less about Resources and Mood.
 
@@ -29,6 +29,7 @@ The sprint records must carry structured goals (goal IDs, *Done when*, an `Area`
 
 ## Running a report
 
+0. **Status only: bring the brief's measures up to date.** Any measure whose `As of` is older than its `Every` is due. Read the *measured* ones from the source their `How measured` names, ask the user for the *asked* ones, and write `Current` and `As of` in the project's `Project Brief.md`. A value left stale is reported as stale, never guessed.
 1. Run the command. It prints the proposed ratings (status) and the summary rules.
 2. **Status only: go through the Essential 4 with the user.** Show each proposed rating with its evidence (in the record's `signals.<name>.evidence`). The user confirms it, or overrides it **with a reason**, which `confirm` requires:
 
@@ -61,7 +62,7 @@ The script never writes this prose. A template can only restate the codes, which
 
 ## The Essential 4, as proposed
 
-Overall is the worst of the four; Mood (the fist of five) is shown but not counted. Green: aligned with the plan. Amber: not aligned, in recovery. Red: not aligned, no recovery.
+Overall is the worst of the four; Mood (the fist of five) and On Outcome are shown but not counted. Green: aligned with the plan. Amber: not aligned, in recovery. Red: not aligned, no recovery.
 
 | Signal | Amber | Red |
 |---|---|---|
@@ -69,6 +70,23 @@ Overall is the worst of the four; Mood (the fist of five) is shown but not count
 | On Scope | an approved Change this sprint, or more hours pulled in than committed | a Change undecided past its decision date, or a key deliverable nothing schedules |
 | On Quality | a committed row without acceptance criteria, or a closure with an AC partial | a closure with an AC not met and no follow-up |
 | Resources | planned over available (a stretch, never red), or 50-80% of committed hours delivered, pro-rated mid-sprint | under 50% delivered |
+
+## Outcome and measures
+
+The status report opens, after the summary, with what the project is for and whether it is getting there. Everything comes from the project's brief, `Project Brief.md` in the project folder beside its registers, written from `templates/Project-Brief-template.md`: the outcome sentence, the done-when list, an optional `**Serves:**` in its header line, and the Measures table.
+
+- **Each measure is scored 0-1 like a key result:** a number by its progress from baseline to target, a habit by its rate against the target rate, a milestone done or not. An aspirational (`A`) measure is met at 0.7 of its target.
+- **Pace is judged at the date the value was taken:** on pace when the score is at least the share of the time from `From` to `By` that had passed by its `As of`. A value not read within its `Every` is **stale**; a measure past its `By` below target is **past due**.
+- **Trend** compares each score with the last confirmed status report's.
+- **On Outcome** is proposed like the Essential 4 and confirmed or overridden the same way (`confirm --signal outcome`), but **is not counted in Overall**:
+
+| | Rule |
+|---|---|
+| Green | every measure on pace and current |
+| Amber | a measure behind pace, stale, or with no value yet; an aspirational one past due |
+| Red | a lag measure with no value, or a committed measure past its date below target |
+
+With no brief, or a lean brief with no Measures table, the section says so and *On Outcome* is not proposed; the report runs as before. A table that breaks the layout (a value outside a vocabulary, a number that isn't one, a date that isn't one, no lag measure) gives **findings** on the page and in the run, never a failure: fix them in the brief.
 
 **Decisions required** lists Changes awaiting an `Outcome` (`raid-manager`), never RAID Decisions: a Decision records a choice already made. **Help required** lists open items whose DRI is not the register's author (`meta.settings.author`).
 

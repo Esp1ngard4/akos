@@ -175,6 +175,7 @@ every push, against Python 3.9 and 3.13.
 ## Templates
 
 - [`templates/TD-template.md`](templates/TD-template.md) — the governance document structure. `td-author` (TSP.3's second skill) is what applies and audits it.
+- [`templates/Project-Brief-template.md`](templates/Project-Brief-template.md) — a project's brief: why, outcome and done-when, and the measures the status report (TSP.10) scores. Lean for a small project, full once it keeps a WBS.
 - [`templates/SKILL-template.md`](templates/SKILL-template.md) — a skill skeleton, with notes on writing a `description` that actually triggers. Under-triggering is the common failure: a skill described in your own private vocabulary never matches anything you type.
 
 ## Where this came from

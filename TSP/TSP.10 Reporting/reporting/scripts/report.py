@@ -490,6 +490,226 @@ def update_facts(last, this, committed, wbss, raid, risks, facts):
             "awaiting_a_decision": _awaiting_decision(raid), "top_risks": _risk_words(risks)}
 
 
+# ─── Outcome and measures ────────────────────────────────────────────────────
+#
+# What the project is for, and whether it is getting there: the outcome, what it
+# serves and the measures, all from the project's brief (`Project Brief.md` beside
+# its registers; templates/Project-Brief-template.md), each measure scored like a
+# key result and judged against its pace. A separate signal, On Outcome, kept out
+# of Overall so the delivery verdict's trend stays comparable.
+
+# No portfolio register ships here: the brief carries the outcome and what the
+# project serves. register_row() stays so a register can be wired in later.
+PROJECT_REGISTER = None
+BRIEF_NAME = "Project Brief.md"
+MEASURE_COLS = ("ID", "Measure", "Role", "Kind", "C/A", "Baseline", "From", "Target", "By",
+                "How measured", "Every", "Current", "As of", "Source", "WBS")
+ROLES, KINDS, CA, SOURCES = ("lag", "lead"), ("H", "M", "N"), ("C", "A"), ("measured", "estimated", "asked")
+EVERY_DAYS = {"week": 7, "sprint": 14, "month": 31, "quarter": 92, "year": 366}
+ASPIRATIONAL = 0.7      # an aspirational measure is fully met at 0.7 of its target
+DONE_WORDS, OPEN_WORDS = ("done", "yes", "met", "delivered"), ("", "no", "not done", "open", "not met")
+
+
+def register_row(prjmgm, path):
+    """A portfolio register's row whose Folder is this project's folder, where one is kept."""
+    if not path or not os.path.exists(path):
+        return None
+    here = os.path.normcase(os.path.normpath(os.path.dirname(os.path.abspath(prjmgm))))
+    for row in R.rows(R.load(path), "projects"):
+        folder = row.get("Folder")
+        if folder and here.endswith(os.path.normcase(os.path.normpath(folder))):
+            return row
+    return None
+
+
+def brief_sections(text):
+    """The executive statement, the outcome paragraph, the done-when list and the
+    Measures table's rows, from a brief written to the template."""
+    lines = text.split("\n")
+    statement = next((l.lstrip("> ").replace("**", "").strip() for l in lines
+                      if l.startswith(">") and "**To**" in l), None)
+    # A brief may name what it serves in its header line; where a register
+    # holds it too, the register's wins.
+    serves = next((m.group(1).strip() for m in (re.search(r"\*\*Serves:\*\*\s*([^·\n]+)", l)
+                                                  for l in lines[:12]) if m), None)
+    outcome, done_when, rows, header = None, [], [], None
+    sec = None
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            sec = line[3:].strip().lower()
+        elif line.startswith("### "):
+            sec = line[4:].strip().lower()
+        if sec and sec.startswith("outcome") and not line.startswith("#"):
+            if outcome is None and line.strip() and not line.startswith(("|", ">", "-")) \
+                    and not re.match(r"^\d+\.", line) and not line.lower().startswith("done when"):
+                outcome = line.strip()
+            m = re.match(r"^\d+\.\s+(.*)", line)
+            if m:
+                done_when.append(m.group(1).strip())
+        if sec == "measures" and line.startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if header is None:
+                header = cells
+            elif not set(line.replace("|", "").strip()) <= set("-: "):
+                rows.append(dict(zip(header, cells)))
+    return {"statement": statement, "outcome": outcome, "done_when": done_when,
+            "serves": serves, "header": header, "rows": rows}
+
+
+def measure_value(cell, kind, role=""):
+    """A cell as a number: a rate for a habit, done/not for a milestone. None
+    when it cannot be read - and a number nobody can read is a finding."""
+    c = (cell or "").strip().lower()
+    if kind == "M":
+        return 1.0 if c in DONE_WORDS else 0.0 if c in OPEN_WORDS else None
+    if kind == "H" and c.startswith("every"):
+        return 1.0                    # "every week, never two missed": a full rate
+    m = re.match(r"^(-?\d+(?:\.\d+)?)\s*%", c)
+    if m:
+        return float(m.group(1)) / 100
+    m = re.match(r"^(-?\d+(?:\.\d+)?)\s+of\s+(\d+(?:\.\d+)?)", c)
+    if m:
+        a, b = float(m.group(1)), float(m.group(2))
+        return (a / b if b else None) if kind == "H" else a
+    m = re.match(r"^-?\d+(?:\.\d+)?$", c)
+    return float(c) if m else None
+
+
+def _date(cell):
+    try:
+        return date.fromisoformat((cell or "").strip())
+    except ValueError:
+        return None
+
+
+def score_measure(row, as_of, prev_scores, find):
+    """Score 0-1, pace, staleness and flags for one measure."""
+    mid, kind, ca = row.get("ID", "?"), row.get("Kind", ""), row.get("C/A", "")
+    for col, vocab in (("Role", ROLES), ("Kind", KINDS), ("C/A", CA), ("Source", SOURCES)):
+        if row.get(col) and row.get(col) not in vocab:
+            find.append("%s: %s %r is not %s" % (mid, col, row.get(col), " / ".join(vocab)))
+    if row.get("Every") and row["Every"] not in EVERY_DAYS:
+        find.append("%s: Every %r is not %s" % (mid, row["Every"], " / ".join(EVERY_DAYS)))
+    start, by, taken = _date(row.get("From")), _date(row.get("By")), _date(row.get("As of"))
+    for col, d in (("From", start), ("By", by), ("As of", taken)):
+        if row.get(col) and d is None:
+            find.append("%s: %s %r is not a date (YYYY-MM-DD)" % (mid, col, row[col]))
+    base, target = measure_value(row.get("Baseline"), kind), measure_value(row.get("Target"), kind)
+    current = measure_value(row.get("Current"), kind)
+    if kind in ("N", "H"):
+        for col, v in (("Baseline", base), ("Target", target), ("Current", current)):
+            if row.get(col) and v is None:
+                find.append("%s: %s %r is not a number" % (mid, col, row[col]))
+    out = {"id": mid, "measure": row.get("Measure", ""), "role": row.get("Role", ""), "kind": kind,
+           "ca": ca, "baseline": row.get("Baseline", ""), "target": row.get("Target", ""),
+           "by": row.get("By", ""), "current": row.get("Current", ""), "as_of": row.get("As of", ""),
+           "source": row.get("Source", ""), "every": row.get("Every", ""), "wbs": row.get("WBS", ""),
+           "score": None, "expected": None, "flags": []}
+    if not row.get("Current", "").strip() and kind != "M":
+        out["flags"].append("missing")
+        return out
+    if kind == "M":
+        score = current
+    elif kind == "H":
+        score = current / target if current is not None and target else None
+    elif current is not None and base is not None and target is not None and target != base:
+        score = (current - base) / (target - base)
+    else:
+        score = None
+    if score is None:
+        return out
+    score = max(0.0, min(1.0, score))
+    judged = min(1.0, score / ASPIRATIONAL) if ca == "A" else score
+    out["score"] = round(score, 2)
+    # Pace is judged at the date the value was taken, not today: a measure read
+    # once a quarter cannot move between readings, and judging it against today
+    # would call it behind pace all quarter. A value overdue for a reading is
+    # caught as stale instead.
+    at = taken or as_of
+    if start and by and by > start:
+        expected = max(0.0, min(1.0, (at - start).days / float((by - start).days)))
+        out["expected"] = round(expected, 2)
+        if kind == "M":
+            if judged < 1 and as_of > by:
+                out["flags"].append("past due")
+        else:
+            if judged + 1e-9 < expected:
+                out["flags"].append("behind pace")
+            if as_of > by and judged < 1:
+                out["flags"].append("past due")
+    days = EVERY_DAYS.get(row.get("Every", ""))
+    if taken and days and (as_of - taken).days > days:
+        out["flags"].append("stale")
+    if mid in prev_scores and prev_scores[mid] is not None:
+        d = score - prev_scores[mid]
+        out["trend"] = u"↑" if d > 0.005 else u"↓" if d < -0.005 else u"→"
+    return out
+
+
+def outcome_block(prjmgm, as_of, register_path, prev):
+    """The record's outcome block: what the project is for, its measures scored,
+    and the findings. `present` is False when there is nothing to rate."""
+    row = register_row(prjmgm, register_path)
+    path = os.path.join(prjmgm, BRIEF_NAME)
+    out = {"present": False, "brief": BRIEF_NAME if os.path.exists(path) else None,
+           "outcome": (row or {}).get("Outcome"), "serves": (row or {}).get("Serves"),
+           "statement": None, "done_when": [], "measures": [], "findings": []}
+    if row is None and register_path:
+        out["findings"].append("no portfolio register row has this project's folder")
+    if not os.path.exists(path):
+        out["reason"] = "No Project Brief in %s" % os.path.basename(prjmgm)
+        return out
+    parts = brief_sections(io.open(path, encoding="utf-8").read())
+    out["statement"], out["done_when"] = parts["statement"], parts["done_when"]
+    out["outcome"] = out["outcome"] or parts["outcome"]
+    out["serves"] = out["serves"] or parts["serves"]
+    if not parts["rows"]:
+        out["reason"] = "The brief has no Measures table (a lean brief)"
+        return out
+    missing = [c for c in MEASURE_COLS if c not in (parts["header"] or [])]
+    if missing:
+        out["findings"].append("Measures table lacks %s" % ", ".join(missing))
+    prev_scores = {m["id"]: m.get("score") for m in ((prev or {}).get("outcome") or {}).get("measures", [])}
+    out["measures"] = [score_measure(r, as_of, prev_scores, out["findings"]) for r in parts["rows"]]
+    if not any(m["role"] == "lag" for m in out["measures"]):
+        out["findings"].append("no lag measure: lead measures alone show activity, not value")
+    out["present"] = True
+    return out
+
+
+def signal_outcome(block):
+    """On Outcome, proposed. None when there is nothing to rate."""
+    if not block.get("present"):
+        return None
+    red, amber = [], []
+    for m in block["measures"]:
+        label = "%s %s" % (m["id"], m["measure"])
+        if m["role"] == "lag" and "missing" in m["flags"]:
+            red.append("%s: a lag measure with no value" % label)
+        if "past due" in m["flags"] and m["ca"] == "C":
+            red.append("%s: past its date (%s) below target" % (label, m["by"]))
+        elif "past due" in m["flags"]:
+            amber.append("%s: past its date (%s) below target, aspirational" % (label, m["by"]))
+        if "behind pace" in m["flags"]:
+            amber.append("%s: score %.2f against %.2f expected when it was taken" % (label, m["score"], m["expected"]))
+        if "stale" in m["flags"]:
+            amber.append("%s: not read since %s (every %s)" % (label, m["as_of"], m["every"]))
+        if "missing" in m["flags"] and m["role"] != "lag":
+            amber.append("%s: no value yet" % label)
+    on = [m for m in block["measures"] if not m["flags"]]
+    ev = red + amber or ["%d measure(s), every one on pace and current" % len(on)]
+    return rate(red, amber), ev
+
+
+def outcome_facts(block):
+    """The outcome in plain words, for the executive summary to draw on."""
+    if not block.get("present"):
+        return None
+    return {"outcome": block.get("outcome"), "measures": [
+        {"measure": m["measure"], "now": m["current"], "target": m["target"], "by": m["by"],
+         "state": ", ".join(m["flags"]) or "on pace"} for m in block["measures"]]}
+
+
 def summary_html(rec):
     s = rec.get("summary") or {}
     extra = ""
@@ -626,6 +846,14 @@ def cmd_status(args):
                            "confirmed": None, "reason": None, "confirmed_on": None}
 
     prev = previous_record(out_dir, "status-report", as_of.isoformat())
+    # What the project is for, and whether it is getting there. A signal of its
+    # own, kept out of Overall; not proposed when there is nothing to rate.
+    outcome = outcome_block(prjmgm, as_of, PROJECT_REGISTER,
+                            prev[1] if prev else None)
+    so = signal_outcome(outcome)
+    if so:
+        signals["outcome"] = {"proposed": so[0], "evidence": so[1], "confirmed": None,
+                              "reason": None, "confirmed_on": None}
     rec = {"kind": "status-report", "version": 1, "scope": wbs.scope, "sprint": sprint,
            "period": {"start": window["Starts"], "end": window["Ends"]}, "as_of": as_of.isoformat(),
            "generated": datetime.now().isoformat(timespec="seconds"),
@@ -641,9 +869,10 @@ def cmd_status(args):
                     and e.get("Type") in ("Risk", "Issue", "Action")
                     and e.get("_pm") and R.clean(e.get("DRI")) != e["_pm"]],
            "risks": top_risks(raid, as_of), "milestones": milestone_map(wbs, as_of),
-           "metrics": metrics,
+           "metrics": metrics, "outcome": outcome,
            "summary": {"text": None, "confirmed_on": None}}
     rec["facts"] = status_facts(wbs, raid, sprint, facts, rec["risks"])
+    rec["facts"]["outcome"] = outcome_facts(outcome)
     rec["facts"]["sprint_progress"] = sprint_progress(window, as_of)
     if prev:
         rec["previous"] = {"file": prev[0], "as_of": prev[1]["as_of"],
@@ -651,9 +880,13 @@ def cmd_status(args):
     os.makedirs(out_dir, exist_ok=True)
     write_record(path, rec)
     print("Status report for %s, %s (as of %s)" % (wbs.scope, sprint, as_of))
-    for key, label in SIGNALS + [("mood", "Mood")]:
+    for key, label in SIGNALS + [("outcome", "On Outcome"), ("mood", "Mood")]:
         if key in signals:
             print("  %-10s proposed %-6s  %s" % (label, signals[key]["proposed"], signals[key]["evidence"][0][:90]))
+    for f in outcome["findings"]:
+        print("  ! brief: %s" % f)
+    if not outcome["present"]:
+        print("  On Outcome not proposed: %s" % outcome.get("reason", "nothing to rate"))
     print("  Record: %s\n  View:   %s" % (path, path[:-5] + ".html"))
     print("  Confirm each rating, or override it with a reason:")
     print("    report.py confirm \"%s\" --signal all" % path)
@@ -1022,6 +1255,9 @@ footer { color:var(--muted); font-size:11px; margin-top:8px; }
 .ex-rows { display:flex; flex-wrap:wrap; gap:10px 28px; }
 .ex-row { display:flex; align-items:center; gap:8px; }
 .ex-name { font-weight:700; }
+.outcome-grid { display:grid; grid-template-columns:180px 1fr; gap:12px; margin-top:10px; align-items:start; }
+@media (max-width:760px) { .outcome-grid { grid-template-columns:1fr; } }
+td.arrow { font-size:15px; }
 .tabs > input { position:absolute; opacity:0; pointer-events:none; }
 .tab-bar { display:flex; gap:4px; border-bottom:1px solid var(--grid); margin-bottom:14px; }
 .tab-bar label { padding:8px 14px; font-size:12.5px; font-weight:600; color:var(--ink2); cursor:pointer;
@@ -1141,27 +1377,72 @@ def roadmap_html(ms, with_scope=False, compact=False):
             'and last columns hold anything earlier or later, with its real date.</p>' % (len(mcols), "".join(mcols)))
 
 
-def render_status(rec):
-    sigs = rec["signals"]
+def signal_cell(rec, key, label):
+    """One signal: its rating, proposed or confirmed, the trend since the last
+    confirmed report, any override's reason, and the evidence behind it."""
+    s = rec["signals"][key]
     prev = (rec.get("previous") or {}).get("ratings", {})
-    shown = lambda s: s.get("confirmed") or s.get("proposed")
-    overall = worst([shown(sigs[k]) for k, _ in SIGNALS if k in sigs])
-    all_confirmed = all(sigs[k].get("confirmed") for k, _ in SIGNALS if k in sigs)
-    cells = []
-    for key, label in SIGNALS + [("mood", "Mood")]:
-        if key not in sigs:
-            continue
-        s = sigs[key]
-        r = shown(s)
-        arrow = trend_arrow(prev.get(key), r) if s.get("confirmed") else None
-        cells.append(
-            '<div class="e4-cell"><div class="e4-head"><span class="e4-name">%s</span>%s</div>%s%s%s'
+    r = s.get("confirmed") or s.get("proposed")
+    arrow = trend_arrow(prev.get(key), r) if s.get("confirmed") else None
+    return ('<div class="e4-cell"><div class="e4-head"><span class="e4-name">%s</span>%s</div>%s%s%s'
             '<details><summary>Evidence</summary><ul>%s</ul></details></div>'
             % (e(label),
                ('<span class="arrow" title="%s since %s">%s</span>' % (e(TREND_NAME[arrow]), e(rec["previous"]["as_of"]), arrow)) if arrow else "",
                status_chip(r), "" if s.get("confirmed") else '<span class="proposed">proposed</span>',
                ('<div class="override">Override: %s</div>' % e(s["reason"])) if s.get("reason") else "",
                "".join("<li>%s</li>" % e(x) for x in s["evidence"])))
+
+
+FLAG_RATING = {"missing": "red", "past due": "red", "behind pace": "amber", "stale": "amber"}
+
+
+def outcome_html(rec):
+    """What the project is for and whether it is getting there: the outcome, the
+    done-when list, On Outcome, and each measure against its pace."""
+    o = rec.get("outcome")
+    if not o:
+        return ""                      # a record from before the section existed
+    head = ""
+    if o.get("outcome"):
+        head += '<p class="sum-text">%s</p>' % e(o["outcome"])
+    if o.get("serves"):
+        head += '<p class="small">Serves %s</p>' % e(o["serves"])
+    if o.get("done_when"):
+        head += ('<details class="small" style="margin-top:6px"><summary>Done when (%d)</summary><ol style="margin:6px 0 0 18px">%s</ol></details>'
+                 % (len(o["done_when"]), "".join("<li>%s</li>" % e(x) for x in o["done_when"])))
+    if not o.get("present"):
+        body = '<p class="muted" style="margin-top:8px">%s: On Outcome is not proposed.</p>' % e(o.get("reason") or "Nothing to rate")
+    else:
+        rows = []
+        for m in o["measures"]:
+            score = ("%.2f" % m["score"]) if m.get("score") is not None else "-"
+            exp = (" <span class='small'>of %.2f expected</span>" % m["expected"]) if m.get("expected") is not None else ""
+            flags = "".join(" " + status_chip(FLAG_RATING.get(f), f) for f in m["flags"]) or " " + status_chip("green", "on pace")
+            rows.append("<tr><td><strong>%s</strong></td><td>%s<div class='small'>%s · %s%s · every %s</div></td>"
+                        "<td>%s → <strong>%s</strong> → %s<div class='small'>by %s · as of %s</div></td>"
+                        "<td>%s%s</td><td class='arrow'>%s</td><td>%s</td></tr>"
+                        % (e(m["id"]), e(m["measure"]), e(m["role"]), e(m["kind"]),
+                           " · aspirational" if m["ca"] == "A" else "", e(m["every"] or "-"),
+                           e(m["baseline"]), e(m["current"] or "-"), e(m["target"]), e(m["by"]), e(m["as_of"] or "-"),
+                           score, exp, e(m.get("trend") or ""), flags))
+        cell = signal_cell(rec, "outcome", "On Outcome") if "outcome" in rec["signals"] else ""
+        body = ('<div class="outcome-grid"><div>%s</div><div><table><thead><tr><th></th><th>Measure</th>'
+                '<th>Baseline → now → target</th><th>Score</th><th>Trend</th><th>State</th></tr></thead><tbody>%s</tbody></table>'
+                '<p class="small" style="margin-top:8px">Score 0-1 like a key result; an aspirational measure is met at 0.7. '
+                'Pace is judged at the date each value was taken; a value not read within its cadence is stale. '
+                'On Outcome is not counted in Overall.</p></div></div>' % (cell, "".join(rows)))
+    if o.get("findings"):
+        body += ('<p class="small" style="margin-top:8px"><strong>To fix in the brief:</strong> %s</p>'
+                 % e("; ".join(o["findings"])))
+    return '<section class="card"><h2>Outcome</h2>%s%s</section>' % (head, body)
+
+
+def render_status(rec):
+    sigs = rec["signals"]
+    shown = lambda s: s.get("confirmed") or s.get("proposed")
+    overall = worst([shown(sigs[k]) for k, _ in SIGNALS if k in sigs])
+    all_confirmed = all(sigs[k].get("confirmed") for k, _ in SIGNALS if k in sigs)
+    cells = [signal_cell(rec, key, label) for key, label in SIGNALS + [("mood", "Mood")] if key in sigs]
     first = "" if rec.get("previous") else '<span class="small">First confirmed report of this scope: no trend yet.</span>'
     e4 = ('<section class="card"><h2>Essential 4</h2><div class="overall"><strong>Overall</strong>%s%s %s</div>'
           '<div class="e4">%s</div><p class="small" style="margin-top:10px">Overall is the worst of the four; Mood '
@@ -1183,7 +1464,7 @@ def render_status(rec):
     milestones = ('<section class="card"><h2>Key deliverables</h2>%s</section>' % roadmap_html(rec["milestones"]))
     risks = '<section class="card"><h2>Top risks and issues</h2>%s</section>' % risks_html(rec["risks"])
     sub = "%s · %s → %s · as of %s" % (e(rec["sprint"]), e(rec["period"]["start"]), e(rec["period"]["end"]), e(rec["as_of"]))
-    return page("%s status" % rec["scope"], sub, summary_html(rec) + e4 + focus + milestones + risks)
+    return page("%s status" % rec["scope"], sub, summary_html(rec) + outcome_html(rec) + e4 + focus + milestones + risks)
 
 
 def goal_card(x, show_verdict):
@@ -1358,7 +1639,7 @@ def main():
     s.set_defaults(func=cmd_sprint)
     s = sub.add_parser("confirm", help="confirm a proposed rating, or override it with a reason")
     s.add_argument("record")
-    s.add_argument("--signal", help="time, scope, quality, resources, mood, or all (status reports)")
+    s.add_argument("--signal", help="time, scope, quality, resources, outcome, mood, or all (status reports)")
     s.add_argument("--rating", choices=RATINGS)
     s.add_argument("--reason")
     s.add_argument("--summary", help="the executive summary, as agreed with the PM; an empty string clears it")
