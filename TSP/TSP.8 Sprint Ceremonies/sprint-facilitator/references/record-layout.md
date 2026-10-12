@@ -27,8 +27,21 @@ The first three are **events**: written once, never touched again, and in that o
 | `review <records> <label>` | Adds the Review block | A sprint never planned; a second review; a review after the retro |
 | `retro <records> <label>` | Adds the Retrospective block | A sprint never planned; a second retro |
 | `status <records> [--calendar F]` | Says what is due or outstanding, in sentences meant to be read out | — |
+| `goals <records> [--json]` | Reads every record's goals back: verdicts, bets, carried goals, the share of committed hours that serve a goal. Lists what breaks the layout and exits 1 when anything does. A report consumes `--json` rather than parsing Markdown | — |
 
 `status` takes a sprint's end from the calendar where the calendar holds the sprint, then from the dates in the record's heading, and failing both from the planning date plus `--length` days (default 14). "Due" means within `--due-in` days (default 3).
+
+## The goal tables
+
+The goals are data a report counts, so three tables keep a fixed shape:
+
+| Block | Table | Columns |
+|---|---|---|
+| Planning | *Iteration goals* | `ID` (`G1`, `G2`…, unique within the sprint) · `Goal` · `Done when` · `Bet` (the longer-cycle bet or objective it serves, or blank) · `Carried from` (`<sprint ID> <goal ID>`, only for a goal continuing an earlier one) |
+| Planning | *Committed items* | `Item` · `Effort` (`Xh`) · `Area` · `Goal` (`G1`, `G1, G3`, or blank) · `Notes` |
+| Review | *Iteration goals* | `ID` · `Goal` · `Achieved` (`Yes` / `Partial` / `No`, nothing else) · `Why` |
+
+The Review also opens with *Highlights*: one paragraph. In *Committed items*, a struck-through row was dropped and an all-bold row is a subtotal heading; `goals` skips both when it sums hours. A record whose goals table has no `ID` column reads as `unstructured`, never guessed at.
 
 ## The calendar
 

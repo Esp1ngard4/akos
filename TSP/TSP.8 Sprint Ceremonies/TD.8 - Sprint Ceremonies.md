@@ -165,7 +165,7 @@ A daily routine that runs `sprint_record.py status` makes a missed ceremony surf
 
 ## How it is tested
 
-`tests/smoke_test.py` exercises `sprint_record.py` the way a new user would. It seeds a calendar, plans a sprint with the heading dated from the calendar, then runs `status` before, at and after the sprint's end. It appends the review and retro, checks that ceremony blocks land ahead of the living sections, carries a draft goal into the next sprint, and confirms every refusal: planning twice, a review after a retro, a ceremony on a sprint never planned, and a calendar with no sprints.
+`tests/smoke_test.py` exercises `sprint_record.py` the way a new user would. It seeds a calendar, plans a sprint with the heading dated from the calendar, then runs `status` before, at and after the sprint's end. It appends the review and retro, checks that ceremony blocks land ahead of the living sections, carries a draft goal into the next sprint as `G1`, has the review pre-fill the goals by ID, reads them back with `goals` (verdict, bet, goal-linked hours), flags a verdict outside Yes / Partial / No and reads a record from before goal IDs as unstructured, and confirms every refusal: planning twice, a review after a retro, a ceremony on a sprint never planned, and a calendar with no sprints.
 
 It also checks that every `wbs.py` and `tsp.py` command the two skills name actually exists, so a command renamed in another tool fails here rather than halfway through a ceremony. It installs both skills and `wbs-manager` into an empty project, the way *Components* says to.
 
@@ -196,5 +196,6 @@ What is **not** tested is whether the agent runs a ceremony well. No test assert
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-10-12 | **Sprint goals become data, and a commitment means `Not Started`.** Goals were free lines with an `Achieved` cell, so nothing could count them. Each now has an ID, a *Done when* test, an optional *Bet* (the longer-cycle bet or objective it serves) and *Carried from* when it continues an earlier goal; committed items carry an `Area` and the `Goal` IDs they serve; the review answers each goal by ID with Yes, Partial or No and a *Why*, under a *Highlights* paragraph. `sprint_record.py goals` reads them back (verdicts, carried goals, the share of committed hours serving a goal) and names what breaks the layout, so a report reads `--json` instead of parsing Markdown. Records written before read as unstructured. Separately: Planning step 4 says so: committing a `Portfolio Backlog` or `Funnel` row moves it to `Not Started`, which `wbs.py` now does itself (TD.1 v1.6), and `check` warns on a committed row left behind. |
 | v1.1 | 2026-10-02 | The two `wbs.py` gaps the dry run found are fixed at the source (TD.1 v1.5): a first `Planned End` needs no reason, and `refined` checks the description. The workarounds the skills carried for both are gone. |
 | v1.0 | 2026-10-02 | Published as TSP.8. The four ceremonies run on the WBS, RAID and TSP registers alone; a task tracker and a calendar are described as adaptations rather than configured. `sprint_record.py` reads sprint windows from the sprint calendar. |

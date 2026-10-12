@@ -109,7 +109,7 @@ On the sprint's last day, before the retro. **It inspects the result**: what the
    ```
 
    Totals first, with the per-register split underneath. Where a figure cannot be produced, say why. A gap in what the sprint recorded is a close-out topic, and usually a more useful one than a number.
-2. **Answer the iteration goals.** Copy the goals from this sprint's planning block and mark each achieved, partly achieved or not. A partly met goal is still answered here: it belonged to this sprint, and whatever continues becomes a new commitment at planning.
+2. **Answer the iteration goals.** `review` pre-fills them by ID from the planning block. Mark each `Yes`, `Partial` or `No` and nothing else; the nuance goes in `Why`, with RAID IDs where a risk or issue was the cause. Write the *Highlights*: one or two sentences for someone who reads nothing else. A partly met goal is still answered here: it belonged to this sprint, and whatever continues becomes a new commitment at planning, *Carried from* this one.
 3. **Account for what was committed with known gaps**, using the planning block's notes. Committing unready work is legitimate, but what became of it is the evidence for whether that keeps working.
 4. **Decide the carryover.** Each committed row that did not finish is one of three things: genuine spillover, quietly abandoned, or finished and never closed. Close the third kind now with a closure note. For spillover, settle in a sentence why it did not finish; planning writes that sentence onto the row when it carries it.
 5. **Re-run the metrics, then write the record.** The session changes what it measures, so record the closing figures:
@@ -118,7 +118,7 @@ On the sprint's last day, before the retro. **It inspects the result**: what the
    python <skill-path>/scripts/sprint_record.py review "<records>" "<sprint ID>"
    ```
 
-   Fill the metrics, *Effort by register* from the per-register split (skip it if there is only one register), the goals, the known gaps and the carryover.
+   Fill the metrics, *Effort by register* from the per-register split (skip it if there is only one register), the goals, the known gaps and the carryover. Then run `sprint_record.py goals <records>`: it reads the goals back and names anything that breaks the layout.
 6. **Then the readiness half**: `sprint-planning-precheck`, in the same session. You cannot judge readiness to commit without first knowing what closed.
 
 ## Running the sprint retrospective
@@ -148,8 +148,8 @@ On the next sprint's first day. The close-out and the retro ran the day before.
    - 2b. **Controls**, if a TSP register is in use: show `tsp.py due` and ask which to commit. The default is three, but the user decides, and retiring dead ones (`tsp.py retire`) is a legitimate answer. A committed control goes into the committed-items table as `control <ID>`. When it is done, it is recorded with `tsp.py done`.
    - 2c. **A `Planned End` already passed on a candidate is a decision, not clean-up**: re-plan it with a `--reason`, or cancel the row with a closure note.
 3. **Confirm each committed row is ready**, top priority first. A row committed with a gap is still committed; note the gap so the close-out can say what became of it.
-4. **Record the commitment on each row.** For a new commitment: `--sprint-planned <sprint ID> --horizon ""`. For a row carried from an earlier sprint and not Done: `--sprint-carried <sprint ID> --reason "<why it did not finish>"`, so the earlier sprint keeps its carryover. **Set the baseline if the row has none**: commitment is the moment it becomes real, it is written once, and `rebaseline` moves it afterwards. Set `Planned End` at the precision the commitment actually has.
-5. **Decide two or three iteration goals**, starting from any `draft:` goals the record carries in. Record confidence as a fist of five, per participant.
+4. **Record the commitment on each row.** For a new commitment: `--sprint-planned <sprint ID> --horizon ""`. For a row carried from an earlier sprint and not Done: `--sprint-carried <sprint ID> --reason "<why it did not finish>"`, so the earlier sprint keeps its carryover. **A commitment means `Not Started`:** `wbs.py` moves a committed `Portfolio Backlog` or `Funnel` row there itself and says so. **Set the baseline if the row has none**: commitment is the moment it becomes real, it is written once, and `rebaseline` moves it afterwards. Set `Planned End` at the precision the commitment actually has.
+5. **Decide two or three iteration goals**, starting from any `draft:` goals the record carries in as `G1`, `G2`…. Each keeps its ID, gets a one-line *Done when* (the test the close-out will judge it against), a *Bet* when it serves a bet or objective from a longer planning cycle (blank otherwise, which is legitimate), and *Carried from* `<sprint ID> <goal ID>` when it continues an earlier goal, reworded or widened included. Mark each committed item's `Goal` with the IDs it serves, and its `Area`. The goals are data a report counts, so keep the ID, the test and the carry out of the goal sentence. Record confidence as a fist of five, per participant.
 6. **Write the record**:
 
    ```bash

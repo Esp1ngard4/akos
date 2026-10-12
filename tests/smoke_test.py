@@ -716,7 +716,41 @@ def test_sprint_ceremonies(root, scratch):
     ok, out = run([sr, "plan", rec, "S26.Q3.7", "--calendar", conv], work)
     nxt = io.open(os.path.join(rec, "S26.Q3.7.md"), encoding="utf-8").read() if ok else ""
     check("plan carries the last sprint's draft goals in",
-          "| draft: Ship the login page |" in nxt, out[:200])
+          "| G1 | draft: Ship the login page |" in nxt, out[:200])
+
+    # --- the goals are data a report reads back -----------------------------
+    nxt_path = os.path.join(rec, "S26.Q3.7.md")
+    nxt = nxt.replace("| G1 | draft: Ship the login page |  |  |  |",
+                      "| G1 | Ship the login page | Login live | Q4-26.B1 |  |")
+    nxt = nxt.replace("| Item | Effort | Area | Goal | Notes |\n|---|---|---|---|---|\n|  |  |  |  |  |",
+                      "| Item | Effort | Area | Goal | Notes |\n|---|---|---|---|---|\n"
+                      "| Atlas#2 Login page | 4h | Product | G1 |  |\n| Atlas#5 Cache | 2h | Product |  |  |")
+    io.open(nxt_path, "w", encoding="utf-8").write(nxt)
+    ok, out = run([sr, "review", rec, "S26.Q3.7"], work)
+    reviewed = io.open(nxt_path, encoding="utf-8").read()
+    check("review pre-fills the goals by ID", ok and "| G1 | Ship the login page |  |  |" in reviewed, out[:200])
+    io.open(nxt_path, "w", encoding="utf-8").write(
+        reviewed.replace("| G1 | Ship the login page |  |  |", "| G1 | Ship the login page | Yes |  |"))
+    ok, out = run([sr, "goals", rec, "--json"], work)
+    try:
+        goals = {g["sprint"]: g for g in json.loads(out)}
+    except ValueError:
+        goals = {}
+    g7 = goals.get("S26.Q3.7") or {}
+    check("goals reads the verdict, the bet and the goal-linked hours",
+          ok and (g7.get("goals") or [{}])[0].get("achieved") == "Yes"
+          and g7["goals"][0].get("bet") == "Q4-26.B1"
+          and (g7.get("hours") or {}).get("goal_linked") == 4.0, out[:300])
+    io.open(nxt_path, "w", encoding="utf-8").write(
+        reviewed.replace("| G1 | Ship the login page |  |  |", "| G1 | Ship the login page | Mostly |  |"))
+    ok, out = run([sr, "goals", rec], work)
+    check("goals flags a verdict that is not Yes / Partial / No", not ok and "Mostly" in out, out[:300])
+    old = os.path.join(rec, "S26.Q2.1.md")
+    io.open(old, "w", encoding="utf-8").write(
+        u"# Sprint S26.Q2.1\n\n## Planning — 2026-04-01\n\n### Iteration goals\n\n"
+        u"| Goal | Achieved |\n|---|---|\n| Old goal | Yes |\n")
+    ok, out = run([sr, "goals", rec], work)
+    check("a record from before goal IDs reads as unstructured", "S26.Q2.1  unstructured" in out, out[:300])
 
     bad = os.path.join(work, "empty.json")
     io.open(bad, "w", encoding="utf-8").write(u"{}")

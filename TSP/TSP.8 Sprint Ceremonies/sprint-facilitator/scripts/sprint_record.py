@@ -6,6 +6,7 @@
     python sprint_record.py review <records dir> "S26.Q3.6"
     python sprint_record.py retro  <records dir> "S26.Q3.6"
     python sprint_record.py status <records dir> [--calendar <file>]
+    python sprint_record.py goals  <records dir> [--json]
 
 One Markdown file per sprint, holding the sprint's whole arc: `plan` creates
 it, `review` records what the sprint delivered, and `retro` appends how the
@@ -15,7 +16,8 @@ Review and retro are kept apart deliberately, as the Scrum Guide has them: the
 review inspects the *result*, the retro inspects the *process, the tools and
 the way of working*. `status` reads the folder back and says what is due or
 outstanding, which is what lets a daily routine raise a ceremony without being
-asked.
+asked. `goals` reads the iteration goals back - verdicts, carried goals,
+goal-linked hours - and flags a record that breaks the layout.
 
 `--calendar` takes any JSON file with a `sprints` list - the agile-conventions
 file `wbs.py sprints seed` writes, or a WBS register that imported it. With
@@ -53,18 +55,26 @@ Confidence in the plan, per participant. Solo: one row.
 
 ### Iteration goals
 
-| Goal | Achieved |
-|---|---|
+`ID` is G1, G2... within this sprint. `Bet` names the bet or objective from a
+longer planning cycle that the goal serves (a quarter's bet, an OKR), or
+nothing. `Carried from` names the earlier goal this one continues
+(`S26.Q3.6 G2`), reworded or widened included. The Review answers each goal;
+this table is not edited after planning.
+
+| ID | Goal | Done when | Bet | Carried from |
+|---|---|---|---|---|
 {goals}
 
 ### Committed items
 
 One row per WBS row committed, qualified by scope where the sprint spans more
-than one register (`Atlas#12`).
+than one register (`Atlas#12`). `Area` is the area of life or work the item
+serves, in whatever vocabulary the TSP register uses. `Goal` holds the IDs the
+item serves (`G1`, `G1, G3`), or nothing.
 
-| Item | Effort | Notes |
-|---|---|---|
-|  |  |  |
+| Item | Effort | Area | Goal | Notes |
+|---|---|---|---|---|
+|  |  |  |  |  |
 
 ### Notes
 
@@ -109,6 +119,10 @@ REVIEW_TEMPLATE = """
 
 _What the sprint delivered. Not how it was worked — that is the retro._
 
+### Highlights
+
+_One or two sentences: what someone reading nothing else should know._
+
 Run the metrics twice: once to open the session, once after the decisions
 below, and record the closing figures. The session changes what it measures.
 Pass every register the sprint spanned:
@@ -138,12 +152,14 @@ time logged. One register: one row, and the table says nothing new - leave it.
 
 ### Iteration goals
 
-Copy the goals table from this sprint's planning block and answer it. A goal
-nobody marks achieved is a commitment nobody checks.
+One row per goal in the planning block, by its ID. `Achieved` is Yes, Partial
+or No and nothing else; the nuance goes in `Why`, with RAID IDs (`R.7`) where
+a risk or issue was the cause. A goal nobody marks achieved is a commitment
+nobody checks.
 
-| Goal | Achieved |
-|---|---|
-|  |  |
+| ID | Goal | Achieved | Why |
+|---|---|---|---|
+{goals}
 
 ### Committed with known gaps
 
@@ -324,6 +340,189 @@ def draft_goals(path):
     return goals
 
 
+# --- Reading the goals back ------------------------------------------------
+#
+# The goals are recorded as tables so that a report can count them: hit rate,
+# goals carried from sprint to sprint, and the share of committed hours that
+# serve a goal. This is the one reader, so a report consumes `goals --json`
+# rather than parsing Markdown of its own.
+
+VERDICTS = ("Yes", "Partial", "No")
+GOAL_ID_RE = re.compile(r"^G\d+$")
+EFFORT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*h\b")
+
+
+def block(text, name):
+    """The text of one '## <name>' block, up to the next '## ' heading."""
+    m = re.search(r"^##[ \t]+%s\b.*$" % name, text, re.M)
+    if not m:
+        return None
+    nxt = re.search(r"^##[ \t]", text[m.end():], re.M)
+    return text[m.end():m.end() + nxt.start()] if nxt else text[m.end():]
+
+
+def table(text, heading):
+    """The first pipe table under '### <heading>', as (header, rows).
+
+    Rows that are empty in every cell are the template's prompt, not data.
+    """
+    if text is None:
+        return None, []
+    at = text.find("### " + heading)
+    if at < 0:
+        return None, []
+    lines = []
+    for line in text[at:].split("\n")[1:]:
+        if line.startswith("#"):
+            break
+        if line.startswith("|"):
+            lines.append(line)
+        elif lines:
+            break
+    if len(lines) < 2:
+        return None, []
+
+    def cells(line):
+        return [c.strip() for c in line.strip().strip("|").split("|")]
+
+    header = cells(lines[0])
+    rows = []
+    for line in lines[2:]:
+        values = cells(line)
+        if not any(values):
+            continue
+        rows.append({h: (values[i] if i < len(values) else "") for i, h in enumerate(header)})
+    return header, rows
+
+
+def unbold(cell):
+    return cell[2:-2].strip() if cell.startswith("**") and cell.endswith("**") else cell
+
+
+def read_goals(path):
+    """One record's goals, verdicts and goal-linked hours, plus what breaks the
+    layout. A record written before goals had IDs is reported as unstructured,
+    never guessed at: a hit rate built on guesses is worse than a gap."""
+    text = open(path, encoding="utf-8").read()
+    sprint = os.path.splitext(os.path.basename(path))[0]
+    out = {"sprint": sprint, "structured": False, "goals": [], "highlights": None,
+           "hours": None, "findings": []}
+    planning, review = block(text, "Planning"), block(text, "Review")
+    header, rows = table(planning, "Iteration goals")
+    if not header or "ID" not in header:
+        return out
+    out["structured"] = True
+    find = out["findings"]
+
+    goals = {}
+    for r in rows:
+        gid = r.get("ID", "")
+        if not GOAL_ID_RE.match(gid):
+            find.append("planning: goal ID %r is not G1, G2..." % gid)
+            continue
+        if r.get("Goal", "").lower().startswith("draft:"):
+            find.append("%s is still marked draft:" % gid)
+        goals[gid] = {"id": gid, "goal": r.get("Goal", ""),
+                      "done_when": r.get("Done when", ""),
+                      "bet": r.get("Bet", ""),
+                      "carried_from": r.get("Carried from", ""),
+                      "achieved": None, "why": None}
+
+    if review is not None:
+        _, answers = table(review, "Iteration goals")
+        answered = set()
+        for r in answers:
+            gid = r.get("ID", "")
+            if gid not in goals:
+                find.append("review answers %r, which planning does not hold" % gid)
+                continue
+            answered.add(gid)
+            verdict = unbold(r.get("Achieved", ""))
+            goals[gid]["achieved"] = verdict or None
+            goals[gid]["why"] = r.get("Why", "")
+            if not verdict:
+                find.append("%s is unanswered" % gid)
+            elif verdict not in VERDICTS:
+                find.append("%s: %r is not Yes / Partial / No" % (gid, verdict))
+        for gid in goals:
+            if gid not in answered:
+                find.append("%s has no row in the review" % gid)
+        hl = review.split("### Highlights", 1)
+        if len(hl) == 2:
+            # One paragraph: the metrics' instructions follow it in the template.
+            body = hl[1].split("###", 1)[0].strip().split("\n\n", 1)[0].strip()
+            out["highlights"] = body if body and not body.startswith("_") else None
+    out["goals"] = list(goals.values())
+
+    cheader, committed = table(planning, "Committed items")
+    if cheader and "Goal" in cheader:
+        total = linked = 0.0
+        unestimated = 0
+        for r in committed:
+            item = r.get("Item", "")
+            # A struck-through row was dropped; an all-bold row is a subtotal
+            # heading over the rows beneath it, and counting it double-counts.
+            if item.startswith("~~") or (item.startswith("**") and item.endswith("**")):
+                continue
+            serves = [g.strip() for g in r.get("Goal", "").split(",") if g.strip()]
+            for g in serves:
+                if g not in goals:
+                    find.append("committed item names %s, which planning does not hold" % g)
+            m = EFFORT_RE.search(r.get("Effort", ""))
+            if not m:
+                unestimated += 1
+                continue
+            hours = float(m.group(1))
+            total += hours
+            if serves:
+                linked += hours
+        out["hours"] = {"committed": total, "goal_linked": linked,
+                        "unestimated_rows": unestimated}
+    else:
+        find.append("committed items have no Goal column")
+    return out
+
+
+def cmd_goals(records_dir, as_json):
+    if not os.path.isdir(records_dir):
+        sys.exit("%s is not a folder." % records_dir)
+    records = read_records(records_dir)
+    results = [read_goals(path_for(records_dir, r["sprint"])) for r in records]
+    known = {(r["sprint"], g["id"]) for r in results for g in r["goals"]}
+    for r in results:
+        for g in r["goals"]:
+            ref = g["carried_from"].split()
+            if ref and (len(ref) != 2 or tuple(ref) not in known):
+                r["findings"].append("%s carried from %r, which no record holds"
+                                     % (g["id"], g["carried_from"]))
+    if as_json:
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+        return 1 if any(r["findings"] for r in results) else 0
+
+    for r in results:
+        if not r["structured"]:
+            print("%s  unstructured - written before goals had IDs" % r["sprint"])
+            continue
+        verdicts = ", ".join("%s %s" % (g["id"], g["achieved"] or "open") for g in r["goals"])
+        line = "%s  %s" % (r["sprint"], verdicts or "no goals")
+        bets = ["%s %s" % (g["id"], g["bet"]) for g in r["goals"] if g["bet"]]
+        if bets:
+            line += "  | bets: %s" % ", ".join(bets)
+        carried = [g["id"] for g in r["goals"] if g["carried_from"]]
+        if carried:
+            line += "  | carried: %s" % ", ".join(carried)
+        h = r["hours"]
+        if h and h["committed"]:
+            line += "  | goal focus %g of %gh (%d%%)" % (
+                h["goal_linked"], h["committed"], round(100 * h["goal_linked"] / h["committed"]))
+            if h["unestimated_rows"]:
+                line += ", %d row(s) unestimated" % h["unestimated_rows"]
+        print(line)
+        for f in r["findings"]:
+            print("    ! %s" % f)
+    return 1 if any(r["findings"] for r in results) else 0
+
+
 def dated(label, calendar):
     """The label with the sprint's dates appended, when the calendar has them
     and the label does not already carry its own."""
@@ -343,7 +542,8 @@ def cmd_plan(records_dir, label, calendar):
     # the latest record, read before this one exists.
     previous = read_records(records_dir)
     carried = draft_goals(path_for(records_dir, previous[-1]["sprint"])) if previous else []
-    rows = "\n".join("| draft: %s |  |" % g.replace("|", "/") for g in carried) or "|  |  |"
+    rows = "\n".join("| G%d | draft: %s |  |  |  |" % (i, g.replace("|", "/"))
+                     for i, g in enumerate(carried, 1)) or "|  |  |  |  |  |"
     os.makedirs(records_dir, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(PLAN_TEMPLATE.format(label=dated(label, calendar),
@@ -392,9 +592,15 @@ def cmd_review(records_dir, label):
         # Chronology is the file's whole value: planning, review, retro.
         sys.exit("%s already has a retrospective, so a review appended now would "
                  "read out of order. Add the review above it by hand." % path)
-    add_block(path, REVIEW_TEMPLATE.format(today=date.today().isoformat()))
+    # The goals are pre-filled by ID from planning, so the session answers
+    # them rather than copying a table by hand.
+    _, planned = table(block(text, "Planning"), "Iteration goals")
+    rows = "\n".join("| %s | %s |  |  |" % (g.get("ID", ""), g.get("Goal", ""))
+                     for g in planned if g.get("ID")) or "|  |  |  |  |"
+    add_block(path, REVIEW_TEMPLATE.format(today=date.today().isoformat(), goals=rows))
     print("Added the review to %s" % path)
-    print("  Fill the metrics, the goals and the carryover decisions live.")
+    print("  Fill the highlights, metrics, goals and carryover decisions live,")
+    print("  then run the goals command to check the record reads.")
     return 0
 
 
@@ -498,6 +704,9 @@ def main():
         s = sub.add_parser(name, help=helptext)
         s.add_argument("records_dir")
         s.add_argument("label", help='the sprint ID planning used, e.g. "S26.Q3.6"')
+    s = sub.add_parser("goals", help="read every record's goals back, and check the layout")
+    s.add_argument("records_dir")
+    s.add_argument("--json", action="store_true", help="emit JSON for a report to consume")
     s = sub.add_parser("status", help="say what is due or outstanding")
     s.add_argument("records_dir")
     s.add_argument("--calendar", metavar="FILE",
@@ -517,6 +726,8 @@ def main():
         return cmd_review(args.records_dir, args.label)
     if args.command == "retro":
         return cmd_retro(args.records_dir, args.label)
+    if args.command == "goals":
+        return cmd_goals(args.records_dir, args.json)
     if args.command == "status":
         as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
         return cmd_status(args.records_dir, as_of, args.length, args.due_in,
