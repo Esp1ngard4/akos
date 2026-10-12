@@ -169,6 +169,32 @@ def build_schedule(items, log, sprints=None):
     return payload
 
 
+def build_boards(register, sprints):
+    """Each sprint's cards and figures, for the Current Sprint tab.
+
+    The cards (with their role, lane and path) and the numbers both come from
+    wbs.py - `sprint_board` and `sprint_metrics` - rather than a second
+    implementation in JavaScript, so the header reads the same as `wbs.py
+    metrics` and a card sits in the same lane in any report built on it.
+    Every sprint is built, not only the current one: which sprint is current
+    is decided when the page opens, so the board stays right between refreshes.
+    """
+    import wbs as W
+    rows = R.rows(register, "items")
+    boards = {}
+    for s in sprints:
+        sid = s["Sprint"]
+        cards = {str(c["id"]): {"r": c["role"], "l": c["lane"], "p": c["path"]}
+                 for c in W.sprint_board(rows, sid)}
+        if not cards:
+            continue
+        m = W.sprint_metrics(register, sid)
+        boards[sid] = {"cards": cards,
+                       "m": {k: m[k] for k in ("committed", "pulled_in",
+                                               "delivered", "carryover")}}
+    return boards
+
+
 def compute_stats(items):
     """Compute summary statistics."""
     stats = {
@@ -389,6 +415,40 @@ tr:hover td{background:#f0f4ff}
 .sheet .datebox div{background:#f8fafc;border-radius:6px;padding:8px 10px;font-size:12px}
 .sheet .datebox span{display:block;color:#6b7280;font-size:10px;text-transform:uppercase;
   letter-spacing:.04em;margin-bottom:2px}
+/* Current Sprint: lanes by deliverable, columns by status. */
+.kb-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 0;border-bottom:2px solid #4472C4;margin-bottom:8px}
+.kb-head select{padding:4px 8px;border:1px solid #e5e7eb;border-radius:4px;font-size:12px;background:#fff;color:#1a1a2e}
+.kb-figs{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12px;color:#374151;margin-bottom:14px}
+.kb-figs b{color:#1a1a2e}
+.kb-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.kb-colheads{gap:0;position:sticky;top:0;z-index:5;background:#fff;padding:4px 0}
+.kb-colhead{font-size:11px;font-weight:700;color:#4472C4;text-transform:uppercase;letter-spacing:.05em;padding:6px 10px;border-bottom:2px solid #dbe4f3}
+.kb-colhead span{color:#6b7280;font-weight:400;text-transform:none;letter-spacing:0;margin-left:8px}
+.kb-lane{margin-top:12px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+.kb-lanehead{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f6f8fb;border-bottom:1px solid #e5e7eb}
+.kb-lanehead .t{font-weight:700;font-size:13px;flex:1;min-width:0}
+.kb-lanehead .h{font-size:11px;color:#6b7280;white-space:nowrap}
+.kb-lanehead .pgw{width:110px;flex:none}
+.kb-cell{padding:8px;display:flex;flex-direction:column;gap:8px;min-height:44px}
+.kb-cell+.kb-cell{border-left:1px dashed #e5e7eb}
+.kb-card{background:#fff;border:1px solid #e5e7eb;border-left:4px solid #e5e7eb;border-radius:6px;padding:7px 9px;font-size:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.kb-card.cx{opacity:.55}.kb-card.cx .kb-title{text-decoration:line-through}
+.kb-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.kb-title{font-weight:600;margin:3px 0 2px;line-height:1.35}
+.kb-path{font-size:11px;color:#6b7280;line-height:1.35}
+.kb-meta{font-size:11px;color:#6b7280;margin-top:4px}
+.kb-tag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;background:#ede9fe;color:#5b21b6;white-space:nowrap}
+.kb-tag.pull{background:#ffedd5;color:#9a3412}
+.kb-flag{margin-top:5px;font-size:11px;color:#b45309;font-weight:600}
+.kb-empty{color:#d1d5db;font-size:11px;text-align:center;padding:8px 0}
+@media (max-width:700px){
+  body{padding:16px}
+  .kb-cols{grid-template-columns:1fr}
+  .kb-colheads{display:none}
+  .kb-cell+.kb-cell{border-left:none;border-top:1px dashed #e5e7eb}
+  .kb-cell::before{content:attr(data-col);font-size:10px;font-weight:700;color:#4472C4;text-transform:uppercase;letter-spacing:.05em}
+  .kb-lanehead{flex-wrap:wrap}
+}
 @media print{.backdrop{display:none}}
 .warn{color:#b91c1c}
 .timestamp{margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;text-align:right}
@@ -400,6 +460,7 @@ JS = '''
 const DATA=__ITEMS__;
 const S=__STATS__;
 const SPRINTS=__SPRINTS__;
+const BOARDS=__BOARDS__;
 
 let fStatus='All',fPriority='All',fType='All';
 let activeTab='tree';
@@ -683,6 +744,111 @@ function renderBoard(){
   return h||'<p class="muted">Nothing matches the current filters.</p>';
 }
 
+/* ---------- Current Sprint ---------- */
+
+/* Which sprint is current is decided when the page opens, from the calendar -
+   the rule the Roadmap's Today line follows - so the board stays right between
+   refreshes. Which rows are in each sprint, and the header's figures, come
+   from wbs.py (BOARDS), never recomputed here. */
+const TODAY=(()=>{const t=new Date();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');})();
+const RUNNING=(SPRINTS.find(s=>s.Starts<=TODAY&&TODAY<=s.Ends)||{}).Sprint||null;
+const WITH_CARDS=SPRINTS.map(s=>s.Sprint).filter(k=>BOARDS[k]);
+let boardSprint=RUNNING||WITH_CARDS[WITH_CARDS.length-1]||null;
+let boardLanes=true;
+// Mid-sprint, the board is what the dashboard is opened for.
+if(RUNNING&&BOARDS[RUNNING])activeTab='current';
+
+/* Each card arrives with its lane (what the work is for) and the path from
+   the lane down to it, both decided in wbs.py's sprint_board(). The flat view
+   shows the whole chain instead, lane included. */
+function fullPath(c){
+  const lane=c.lane!=null?byId.get(String(c.lane)):null;
+  return lane&&String(lane.id)!==String(c.d.id)?[lane.t,...c.path]:c.path;
+}
+const KB_COLS=[['todo','To do'],['doing','Doing'],['done','Done']];
+function kbCol(d){return d.s==='Implementing'?'doing':(d.s==='Done'||d.s==='Cancelled')?'done':'todo';}
+const kbHours=cs=>Math.round(cs.reduce((a,c)=>a+(c.d.s==='Cancelled'?0:(c.d.e||0)),0)*100)/100;
+
+function kbCard(c,laned){
+  const d=c.d,path=laned?c.path:fullPath(c);
+  const tag=c.role==='Committed'?'':`<span class="kb-tag${c.role==='Pulled in'?' pull':''}">${c.role}</span>`;
+  // A committed card still in the backlog is a status nobody moved at planning.
+  const flag=(d.s==='Portfolio Backlog'||d.s==='Funnel')
+    ?`<div class="kb-flag" title="Committed to the sprint, but Status is ${esc(d.s)} - a commitment means Not Started">&#9873; still ${esc(d.s)}</div>`:'';
+  return `<div class="kb-card${d.s==='Cancelled'?' cx':''}" style="border-left-color:${SCOL[d.s]||'#e5e7eb'}">
+    <div class="kb-top"><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button>${tag}</div>
+    <div class="kb-title">${esc(d.t)||'<em class="warn">(no title)</em>'}</div>
+    ${path.length?`<div class="kb-path">&rsaquo; ${path.map(esc).join(' &rsaquo; ')}</div>`:''}
+    <div class="kb-meta">${[d.ty,d.e?d.e+'h':'no estimate',d.p].filter(Boolean).map(esc).join(' &middot; ')}</div>${flag}</div>`;
+}
+function kbCells(cards,laned){
+  return `<div class="kb-cols">${KB_COLS.map(([k,l])=>{
+    const cs=cards.filter(c=>kbCol(c.d)===k).sort((a,b)=>byCode(a.d,b.d));
+    return `<div class="kb-cell" data-col="${l}">${cs.map(c=>kbCard(c,laned)).join('')||'<div class="kb-empty">&mdash;</div>'}</div>`;
+  }).join('')}</div>`;
+}
+function kbWhen(s){
+  const days=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+  const day=iso=>{const p=iso.split('-');return Number(p[2])+' '+MON[Number(p[1])-1];};
+  const span=`${day(s.Starts)} &ndash; ${day(s.Ends)}`;
+  if(TODAY<s.Starts)return `${span} &middot; starts in ${days(TODAY,s.Starts)} day(s)`;
+  if(TODAY>s.Ends)return `${span} &middot; ended`;
+  const left=days(TODAY,s.Ends)+1;
+  return `${span} &middot; <b>${left} day${left===1?'':'s'} left</b>`;
+}
+/* The same figures, in the same words, as `wbs.py metrics --sprint`. */
+function kbFigures(m){
+  if(!m)return '';
+  const c=m.committed,p=m.pulled_in,dl=m.delivered,co=m.carryover;
+  const pc=(a,b)=>b?Math.round(a/b*100)+'%':'-';
+  const parts=[`<span>Committed <b>${c.n}</b> &middot; ${c.h}h</span>`];
+  if(p.n)parts.push(`<span>Pulled in <b>${p.n}</b> &middot; ${p.h}h</span>`);
+  parts.push(`<span>Delivered <b>${dl.n}</b> &middot; ${dl.h}h</span>`);
+  parts.push(c.n?`<span>Completion <b>${pc(dl.n,c.n)}</b> of items, <b>${pc(dl.h,c.h)}</b> of hours</span>`
+                :`<span class="warn">No completion figure: nothing carries Sprint Planned = this sprint</span>`);
+  if(co.n)parts.push(`<span>Committed, not yet delivered <b>${co.n}</b> &middot; ${co.h}h</span>`);
+  if(c.n&&c.estimated<c.n)parts.push(`<span class="warn">${c.n-c.estimated} committed row(s) have no estimate</span>`);
+  return `<div class="kb-figs">${parts.join('')}</div>`;
+}
+
+function renderCurrent(){
+  if(!boardSprint)return '<p class="muted">No sprint to show: this register has no sprint calendar, or no row names a sprint. Import the calendar with <code>wbs.py sprints import</code>.</p>';
+  const s=SPRINTS.find(x=>x.Sprint===boardSprint);
+  const b=BOARDS[boardSprint]||{cards:{},m:null};
+  const opts=SPRINTS.filter(x=>BOARDS[x.Sprint]||x.Sprint===RUNNING);
+  const picker=`<select onchange="boardSprint=this.value;render()">${opts.map(o=>`<option value="${o.Sprint}"${o.Sprint===boardSprint?' selected':''}>${o.Sprint}${o.Sprint===RUNNING?' (current)':''}</option>`).join('')}</select>`;
+  let h=`<div class="kb-head"><div class="sprint-name">${boardSprint}</div>${picker}
+    <div class="sprint-meta">${s?kbWhen(s):''}</div>
+    <span class="btn${boardLanes?' on':''}" onclick="boardLanes=!boardLanes;render()" title="Group the cards by the deliverable they serve">By deliverable</span></div>
+    ${kbFigures(b.m)}`;
+  if(!RUNNING)h+=`<p class="muted">No sprint in this register's calendar runs today, so this is ${boardSprint}, the latest sprint with cards.</p>`;
+  const cards=Object.entries(b.cards).map(([id,x])=>({d:byId.get(id),role:x.r,lane:x.l,path:x.p})).filter(c=>c.d&&visible(c.d));
+  if(!cards.length)return h+`<p class="muted">No card from this project is in ${boardSprint}.</p>`;
+  h+=`<div class="kb-cols kb-colheads">${KB_COLS.map(([k,l])=>{
+    const cs=cards.filter(c=>kbCol(c.d)===k);
+    return `<div class="kb-colhead">${l}<span>${cs.length} &middot; ${kbHours(cs)}h</span></div>`;}).join('')}</div>`;
+  if(!boardLanes)return h+`<div class="kb-lane flat">${kbCells(cards,false)}</div>`;
+  const lanes=new Map();
+  cards.forEach(c=>{
+    const l=c.lane!=null?byId.get(String(c.lane)):null,k=l?String(l.id):'';
+    if(!lanes.has(k))lanes.set(k,{lane:l,cards:[]});
+    lanes.get(k).cards.push(c);
+  });
+  // Largest share of the sprint first; the
+  // cards with no deliverable last, where the gap is read as one.
+  [...lanes.values()].sort((a,b)=>(a.lane?0:1)-(b.lane?0:1)||kbHours(b.cards)-kbHours(a.cards)).forEach(g=>{
+    const l=g.lane,done=g.cards.filter(c=>c.d.s==='Done');
+    const head=l
+      ?`<button class="idbtn" onclick="openDetail(${l.id})" title="Open the full record">${l.id}</button>
+         <div class="t">${esc(l.t)}${l.kd==='Y'?' <span class="kdtag" title="Key Deliverable">&#9733; KEY</span>':''}</div>
+         <div class="pgw" title="Progress of the whole deliverable, not only this sprint">${progressCell(l)}</div>`
+      :`<div class="t warn">No deliverable &mdash; these cards have no parent</div>`;
+    h+=`<div class="kb-lane"><div class="kb-lanehead">${head}
+      <div class="h">${kbHours(g.cards)}h in sprint &middot; ${kbHours(done)}h done</div></div>${kbCells(g.cards,true)}</div>`;
+  });
+  return h;
+}
+
 /* ---------- Analytics ---------- */
 
 function renderAnalytics(){
@@ -892,8 +1058,8 @@ function renderRoadmap(){
 
 function render(){
   rebuildSprints();
-  const tabs=[['tree','Breakdown'],['deliverables','Deliverables'],['roadmap','Roadmap'],['sprints','Sprint Board'],['analytics','Analytics']];
-  const body={tree:renderTree,deliverables:renderDeliverables,roadmap:renderRoadmap,sprints:renderBoard,analytics:renderAnalytics}[activeTab]();
+  const tabs=[['current','Current Sprint'],['tree','Breakdown'],['deliverables','Deliverables'],['roadmap','Roadmap'],['sprints','Sprint Board'],['analytics','Analytics']];
+  const body={current:renderCurrent,tree:renderTree,deliverables:renderDeliverables,roadmap:renderRoadmap,sprints:renderBoard,analytics:renderAnalytics}[activeTab]();
   const showFilters=(activeTab==='sprints'||activeTab==='analytics');
   document.getElementById('app').innerHTML=`${renderKPIs()}
   <div class="tabs">${tabs.map(([k,l])=>`<div class="tab ${activeTab===k?'active':''}" onclick="activeTab='${k}';render()">${l}</div>`).join('')}</div>
@@ -926,7 +1092,8 @@ SHELL = '''<!DOCTYPE html>
 </html>'''
 
 
-def generate_html(project_name, items, stats, schedule=None, sprints=None):
+def generate_html(project_name, items, stats, schedule=None, sprints=None,
+                  boards=None):
     """Assemble the dashboard.
 
     The JS and CSS are plain strings, not f-strings, so braces stay as the
@@ -985,6 +1152,7 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None):
         if entry:
             row.update(entry)
     js = (JS.replace('__SPRINTS__', json.dumps(sprints or []))
+            .replace('__BOARDS__', json.dumps(boards or {}))
             .replace('__ITEMS__', json.dumps(compact))
             .replace('__STATS__', json.dumps({
                 'total': stats['total'], 'done': stats['done'],
@@ -1027,7 +1195,8 @@ def main():
                if s.get('Starts') and s.get('Ends')]
     sprints.sort(key=lambda s: s['Starts'])
     schedule = build_schedule(items, register.get('schedule_log'), sprints)
-    html = generate_html(project_name, items, stats, schedule, sprints)
+    boards = build_boards(register, sprints)
+    html = generate_html(project_name, items, stats, schedule, sprints, boards)
 
     html = html.replace('__HASH__', register['meta'].get('values_hash',''))
     Path(html_path).write_text(html, encoding='utf-8')

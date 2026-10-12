@@ -443,6 +443,31 @@ def apply_sprints(data, row, args, changed):
     changed.append("%s += %s (reason noted in Comments)" % (CARRIED, value))
 
 
+# Statuses that mean "not committed yet". Committing a row to a sprint ends
+# that, so the row moves to Not Started. Without it, planning sets the sprint
+# and nothing moves the Status, and a sprint's committed rows go on reading
+# Portfolio Backlog.
+UNCOMMITTED = ("Portfolio Backlog", "Funnel")
+
+
+def commit_status(row, args, changed):
+    """A commitment means Not Started - unless a Status was passed with it.
+
+    Only Sprint Planned and Sprint Carried commit; Sprint Added records work
+    pulled in, which normally starts at once and is given its Status then.
+    """
+    if getattr(args, "status", None):
+        return                       # an explicit value was passed; leave it
+    if not (getattr(args, "sprint_planned", None)
+            or getattr(args, "sprint_carried", None)):
+        return
+    if row.get("Status") not in UNCOMMITTED:
+        return
+    changed.append("Status=Not Started (was %s: committing to a sprint means "
+                   "Not Started; pass --status to correct)" % row["Status"])
+    row["Status"] = "Not Started"
+
+
 def stamp_sprint_ended(data, row, args, changed):
     """Done closes a row into whatever sprint the calendar was on that day.
 
@@ -511,8 +536,17 @@ def cmd_add(args):
     apply_closure(row, args, created, None)
     apply_dates(data, row, args, created, creating=True)
     apply_sprints(data, row, args, created)
+    commit_status(row, args, created)
+    # A row added straight into Implementing or Done takes the same stamps a
+    # status change does - adding is just the first write of that status.
+    clear_horizon_on_close(row, args, created)
+    stamp_actuals(data, row, args, created)
+    stamp_sprint_ended(data, row, args, created)
     R.rows(data, ITEMS).append(row)
-    return finish(args, data, "Added item %s  %s" % (row["ID"], args.title))
+    # Stamped values are announced, as `set` announces them, so a wrong one
+    # can be corrected.
+    return finish(args, data, "Added item %s  %s%s" % (
+        row["ID"], args.title, "\n  " + "\n  ".join(created) if created else ""))
 
 
 def cmd_set(args):
@@ -548,6 +582,7 @@ def cmd_set(args):
             changed.append("%s=%s" % (key, value))
     apply_dates(data, row, args, changed)
     apply_sprints(data, row, args, changed)
+    commit_status(row, args, changed)
     apply_closure(row, args, changed, was)
     clear_horizon_on_close(row, args, changed)
     stamp_actuals(data, row, args, changed)
@@ -666,6 +701,11 @@ def cmd_check(args):
                                                   "Funnel"):
             errors.append("item %s: Actual Start is set but Status is %r"
                           % (rid, status))
+        if status in UNCOMMITTED and (row.get("Sprint Planned") or carried(row)):
+            warnings.append("item %s: committed to %s but Status is %r - a "
+                            "commitment means Not Started"
+                            % (rid, (carried(row) or [row.get("Sprint Planned")])[-1],
+                               status))
         if not has_children(data, rid):
             if status == "Done" and not row.get("Actual End"):
                 warnings.append("item %s: Done with no Actual End - the "
@@ -928,6 +968,66 @@ def cycle_days(row):
     return (date.fromisoformat(ended["end"]) - date.fromisoformat(began["start"])).days
 
 
+def sprint_populations(rows, sprint):
+    """Committed, pulled in and delivered: which rows a sprint holds.
+
+    The one definition of sprint membership. `metrics` counts these and the
+    dashboard's Current Sprint board draws them, so the board and the retro
+    cannot disagree about what was in the sprint. The caller chooses the rows:
+    `metrics` leaves Cancelled out, the board keeps them for its toggle.
+    """
+    committed = [r for r in rows if committed_to(r, sprint)]
+    pulled = [r for r in rows if r.get("Sprint Added") == sprint
+              and not committed_to(r, sprint)]
+    delivered = [r for r in rows if r.get("Sprint Ended") == sprint
+                 and r.get("Status") == "Done"]
+    return committed, pulled, delivered
+
+
+def sprint_board(rows, sprint):
+    """The sprint's cards, each with how it is in the sprint and what it is for.
+
+    One card per row the sprint holds (`sprint_populations`), with:
+    - `role`: Committed, Carried in, Pulled in, or Closed here (delivered in
+      the sprint without having been committed or pulled into it);
+    - `lane`: the ID of the nearest Deliverable at or above the row, else its
+      root ancestor, else None - a row with no parent has nothing to serve;
+    - `path`: the titles between the lane and the row, top first.
+
+    The WBS dashboard's Current Sprint tab draws from this, and so should any
+    report that shows the sprint as a board, so a card sits in the same lane
+    wherever it is shown.
+    """
+    by_id = {r.get("ID"): r for r in rows}
+    committed, pulled, delivered = sprint_populations(rows, sprint)
+    role = {}
+    for r in delivered:
+        role[r.get("ID")] = "Closed here"
+    for r in pulled:
+        role[r.get("ID")] = "Pulled in"
+    for r in committed:
+        role[r.get("ID")] = "Carried in" if sprint in carried(r) else "Committed"
+
+    cards = []
+    for rid, how in role.items():
+        row, chain = by_id[rid], []
+        cur, seen = row, {rid}
+        while cur.get("Parent") in by_id and cur.get("Parent") not in seen:
+            cur = by_id[cur.get("Parent")]
+            seen.add(cur.get("ID"))
+            chain.append(cur)                # nearest first
+        if row.get("Type") == "Deliverable":
+            lane, path = rid, []
+        else:
+            hit = next((n for n, a in enumerate(chain) if a.get("Type") == "Deliverable"), None)
+            if hit is None and chain:
+                hit = len(chain) - 1         # no Deliverable above: the root
+            lane = chain[hit].get("ID") if hit is not None else None
+            path = [a.get("Title", "") for a in reversed(chain[:hit])] if hit else []
+        cards.append({"id": rid, "role": how, "lane": lane, "path": path})
+    return cards
+
+
 def sprint_metrics(data, sprint):
     """The four populations, and what each one is worth.
 
@@ -936,11 +1036,7 @@ def sprint_metrics(data, sprint):
     more is not the same as one that merely hit its number.
     """
     live = [r for r in R.rows(data, ITEMS) if r.get("Status") != "Cancelled"]
-    committed = [r for r in live if committed_to(r, sprint)]
-    pulled = [r for r in live if r.get("Sprint Added") == sprint
-              and not committed_to(r, sprint)]
-    delivered = [r for r in live if r.get("Sprint Ended") == sprint
-                 and r.get("Status") == "Done"]
+    committed, pulled, delivered = sprint_populations(live, sprint)
     carried = [r for r in committed if r not in delivered]
     spans = sorted(d for d in (cycle_days(r) for r in delivered) if d is not None)
     scope = data.get("meta", {}).get("scope", "?")

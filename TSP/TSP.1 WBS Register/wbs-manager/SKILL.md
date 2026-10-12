@@ -222,6 +222,7 @@ It also holds the two time fields apart, which is what stops `Horizon` rotting i
 - **`Horizon` on a `Done` or `Cancelled` row** — closing the row settles how soon it was wanted.
 - **`Horizon` alongside a `Sprint Planned`** — a commitment supersedes an intention.
 - **A sprint ID the calendar does not hold**, in any of the three sprint fields. Silent when the register has no calendar: with nothing to check against, guessing would be worse than saying nothing.
+- **A committed row still in `Portfolio Backlog` or `Funnel`** — a warning. A commitment means `Not Started`.
 
 And it holds the schedule dates against reality:
 
@@ -239,7 +240,7 @@ Run it before a planning ceremony and after any hand-edit.
 Grooming sets the horizon; planning turns it into a commitment.
 
 - **Grooming** — `--horizon Next` for the upcoming sprint, `Future` for the one after.
-- **Planning** — set `Sprint Planned` to a sprint ID the calendar holds, and **clear `Horizon` in the same edit** (`--horizon ""`). `check` will otherwise flag the row. **A row already planned into an earlier sprint and not Done** keeps its `Sprint Planned`; add the new sprint with `--sprint-carried` and a `--reason` saying why it did not finish. Work committed at a planning counts to that sprint from that moment, even if it finishes before the sprint's start date.
+- **Planning** — set `Sprint Planned` to a sprint ID the calendar holds, and **clear `Horizon` in the same edit** (`--horizon ""`). `check` will otherwise flag the row. **A commitment means `Not Started`:** committing a `Portfolio Backlog` or `Funnel` row (`--sprint-planned` or `--sprint-carried`) moves it to `Not Started` and says so, unless `--status` is passed with it. **A row already planned into an earlier sprint and not Done** keeps its `Sprint Planned`; add the new sprint with `--sprint-carried` and a `--reason` saying why it did not finish. Work committed at a planning counts to that sprint from that moment, even if it finishes before the sprint's start date.
 - When an item starts: Status → `Implementing`, `Sprint Added` → current sprint. `Actual Start` is stamped with it.
 - When an item completes: Status → `Done`, `Sprint Ended` → current sprint, `Horizon` must be gone, and `Actual End` is stamped.
 - Multiple items can share a sprint. After changes, **refresh the dashboard** (operation 5).
@@ -252,7 +253,11 @@ python <skill-path>/scripts/refresh_wbs.py "<register.json>" "<output-html-path>
 ```
 Generates a self-contained HTML file with:
 - **KPI strip** — total items, implementing, done, not started, total effort, planned sprints
-- **Sprint Board tab** — items grouped by sprint with status badges, filterable by status/priority/type
+- **Current Sprint tab** — one sprint as a board: **lanes by the deliverable each card serves**, columns To do / Doing / Done. The lane is the card's nearest `Deliverable` ancestor, else its root; a card with no parent goes in a final *No deliverable* lane, so the gap shows. Each card shows the levels between it and its lane, and a tag when it was **carried in** or **pulled in**; a committed card still in `Portfolio Backlog` or `Funnel` is flagged. The lane header carries the deliverable's overall progress and the sprint's hours in it. A switch drops the lanes for a plain board.
+  - **Which rows are in the sprint, and the header's figures, come from `wbs.py`** (`sprint_board`, `sprint_metrics`), embedded per sprint at generation. `sprint_board()` decides each card's role, lane and path once; a report that shows the sprint as a board should use it too, so a card sits in the same lane everywhere. The header therefore reads the same as `wbs.py metrics --sprint` for that sprint; never recompute them in the page.
+  - **Which sprint is current is decided when the page opens**, from the calendar, like the Roadmap's Today line, so it stays right between refreshes. A picker shows any other sprint. While today's sprint has cards, the dashboard opens on this tab.
+  - **Read-only**, like the rest of the dashboard: a card moves through `wbs.py set`. One project per dashboard: a sprint that spans several projects is a cross-project report's job, not the dashboard's.
+- **Sprint Board tab** — every sprint's items as a table, with status badges, filterable by status/priority/type: the history view
 - **Analytics tab** — status distribution, priority breakdown, sprint effort allocation
 - **Roadmap tab** — baseline, plan and actual as three bars per row, with a **zoom control** (day / month / quarter / sprint). **Slip is drawn, not listed** — a hatched band runs from where a row was promised to where it now lands, red when late and green when early, dashed at the promise and arrowed at the landing. It reads as the distance it is, costs no column, and appears on no row that never had a baseline to miss. A row that moved more than once carries the count; the full phrase is on hover.
 
@@ -335,7 +340,7 @@ All of this lives in `scripts/dates.py`, and **only there**. The dashboard recei
 
 ### When each date is written
 
-The dates are only as good as the moment they are captured, and a field nobody is prompted for is a field nobody fills. **Status is the trigger:** an actual date and a status change are two halves of one fact, so `wbs.py set --status` stamps the matching date itself and says it did.
+The dates are only as good as the moment they are captured, and a field nobody is prompted for is a field nobody fills. **Status is the trigger:** an actual date and a status change are two halves of one fact, so `wbs.py set --status` stamps the matching date itself and says it did — and so does `add --status`, since adding a row is the first write of its status.
 
 | Field | Written | At |
 |---|---|---|
@@ -407,6 +412,8 @@ Four populations, and the first two are kept apart deliberately — the gap betw
 | **Pulled in** | `Sprint Added` = the sprint but the row is not committed to it. Scope that arrived mid-sprint. |
 | **Delivered** | `Sprint Ended` = the sprint and `Status` is `Done`. |
 | **Carried over** | Committed, not delivered. Listed by ID, so the retro can discuss items rather than a number. |
+
+These definitions live in `sprint_populations()`, and the dashboard's Current Sprint board draws from the same function.
 
 **Hours count as committed in every sprint a row was planned into, and as delivered only in the sprint where it closes.** A deliverable worked across three sprints is a real commitment in each; completion % is low while it is in progress and catches up when it closes.
 

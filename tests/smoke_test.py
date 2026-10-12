@@ -874,6 +874,14 @@ def test_sync_commands(root, scratch):
         ok, out = run(cmd, work)
         if not check("wbs: %s" % label, ok, out):
             return
+    row = [r for r in json.load(io.open(reg, encoding="utf-8"))["items"] if r["ID"] == 2][0]
+    check("wbs: committing a backlog row moves it to Not Started",
+          row.get("Status") == "Not Started", str(row.get("Status")))
+    ok, out = run([wbs, "add", reg, "Signup page", "--parent", "1",
+                   "--status", "Implementing"], work)
+    row = [r for r in json.load(io.open(reg, encoding="utf-8"))["items"] if r["ID"] == 3][0]
+    check("wbs: add stamps Actual Start on an Implementing row, and says so",
+          ok and row.get("Actual Start") and "stamped" in out, out[:200])
     ok, out = run([wbs, "set", reg, "--id", "2", "--planned-end", "2026-Sep-26"], work)
     check("wbs: a first planned date needs no reason", ok, out)
     ok, _ = run([wbs, "set", reg, "--id", "2", "--planned-end", "2026-Oct-10"], work)
@@ -910,6 +918,26 @@ def test_sync_commands(root, scratch):
           (m.get("committed") or {}).get("n") == 1, out[:200])
     ok, out = run([wbs, "deliverables", reg, "--sprint", "S26.Q3.7"], work)
     check("wbs: deliverables names the open Key Deliverable", ok and "Website" in out, out[:200])
+    data = json.load(io.open(reg, encoding="utf-8"))
+    data["items"].append({"ID": 4, "Title": "Orphan task", "Type": "Task",
+                          "Status": "Portfolio Backlog", "Sprint Planned": "S26.Q3.7"})
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data))
+    ok, out = run([wbs, "check", reg], work)
+    check("wbs: check warns on a committed row still in the backlog",
+          "a commitment means Not Started" in out, out[:300])
+    html = os.path.join(work, "WBS Dashboard.html")
+    ok, out = run([os.path.join(os.path.dirname(wbs), "refresh_wbs.py"), reg, html, "Atlas"], work)
+    page = io.open(html, encoding="utf-8").read() if ok else ""
+    try:
+        boards = json.loads(page.split("const BOARDS=", 1)[1].split(";\n", 1)[0])
+    except (IndexError, ValueError):
+        boards = {}
+    cards = (boards.get("S26.Q3.7") or {}).get("cards") or {}
+    check("wbs: the Current Sprint board puts a card in its deliverable's lane, with its role",
+          (cards.get("2") or {}).get("l") == 1 and (cards.get("2") or {}).get("r") == "Carried in",
+          str(cards)[:200])
+    check("wbs: a card with no parent has no lane",
+          "4" in cards and cards["4"].get("l") is None, str(cards)[:200])
 
     # --- RAID, and the reference refined reads -------------------------------
     raid = os.path.join(work, "RAID Atlas.json")
