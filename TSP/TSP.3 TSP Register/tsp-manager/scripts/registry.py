@@ -29,6 +29,14 @@ hash it was built from, so it can say it has gone stale rather than quietly
 showing old numbers. It ignores formatting, so reindenting the file is not a
 data change.
 
+Two writers can hold the same register. Each save rewrites the whole file, so
+a writer saving a copy it read before someone else's save would erase that
+save without a trace. `load` therefore remembers a fingerprint of the file's
+bytes, and `save` refuses when the file on disk no longer matches it: nothing
+is written, and the writer reloads and makes its change again. The whole file
+is fingerprinted, not `values_hash`, because a change to `meta` alone is still
+someone's change.
+
 This module is intentionally standard-library only, so a tool that uses it has
 no install step at all.
 """
@@ -40,6 +48,10 @@ import os
 
 FORMAT_VERSION = 1
 
+# What each loaded register looked like on disk: id(data) -> (data, path,
+# fingerprint). Holding `data` keeps its id from being reused by another object.
+_LOADED = {}
+
 
 # --- reading and writing ----------------------------------------------------
 
@@ -47,22 +59,36 @@ def load(path):
     """Read a register. Raises SystemExit with a usable message if it cannot."""
     if not os.path.isfile(path):
         raise SystemExit("No register at %s" % path)
+    with io.open(path, "rb") as fh:
+        raw = fh.read()
     try:
-        with io.open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
+        data = json.loads(raw.decode("utf-8"))
     except ValueError as exc:
         raise SystemExit("%s is not valid JSON: %s" % (path, exc))
     if "meta" not in data:
         raise SystemExit("%s has no 'meta' block - is it a register?" % path)
+    _LOADED[id(data)] = (data, os.path.abspath(path), _fingerprint(raw))
     return data
 
 
-def save(path, data, touch=True):
+def save(path, data, touch=True, force=False):
     """Write a register, refreshing its hash and timestamp.
 
     Sorted keys and a trailing newline so that a diff shows what changed rather
-    than a reshuffle.
+    than a reshuffle. Refuses, writing nothing, when the file changed on disk
+    after `data` was loaded from it; `force=True` overwrites deliberately. A
+    register built in memory rather than loaded is not checked.
     """
+    target = os.path.abspath(path)
+    seen = _LOADED.get(id(data))
+    if (not force and seen and seen[0] is data and seen[1] == target
+            and os.path.exists(path)):
+        with io.open(path, "rb") as fh:
+            if _fingerprint(fh.read()) != seen[2]:
+                raise SystemExit(
+                    "%s changed on disk after it was loaded - another session or "
+                    "a sync wrote to it. Nothing was saved. Reload the register "
+                    "and make the change again." % path)
     if touch:
         data["meta"]["updated"] = dt.datetime.now().replace(microsecond=0).isoformat()
         data["meta"]["values_hash"] = values_hash(data)
@@ -74,6 +100,7 @@ def save(path, data, touch=True):
     if os.path.exists(path):
         os.remove(path)
     os.rename(tmp, path)          # written whole, so a crash never truncates it
+    _LOADED[id(data)] = (data, target, _fingerprint((text + "\n").encode("utf-8")))
     return path
 
 
@@ -85,6 +112,10 @@ def new(kind, scope, collections, settings=None):
 
 
 # --- identity ---------------------------------------------------------------
+
+def _fingerprint(raw):
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
 
 def values_hash(data):
     """Fingerprint the rows, ignoring the envelope.

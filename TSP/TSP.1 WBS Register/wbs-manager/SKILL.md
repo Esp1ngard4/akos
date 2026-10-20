@@ -172,6 +172,7 @@ There is **no `key_deliverables` collection.** A deliverable is a row whose `Key
 5. **Deliverables are a view, not a collection.** Never reintroduce a parallel list — the link between a deliverable and the work that delivers it is `Parent`, and a second collection cannot express it.
 6. **No derived values in the register** — effort rollups, counts and percentages are computed by the dashboard generator, not stored.
 7. **Field order doesn't matter** in a row; `meta.settings.fields` defines display order.
+8. **A refused save means someone else wrote first.** `registry.save` refuses when the register changed on disk after it was loaded (another session or a sync saved in between), and writes nothing. Reload, make the change again, and save. `force=True` is only for an overwrite the user has asked for, never a way past the refusal.
 
 ## WBS File Discovery
 
