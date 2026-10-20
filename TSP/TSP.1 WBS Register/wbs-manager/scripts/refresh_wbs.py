@@ -1084,7 +1084,7 @@ SHELL = '''<!DOCTYPE html>
 <body>
 <div class="header">
   <h1>__PROJECT__ — WBS Dashboard</h1>
-  <div class="sub">AI-First Project Management · Generated __TIMESTAMP__</div>
+  <div class="sub">AI-First Project Management · Generated __TIMESTAMP__</div>__LAYOUT__
 </div>
 <div id="app"></div>
 <script>__JS__</script>
@@ -1199,6 +1199,16 @@ def main():
     html = generate_html(project_name, items, stats, schedule, sprints, boards)
 
     html = html.replace('__HASH__', register['meta'].get('values_hash',''))
+    # A project whose Execution folders differ from the standard says so in the
+    # header, from its own declaration; a standard project shows nothing.
+    import html as H
+    import wbs as W
+    labels = {'folder': 'Execution', 'inputs': 'Inputs', 'deliverables': 'Deliverables'}
+    deviations = W.execution_layout(register, register_path)['deviations']
+    layout = ('<div class="sub">Folders: ' + ' · '.join(
+        '%s <code>%s</code>' % (labels[k], H.escape(v)) for k, v in deviations)
+        + '</div>') if deviations else ''
+    html = html.replace('__LAYOUT__', layout)
     Path(html_path).write_text(html, encoding='utf-8')
     print(f"Dashboard generated: {html_path}")
     dated = sum(1 for e in schedule.values() if e.get('d'))

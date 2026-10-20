@@ -39,11 +39,37 @@ The skill lives with its tool, at `TSP.1 WBS Register/wbs-manager/` — that is 
 
 ## Support Material — Execution Folder
 
-Support material for a WBS item (design notes, research, mockups) always lives in the project's `1. Execution/` folder. This is the only convention — there is no fallback or alternate location.
+Support material for a WBS item (discovery, specs, plans, notes, inputs) always lives in the project's `1. Execution/` folder. There is no fallback or alternate location. If the project has no `1. Execution/` folder yet, create one as part of setting up its WBS.
 
-- **Granularity:** one subfolder per Feature-level WP, not per Story. A Story that only needs a single supporting file is a loose file inside its parent's Execution subfolder, distinguished by its own sub-item filename prefix (e.g. `WP3.1 Gap Analysis.md` inside `WP.3 Dashboard Enhancement/`). Only give a Story its own nested subfolder if its material itself grows multi-document.
-- **Naming:** `WP.<ID> <Brief Title>` — keyed off the item's stable `ID` field (see Register Schema below), never off `Code`, since `Code` is expected to be renumbered as the WBS evolves and a folder name keyed off it would silently go stale.
-- If the project doesn't yet have a `1. Execution/` folder, create one as part of setting up its WBS.
+**Organise by piece of work, not by document type.** People read later to find out what happened with one piece of work. A `Plan/` or `Discovery/` folder would scatter that story across several places.
+
+- **One folder per Feature:** `WP.<ID> <Brief Title>`, keyed off the stable `ID`, never `Code`. `Code` is renumbered as the WBS evolves, and a name keyed off it goes stale silently.
+- **Flat until it isn't.** A Story's documents are loose files in its parent's folder, prefixed `WP<ID>` (e.g. `WP12 Gap Analysis.md` inside `WP.3 Dashboard Enhancement/`). Once a Story or sub-deliverable has about three documents of its own, it gets a nested `WP.<ID> <Title>/` folder.
+- **Two folders by kind, both for material that is not ours to edit,** created when there is something to put in them:
+  - `Inputs/`: material received from outside (a client, a vendor, an external spec), kept as received;
+  - `Deliverables/`: what was handed over, frozen as sent.
+- **The document type is the filename's suffix:** `WP<ID> <Title> - <Type>.md`.
+
+| Type | What to expect |
+|---|---|
+| Discovery | What was found: the current state, the problem, the evidence |
+| Assessment | Options weighed against criteria, a recommendation, and the agreed outcome |
+| Specification | What will be built: requirements, detailed acceptance criteria, design |
+| Plan | Steps, sequence, sizing |
+| Notes | Meetings and decisions as they happened, dated |
+| Input | External material that informed the work, with a line saying how it was used |
+
+- **A header names the row and the date, never the status:** `**Story:** ID 12 · **Written:** 2026-03-12`. The status lives in the register; a status copied into a document goes stale. `refined` finds a row's spec by the `ID <n>` in its first lines.
+- **A replaced document goes to a `PreviousV/` beside it,** never deleted.
+- **Existing folders are not retrofitted** to match.
+
+**A project's own layout.** Where a project's folders differ from these names, its register declares the difference once, in `meta.execution`:
+
+```json
+"execution": {"folder": "../../01. Work", "inputs": "Client input", "deliverables": "Sent to client"}
+```
+
+`folder` is relative to the register's own folder. Declare only what differs; anything left out follows the standard. **Read `meta.execution` before filing anything.** The dashboard header shows the declared differences, and nothing when a project follows the standard. With `folder` declared, `refined` checks specs without being given `--execution`. The project's top level is the Artifact Register's (TSP.5) to record where the project has one, and the register takes precedence there.
 
 ## Register Schema
 

@@ -1337,6 +1337,41 @@ def cmd_deliverables(args):
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# The project's Execution folder. The standard layout needs no declaration; a
+# project whose folders differ declares the difference in meta.execution, so
+# the skill stays cross-project and the deviation is written down once, where
+# the convention is read.
+#   folder        the Execution folder, relative to the register's own folder
+#   inputs        the folder for material received from outside
+#   deliverables  the folder for what was handed over, as sent
+
+EXECUTION_STANDARD = {"folder": "1. Execution", "inputs": "Inputs",
+                      "deliverables": "Deliverables"}
+
+
+def execution_layout(data, register_path=None):
+    """The register's Execution layout: names, resolved path, and deviations.
+
+    `path` is None when no folder is declared - guessing where a project keeps
+    its work would be worse than asking. `deviations` lists only the names that
+    differ from the standard, which is what the dashboard shows.
+    """
+    declared = data.get("meta", {}).get("execution") or {}
+    layout = dict(EXECUTION_STANDARD)
+    for key in EXECUTION_STANDARD:
+        if str(declared.get(key) or "").strip():
+            layout[key] = str(declared[key]).strip()
+    layout["path"] = None
+    if declared.get("folder") and register_path:
+        base = os.path.dirname(os.path.abspath(register_path))
+        layout["path"] = os.path.normpath(os.path.join(base, layout["folder"]))
+    shown = dict(layout, folder=os.path.basename(os.path.normpath(layout["folder"])))
+    layout["deviations"] = [(key, shown[key]) for key in EXECUTION_STANDARD
+                            if shown[key] != EXECUTION_STANDARD[key]]
+    return layout
+
+
 def cmd_refined(args):
     """Is a candidate refined enough to commit to?
 
@@ -1375,8 +1410,12 @@ def cmd_refined(args):
                                 str(entry.get("Detail"))[:40]))
 
     specs = {}
-    if args.execution:
-        for base, _dirs, files in os.walk(args.execution):
+    execution = args.execution or execution_layout(data, args.register)["path"]
+    if execution and not os.path.isdir(execution):
+        sys.exit("No Execution folder at %s - check meta.execution.folder or "
+                 "--execution." % execution)
+    if execution:
+        for base, _dirs, files in os.walk(execution):
             for name in files:
                 if not name.lower().endswith(".md"):
                     continue
@@ -1416,7 +1455,7 @@ def cmd_refined(args):
             gaps.append("no Type")
         if not str(row.get("Action Plan") or "").strip():
             gaps.append("no action plan")
-        if args.execution and rid not in specs:
+        if execution and rid not in specs:
             gaps.append("no spec naming it")
         for threat in threats.get(rid, []):
             gaps.append("open " + threat)
@@ -1578,7 +1617,8 @@ def main():
     s.add_argument("--ids", required=True, metavar="N,N,N",
                    help="the candidates, as the grooming draft names them")
     s.add_argument("--execution", metavar="DIR",
-                   help="also check whether a spec in this folder names each one")
+                   help="also check whether a spec in this folder names each one "
+                        "(default: the register's meta.execution.folder)")
     s.add_argument("--raid", metavar="REGISTER",
                    help="also name open RAID items whose WBS Ref points at each one")
     s.set_defaults(func=cmd_refined)
