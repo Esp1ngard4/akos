@@ -225,6 +225,115 @@ def test_installer(root, scratch):
     check("status --check passes once declared", ok, out)
 
 
+def test_concurrent_save(root, scratch):
+    """A save refuses when someone else wrote the register after it was loaded.
+
+    Each save rewrites the whole file, so without this a writer saving a copy it
+    read before another's save would erase that save and nothing would say so.
+    Driven through registry.py itself, since every tool saves through it and
+    the copies are held identical by test_shared_modules.
+    """
+    import importlib.util
+    import json
+    print("\nconcurrent saves")
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    spec = importlib.util.spec_from_file_location(
+        "akos_registry_smoke", os.path.join(scripts, "registry.py"))
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    work = os.path.join(scratch, "concurrent")
+    os.makedirs(work, exist_ok=True)
+    reg = os.path.join(work, "WBS Atlas.json")
+    ok, out = run([os.path.join(scripts, "create_wbs.py"), reg, "Atlas"], work)
+    if not check("concurrent: a register to write to", ok, out):
+        return
+
+    def refused(data, **kw):
+        try:
+            R.save(reg, data, **kw)
+            return False
+        except SystemExit as exc:
+            return "changed on disk after it was loaded" in str(exc)
+
+    before = io.open(reg, "rb").read()
+    unchanged = R.load(reg)
+    R.save(reg, unchanged, touch=False)
+    check("concurrent: a save with no other writer changes nothing",
+          io.open(reg, "rb").read() == before)
+
+    first, second = R.load(reg), R.load(reg)
+    second["items"].append({"ID": 1, "Title": "Second writer's row", "Type": "Story",
+                            "Status": "Portfolio Backlog"})
+    R.save(reg, second)
+    on_disk = io.open(reg, "rb").read()
+    first["items"].append({"ID": 1, "Title": "First writer's row", "Type": "Story",
+                           "Status": "Portfolio Backlog"})
+    check("concurrent: the stale writer's save is refused", refused(first))
+    check("concurrent: nothing is written when it is refused",
+          io.open(reg, "rb").read() == on_disk)
+    titles = [r["Title"] for r in json.load(io.open(reg, encoding="utf-8"))["items"]]
+    check("concurrent: the other writer's change survives",
+          titles == ["Second writer's row"], str(titles))
+
+    second["items"][0]["Owner"] = "Ana"
+    check("concurrent: the same writer can save again", not refused(second))
+
+    meta_only = R.load(reg)
+    stale = R.load(reg)
+    meta_only["meta"]["execution"] = {"inputs": "Client input"}
+    R.save(reg, meta_only, touch=False)
+    check("concurrent: a change to meta alone is caught too", refused(stale))
+    check("concurrent: force=True overwrites deliberately",
+          not refused(stale, force=True))
+
+
+def test_execution_layout(root, scratch):
+    """A project's own folder names, declared once in meta.execution.
+
+    The standard layout needs no declaration and shows nothing; a project that
+    differs says so in its register, the dashboard header names the difference,
+    and refined finds specs in the declared folder without being told where.
+    """
+    import json
+    print("\nExecution layout")
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs, refresh = os.path.join(scripts, "wbs.py"), os.path.join(scripts, "refresh_wbs.py")
+    project = os.path.join(scratch, "layout", "Atlas")
+    pm, work = os.path.join(project, "PM"), os.path.join(project, "01. Work")
+    os.makedirs(pm, exist_ok=True)
+    os.makedirs(os.path.join(work, "WP.1 Login"), exist_ok=True)
+    io.open(os.path.join(work, "WP.1 Login", "WP1 Login - Specification.md"), "w",
+            encoding="utf-8").write("# WP1 Login\n\n**Story:** ID 1 · **Written:** 2026-03-12\n")
+    reg = os.path.join(pm, "WBS Atlas.json")
+    html = os.path.join(pm, "WBS Dashboard.html")
+    ok, out = run([os.path.join(scripts, "create_wbs.py"), reg, "Atlas"], pm)
+    ok = ok and run([wbs, "add", reg, "Login page", "--type", "Story"], pm)[0]
+    if not check("layout: a register with one story", ok, out):
+        return
+
+    ok, _ = run([refresh, reg, html, "Atlas"], pm)
+    check("layout: a standard project shows no folder line",
+          ok and "Folders:" not in io.open(html, encoding="utf-8").read())
+
+    data = json.load(io.open(reg, encoding="utf-8"))
+    data["meta"]["execution"] = {"folder": "../01. Work", "inputs": "Client input"}
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data))
+    ok, out = run([refresh, reg, html, "Atlas"], pm)
+    page = io.open(html, encoding="utf-8").read() if ok else ""
+    check("layout: the dashboard names the declared differences",
+          "Folders:" in page and "01. Work" in page and "Client input" in page
+          and "Deliverables <code>" not in page, out[:200])
+    ok, out = run([wbs, "refined", reg, "--ids", "1"], pm)
+    check("layout: refined finds the spec in the declared folder",
+          ok and "no spec naming it" not in out, out[:300])
+
+    data["meta"]["execution"]["folder"] = "../Nowhere"
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data))
+    ok, out = run([wbs, "refined", reg, "--ids", "1"], pm)
+    check("layout: a declared folder that does not exist is refused, not ignored",
+          not ok and "No Execution folder" in out, out[:300])
+
+
 def test_shared_modules(root, scratch):
     """Modules copied into every skill folder must be identical.
 
@@ -1204,6 +1313,8 @@ def main():
         test_catalogue(root, scratch)
         test_tsp_fields(root, scratch)
         test_sync_commands(root, scratch)
+        test_concurrent_save(root, scratch)
+        test_execution_layout(root, scratch)
         test_content_system(root, scratch)
         test_notebook_manager(root, scratch)
         test_sprint_ceremonies(root, scratch)
@@ -1220,6 +1331,7 @@ def main():
             return 1
         print("All checks passed (%d tools, plus the installer, the "
               "reconciliation case, the catalogue, the shared modules, the "
+              "concurrent-save check, the Execution layout, the "
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
               "ceremonies, the daily loop and reporting)." % len(TOOLS))
