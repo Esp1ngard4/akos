@@ -150,7 +150,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Actual Start / End | No | What happened. Derived on a parent. `check` holds them against Status. |
 | Horizon | No | `Next` / `Future` — how soon this is wanted. Not a status and not a priority: an item can be `Could` and `Next`, or `Must` and `Future`. Cleared by a real sprint or by closure; `check` enforces both. |
 | Sprint Planned / Added / Ended | No | Sprint IDs from the register's `sprints` calendar (e.g. `S26.Q3.5`), and nothing else. `check` rejects an ID the calendar does not hold. |
-| Sprint Carried | No | A **list** of the sprints the row was committed to again after `Sprint Planned` — spillover, or the next slice of a deliverable worked across sprints. `set --sprint-carried S --reason "…"` adds one and notes `Carried into S: …` in Comments — refused without the reason; `--sprint-carried ""` clears the list. Never repeats `Sprint Planned`. |
+| Sprint Carried | No | A **list** of the sprints the row was committed to again after `Sprint Planned` — spillover, or the next slice of a deliverable worked across sprints. `set --sprint-carried S --reason "…"` adds one and notes `Carried into S: …` in Comments — refused without the reason; `--sprint-carried ""` clears the list. Never repeats `Sprint Planned`. For a row with nothing done; **partly done work is split instead** (operation 4b). |
 | Key Dependencies | No | IDs of blocking items |
 | Control Approach | No | How the deliverable is verified (review, functional test, ...) |
 | Control Tool | No | Where that verification happens |
@@ -158,7 +158,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Planned Release / Released On | No | Deliverable dates |
 | Action Plan | No | Approach description |
 | Planning Considerations | No | Assumptions, risks, constraints |
-| Validation Approach | No | How the deliverable will be verified |
+| Validation Approach | No | How the deliverable will be verified. **Optional, and not asked for:** a requirement's acceptance criteria and its closure verdict already say how it is verified and whether it was (see the Verification tab) |
 | Comments | No | A log of dated entries, **newest on top**, one paragraph each — written with `wbs.py note`. A **closure note** from `set --closure` stays pinned above them (see operation 3) |
 
 There is **no `key_deliverables` collection.** A deliverable is a row whose `Key Deliverable` is `Y`; the deliverables view filters on it and rolls progress up from descendants through `Parent`. A register still carrying that collection has not been migrated — run `wbs.py migrate`.
@@ -250,6 +250,7 @@ It also holds the two time fields apart, which is what stops `Horizon` rotting i
 - **`Horizon` alongside a `Sprint Planned`** — a commitment supersedes an intention.
 - **A sprint ID the calendar does not hold**, in any of the three sprint fields. Silent when the register has no calendar: with nothing to check against, guessing would be worse than saying nothing.
 - **A committed row still in `Portfolio Backlog` or `Funnel`** — a warning. A commitment means `Not Started`.
+- **An open parent whose own estimate differs from its leaves' sum** — a warning, under the 100% rule: a parent's children make up 100% of its work, so its own estimate (made before it was broken down) is compared with theirs, never added to it. Below it, the breakdown is incomplete or leaves are unestimated; above it, scope grew. Closed parents are not checked: their difference is history, shown on the Breakdown. `add --parent` reminds you when the parent carries an estimate.
 
 And it holds the schedule dates against reality:
 
@@ -260,6 +261,11 @@ And it holds the schedule dates against reality:
 - **A `Done` row with no `Actual End`, or an `Implementing` row with no `Actual Start`** — warnings. The roadmap cannot place such a row, and this is the direction of the implication that actually rots.
 - **`Sprint Planned` and `Planned End` in different periods** — also a warning. The calendar makes them comparable, and disagreement is usually a stale field rather than a mistake.
 - **A closed row with no closure note** — a warning. `set` refuses that close, so one of these was closed by hand-edit. A register adopting the rule part-way sets `meta.settings.closure_notes_from` to an ISO date, and only rows closed on or after it are checked; older notes are a backfill chosen by the outcome each delivered, not a sweep.
+
+And it holds commitments to the work they name:
+
+- **An open parent committed to a sprint with none of its children in it** — a warning. A committed parent takes its hours from its children in the sprint, so with none there the work that finishes it is not named: a refinement gap. `refined` reports the same before planning.
+- **An open row carried into two or more sprints** — a warning: re-scope it, break it down, or drop it out loud. A split's rest inherits the commitment history, so a remainder pushed again is caught too.
 
 Run it before a planning ceremony and after any hand-edit.
 
@@ -272,6 +278,25 @@ Grooming sets the horizon; planning turns it into a commitment.
 - When an item completes: Status → `Done`, `Sprint Ended` → current sprint, `Horizon` must be gone, and `Actual End` is stamped.
 - Multiple items can share a sprint. After changes, **refresh the dashboard** (operation 5).
 
+**A committed parent is legitimate** — it is the promise that the deliverable lands this sprint. It counts as an item; its hours are its children's in the sprint (see Sprint metrics), so commit the work that finishes it alongside it.
+
+### 4b. Split partly done work
+
+At the close-out, a committed leaf that did not finish is asked one question: was any of it delivered? **Nothing** → carry it whole (`--sprint-carried`). **Something** → split it:
+
+```bash
+python <skill-path>/scripts/wbs.py split "<register>" --id 42 --delivered 6 --sprint S26.Q4.1 \
+  --closure "What happened: … AC: (1) met. (2) partial: rest in the new row." [--rest-effort 4]
+```
+
+- **The row becomes the parent of two pieces**, and keeps its ID, sprint commitment, baseline and own estimate, which the Breakdown then shows as the original (*10h → 6h + 4h*). It stays open until the rest closes.
+- **The done piece** closes `Done` in `--sprint` (default: the row's latest) with the delivered hours, the closure note and the row's `Actual Start`.
+- **The rest piece** is `Not Started`, with the remaining hours (default: the estimate less `--delivered`), the `Planned` dates and `Tracked Externally`.
+- **Both carry the row's commitment history** (`Sprint Planned`, `Sprint Added`, `Sprint Carried`), so every sprint that committed to the work still counts it, and the delivered hours land where they were done.
+- **Splitting a piece again** closes that piece with what was delivered and adds the rest beside it, under the same parent: a split cuts by sprint, not by meaning, so it adds no layer. Add layers yourself wherever they represent the work.
+- Refused on a row with children (close or carry them instead), a closed row, and a row never in the sprint.
+- It says what to change in the task tracker: the open task now serves the rest piece, with the hours left. Planning then carries the rest piece with `--sprint-carried`, and the parent only when the deliverable is promised again.
+
 The schedule dates hang off these same moments rather than forming a separate routine — see **When each date is written** below for which field belongs to which. Committing to a sprint is also when a story's **baseline** is set, and it is set once.
 
 ### 5. Generate dashboard
@@ -279,12 +304,14 @@ The schedule dates hang off these same moments rather than forming a separate ro
 python <skill-path>/scripts/refresh_wbs.py "<register.json>" "<output-html-path>" "<project-name>"
 ```
 Generates a self-contained HTML file with:
-- **KPI strip** — total items, implementing, done, not started, total effort, planned sprints
-- **Current Sprint tab** — one sprint as a board: **lanes by the deliverable each card serves**, columns To do / Doing / Done. The lane is the card's nearest `Deliverable` ancestor, else its root; a card with no parent goes in a final *No deliverable* lane, so the gap shows. Each card shows the levels between it and its lane, and a tag when it was **carried in** or **pulled in**; a committed card still in `Portfolio Backlog` or `Funnel` is flagged. The lane header carries the deliverable's overall progress and the sprint's hours in it. A switch drops the lanes for a plain board.
+- **KPI strip** — total items, implementing, done, not started, total effort (leaves only), planned sprints
+- **Current Sprint tab** — one sprint as a board: **lanes by the deliverable each card serves**, columns To do / Doing / Done. The lane is the card's nearest `Deliverable` ancestor, else its root; a card with no parent goes in a final *No deliverable* lane, so the gap shows. Each card shows the levels between it and its lane, and a tag when it was **carried in** or **pulled in**; a committed card still in `Portfolio Backlog` or `Funnel` is flagged. A parent card shows its hours *in sprint*, its children's on the board, and the column and lane totals add leaves only. The lane header carries the deliverable's overall progress and the sprint's hours in it. A switch drops the lanes for a plain board.
   - **Which rows are in the sprint, and the header's figures, come from `wbs.py`** (`sprint_board`, `sprint_metrics`), embedded per sprint at generation. `sprint_board()` decides each card's role, lane and path once; a report that shows the sprint as a board should use it too, so a card sits in the same lane everywhere. The header therefore reads the same as `wbs.py metrics --sprint` for that sprint; never recompute them in the page.
   - **Which sprint is current is decided when the page opens**, from the calendar, like the Roadmap's Today line, so it stays right between refreshes. A picker shows any other sprint. While today's sprint has cards, the dashboard opens on this tab.
   - **Read-only**, like the rest of the dashboard: a card moves through `wbs.py set`. One project per dashboard: a sprint that spans several projects is a cross-project report's job, not the dashboard's.
 - **Sprint Board tab** — every sprint's items as a table, with status badges, filterable by status/priority/type: the history view
+- **Breakdown tab: effort rolls up bottom-up.** A parent's effort is its leaves' sum and its progress is over its leaves - never its own estimate added on top. Where a parent carries its own estimate it shows as the original one, with the difference (*est. 10h → 27h (+17h)*); unestimated leaves are counted (*2 of 7 unestimated*), never filled in.
+- **Verification tab** — every requirement (Feature and Story) with the deliverable and parent it traces to, how many acceptance criteria it states, and its verification read from its closure note: *verified*, *partly met*, *not met*, *no verdict*, *open*, or *referred* (a row split from another keeps its verdict there). A gap shows where its follow-up went. Flags: committed or staged with no AC; closed with no AC verdict (since the register's `meta.settings.closure_notes_from` date, where set); partly or not met with no follow-up. This is a traceability matrix's verified column, read from the closure notes rather than kept by hand, and the drill-down behind the status report's *On Quality*.
 - **Analytics tab** — status distribution, priority breakdown, sprint effort allocation
 - **Roadmap tab** — baseline, plan and actual as three bars per row, with a **zoom control** (day / month / quarter / sprint). **Slip is drawn, not listed** — a hatched band runs from where a row was promised to where it now lands, red when late and green when early, dashed at the promise and arrowed at the landing. It reads as the distance it is, costs no column, and appears on no row that never had a baseline to miss. A row that moved more than once carries the count; the full phrase is on hover.
 
@@ -442,7 +469,9 @@ Four populations, and the first two are kept apart deliberately — the gap betw
 
 These definitions live in `sprint_populations()`, and the dashboard's Current Sprint board draws from the same function.
 
-**Hours count as committed in every sprint a row was planned into, and as delivered only in the sprint where it closes.** A deliverable worked across three sprints is a real commitment in each; completion % is low while it is in progress and catches up when it closes.
+**Hours come from leaves.** A committed or delivered parent counts as an item, and adds no hours of its own: its own estimate is the top-down figure its children replaced, so its hours in a sprint are its children's there, already counted. A 20h document committed with its 2h last piece is 2 items and 2h. Board cards follow the same rule (`sprint_board` gives each card its hours, a parent's as its children's on the board), and the dashboard's effort totals count leaves only.
+
+**Hours count as committed in every sprint a row was planned into, and as delivered only in the sprint where it closes.** For a row with nothing done that is right: no work happened in the earlier sprint. Partly done work is split (operation 4b), so what was delivered lands in its sprint and only the rest moves on, while each sprint still shows what it committed.
 
 Reported: **velocity** (count *and* hours — eight one-hour jobs is not two four-hour ones), **completion rate** by both count and hours, **carryover**, **committed against delivered hours**, and **median cycle time** from `Actual Start` to `Actual End`.
 

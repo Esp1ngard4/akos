@@ -8,6 +8,7 @@ Usage:
 """
 
 import os
+import re
 import sys
 import json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -150,8 +151,11 @@ def build_schedule(items, log, sprints=None):
                           for c in family if c.get("Status") == "Done")
         entry = {"d": got}
         if total:
+            # ue: leaves with no estimate. Counted and shown, never filled in -
+            # an invented number would hide the gap the roll-up exists to show.
             entry["pg"] = {"n": total, "dn": done,
-                           "et": round(effort, 2), "eh": round(effort_done, 2)}
+                           "et": round(effort, 2), "eh": round(effort_done, 2),
+                           "ue": sum(1 for c in family if not c.get("Estimated Effort (h)"))}
         var = D.variance(
             D.resolve(row.get("Baseline End")),
             D.resolve(row.get("Planned End")) if not kids.get(rid) else None)
@@ -184,7 +188,8 @@ def build_boards(register, sprints):
     boards = {}
     for s in sprints:
         sid = s["Sprint"]
-        cards = {str(c["id"]): {"r": c["role"], "l": c["lane"], "p": c["path"]}
+        cards = {str(c["id"]): {"r": c["role"], "l": c["lane"], "p": c["path"],
+                                 "h": c["hours"], "pa": c["parent"]}
                  for c in W.sprint_board(rows, sid)}
         if not cards:
             continue
@@ -193,6 +198,94 @@ def build_boards(register, sprints):
                        "m": {k: m[k] for k in ("committed", "pulled_in",
                                                "delivered", "carryover")}}
     return boards
+
+
+# --- Verification: does each requirement say how it is verified, and was it? -
+#
+# A requirement is a Feature or Story row. Its acceptance criteria are the
+# test; its closure note is the result, written as `AC: (1) ... - met.
+# (2) ... - partial: ...` then `Follow-up: ...`. This reads them once, here,
+# so the dashboard receives answers rather than parsing prose of its own.
+
+REQUIREMENT_TYPES = ("Feature", "Story")
+CLOSURE_HEAD = re.compile(r"(?:^|\n)Closure (\d{4}-[A-Za-z]{3}-\d{1,2}) \((Done|Cancelled)\):(.*?)(?=\n\n|$)", re.S)
+VERDICT_WORD = re.compile(r"\b(not met|partly met|partially met|partial|met|dropped|n/a)\b", re.I)
+FOLLOW_ID = re.compile(r"(?:\bIDs?|\bWBS|\brows?|#)\s*(\d+(?:\s*(?:,|and|&)\s*\d+)*)", re.I)
+VERDICT_RANK = {"met": 0, "partial": 1, "not met": 2}
+AC_PART = re.compile(r"\b(?:AC(?:\s+status)?|Acceptance criteria)\s*:(.*?)(?:\bFollow-up:|$)", re.S | re.I)
+# A row split from another keeps its verdict there: "... is in ID 12's comments".
+REFERRAL = re.compile(r"\bin ID (\d+)'s comments|\bsee ID (\d+)", re.I)
+
+
+def ac_count(text):
+    """How many criteria a row states: numbered (1), (2)..., else bullet lines,
+    else one if anything is written."""
+    text = (text or "").strip()
+    if not text:
+        return 0
+    numbered = set(re.findall(r"\((\d+)\)", text))
+    if numbered:
+        return len(numbered)
+    bullets = [l for l in text.split("\n") if l.strip().startswith(("- ", "* "))]
+    return len(bullets) or 1
+
+
+def verification(row):
+    """{'state', 'closed_on', 'follow_up', 'follow_ids'} for one requirement.
+
+    state: open | verified | partly met | not met | no verdict | referred (the
+    verdict sits on the row this one was split from). A criterion's
+    verdict is the last verdict word in its (n) chunk; the row's is the worst.
+    'dropped' and 'n/a' count as met: a criterion deliberately set aside."""
+    if row.get("Status") not in ("Done", "Cancelled"):
+        return {"state": "open"}
+    m = CLOSURE_HEAD.search(row.get("Comments") or "")
+    if not m:
+        return {"state": "no verdict", "closed_on": None}
+    note = m.group(3)
+    out = {"closed_on": m.group(1)}
+    fu = re.search(r"Follow-up:\s*(.*)$", note, re.S)
+    out["follow_up"] = fu.group(1).strip().rstrip(".") if fu else ""
+    out["follow_ids"] = [n for grp in FOLLOW_ID.findall(out["follow_up"]) for n in re.findall(r"\d+", grp)]
+    ac = AC_PART.search(note)
+    if not ac:
+        ref = REFERRAL.search(note)
+        if ref:
+            out["state"], out["referred_to"] = "referred", ref.group(1) or ref.group(2)
+        else:
+            out["state"] = "no verdict"
+        return out
+    chunks = [c for c in re.split(r"\(\d+\)", ac.group(1)) if c.strip()] or [ac.group(1)]
+    worst = None
+    for c in chunks:
+        words = VERDICT_WORD.findall(c)
+        if not words:
+            continue
+        w = words[-1].lower()
+        v = "not met" if w == "not met" else "partial" if w.startswith("part") else "met"
+        if worst is None or VERDICT_RANK[v] > VERDICT_RANK[worst]:
+            worst = v
+    out["state"] = {"met": "verified", "partial": "partly met", "not met": "not met",
+                    None: "no verdict"}[worst]
+    return out
+
+
+def verification_flags(row, v, closure_rule_from):
+    """What needs action. `closure_rule_from` is the register's
+    `closure_notes_from` setting: a closure before it is shown, not flagged."""
+    flags = []
+    staged = row.get("Sprint Planned") or row.get("Sprint Carried") or row.get("Horizon")
+    if v["state"] == "open" and staged and not ac_count(row.get("Acceptance Criteria")):
+        flags.append("committed or staged with no AC")
+    if v["state"] == "no verdict" and row.get("Status") == "Done":
+        closed = D.resolve(v.get("closed_on") or row.get("Actual End"))
+        if closed and (not closure_rule_from or closed["start"] >= closure_rule_from):
+            flags.append("closed with no AC verdict")
+    if v["state"] in ("partly met", "not met"):
+        fu = (v.get("follow_up") or "").lower()
+        if not fu or fu.startswith("none"):
+            flags.append("gap with no follow-up")
+    return flags
 
 
 def compute_stats(items):
@@ -207,7 +300,12 @@ def compute_stats(items):
         'priorities': {},
         'types': {},
     }
+    # Effort over leaves only: a parent's own estimate is the figure
+    # its children replaced, so adding it would count the same work twice.
+    parents = {str(it.get('Parent')) for it in items
+               if it.get('Parent') not in (None, '') and it.get('Status') != 'Cancelled'}
     for it in items:
+        own = 0 if str(it.get('ID')) in parents else (it.get('Estimated Effort (h)', 0) or 0)
         s = str(it.get('Status', 'No Status') or 'No Status')
         stats['statuses'][s] = stats['statuses'].get(s, 0) + 1
         if s == 'Done': stats['done'] += 1
@@ -225,7 +323,7 @@ def compute_stats(items):
         if t:
             stats['types'][t] = stats['types'].get(t, 0) + 1
 
-        stats['total_effort'] += it.get('Estimated Effort (h)', 0) or 0
+        stats['total_effort'] += own
 
         # A row belongs to a sprint it was committed to, pulled into, or closed
         # in. Keying this on Sprint Planned alone hid every row a sprint
@@ -243,7 +341,7 @@ def compute_stats(items):
                 stats['sprints'][sp] = {'items': [], 'effort': 0, 'done': 0}
             stats['sprints'][sp]['items'].append(it)
             if sp == home:
-                stats['sprints'][sp]['effort'] += it.get('Estimated Effort (h)', 0) or 0
+                stats['sprints'][sp]['effort'] += own
                 if s == 'Done':
                     stats['sprints'][sp]['done'] += 1
 
@@ -272,7 +370,7 @@ tr:hover td{background:#f0f4ff}
 .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
 .b-done{background:#dcfce7;color:#166534}.b-impl{background:#dbeafe;color:#1e40af}
 .b-ns{background:#f3f4f6;color:#374151}.b-bl{background:#fef3c7;color:#92400e}
-.b-fn{background:#fce7f3;color:#9d174d}.b-cx{background:#f3f4f6;color:#9ca3af;text-decoration:line-through}.b-no{background:#f9fafb;color:#9ca3af}
+.b-fn{background:#fce7f3;color:#9d174d}.b-cx-red{background:#fee2e2;color:#991b1b}.b-cx{background:#f3f4f6;color:#9ca3af;text-decoration:line-through}.b-no{background:#f9fafb;color:#9ca3af}
 .sprint-section{margin-bottom:24px}
 .btn.on{background:#4472C4;color:#fff;border-color:#4472C4}
 .sep{display:inline-block;width:1px;height:18px;background:#e5e7eb;margin:0 6px;vertical-align:middle}
@@ -345,6 +443,8 @@ tr:hover td{background:#f0f4ff}
 .rm-head .rm-track{background:transparent}
 /* The pinned columns need an edge too, or bars slide under them invisibly. */
 .rm-pg{box-shadow:6px 0 6px -6px rgba(0,0,0,.25)}
+.est{color:#6b7280;font-size:11px}
+.muted-s{color:#6b7280;font-size:12px}
 .slip{font-weight:600}.slip-late{color:#dc2626}.slip-early{color:#16a34a}.slip-ok{color:#6b7280}
 .slip-n{color:#b45309;font-weight:700}
 .hz{display:inline-block;padding:1px 6px;border-radius:8px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:600;margin-right:4px}
@@ -488,6 +588,9 @@ function visible(d){return showCancelled||d.s!=='Cancelled';}
 function childrenOf(id){return (kids.get(id===null?null:String(id))||[]).filter(visible);}
 function roots(){return childrenOf(null);}
 function hasKids(d){return childrenOf(d.id).length>0;}
+/* A parent's own estimate is the top-down figure its children replaced, so
+   sprint hours come from leaves only. Cancelled children do not count. */
+function liveParent(d){return (kids.get(String(d.id))||[]).some(k=>k.s!=='Cancelled');}
 
 function descendants(id){
   const out=[],stack=[...childrenOf(id)];
@@ -626,7 +729,7 @@ function rebuildSprints(){
       if(!sprintGroups[sp])sprintGroups[sp]={items:[],effort:0,done:0};
       sprintGroups[sp].items.push(Object.assign({},d,{_role:roles[sp].join(' · ')}));
       if(sp===home){
-        sprintGroups[sp].effort+=d.e||0;
+        if(!liveParent(d))sprintGroups[sp].effort+=d.e||0;
         if(d.s==='Done')sprintGroups[sp].done++;
       }
     });
@@ -672,26 +775,95 @@ function renderKPIs(){
 
 /* ---------- Breakdown ---------- */
 
+/* A parent's effort is its leaves' sum - bottom-up, the 100% rule: its own
+   estimate is never added on top. Where a parent carries one, it shows as the
+   original estimate with the difference, so a breakdown that outgrew its
+   estimate, or falls short of it, is visible rather than double counted. */
+function effortCell(d){
+  if(!hasKids(d))return d.e?d.e+'h':'-';
+  const g=d.pg, sum=g?g.et:0;
+  let s=sum?`<strong>${sum}h</strong>`:'-';
+  if(d.e){
+    const diff=Math.round((sum-d.e)*100)/100;
+    s=`<span class="est" title="The parent's own estimate, made before it was broken down">est. ${d.e}h</span> &rarr; ${s}`
+      +(diff?` <span class="${diff>0?'slip-late':'slip-early'}" title="broken down against the original estimate">(${diff>0?'+':''}${diff}h)</span>`:'');
+  }
+  if(g&&g.ue)s+=`<div class="pg-sub">${g.ue} of ${g.n} unestimated</div>`;
+  return s;
+}
+
 function renderTree(){
   let h=treeControls();
-  h+=`<table><tr><th>ID</th><th>Code</th><th>Item</th><th>Type</th><th>Class</th><th>Delivers</th><th>Nature</th><th>Status</th><th>Effort</th><th>Owner</th></tr>`;
+  h+=`<table><tr><th>ID</th><th>Code</th><th>Item</th><th>Type</th><th>Class</th><th>Delivers</th><th>Nature</th><th>Status</th><th>Effort</th><th>Progress</th><th>Owner</th></tr>`;
   let shown=0;
   walk((d,depth)=>{
     shown++;
     const kd=d.kd==='Y'?'<span class="kdtag">KEY</span>':'';
     const strong=(depth===0||d.kd==='Y')?'font-weight:700':'';
     const sub=collapsed.has(String(d.id))?descendants(d.id):[];
-    const rolled=sub.length?` <span style="color:#6b7280">(${sub.length} hidden, ${sub.reduce((a,k)=>a+(k.e||0),0)+(d.e||0)}h)</span>`:'';
+    const rolled=sub.length?` <span style="color:#6b7280">(${sub.length} hidden)</span>`:'';
     h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c||'-'}</td>
       <td style="padding-left:${8+depth*18}px;${strong}">${twisty(d)} ${d.t||'<em class="warn">(no title)</em>'}${kd}${rolled}</td>
       <td>${d.ty||'<span class="warn">—</span>'}</td><td>${d.cl==='Product'?'-':(d.cl||'-')}</td><td>${d.dl||'-'}</td><td>${d.na||'-'}</td>
-      <td>${badge(d.s)}</td><td>${d.e?d.e+'h':'-'}</td><td>${d.o||'-'}</td></tr>`;
+      <td>${badge(d.s)}</td><td>${effortCell(d)}</td><td style="min-width:96px">${hasKids(d)?progressCell(d):''}</td><td>${d.o||'-'}</td></tr>`;
   });
   h+=`</table>`;
   let reachable=0;walk(()=>reachable++);
   const untyped=DATA.filter(d=>!d.ty).length;
   if(untyped)h+=`<p class="muted">${untyped} row(s) with no Type, shown as —.</p>`;
   h+=`<p class="muted">Filters do not apply here: hiding a parent would break the tree.</p>`;
+  return h;
+}
+
+/* ---------- Verification ---------- */
+
+/* Each requirement (Feature, Story): what it traces to, how many acceptance
+   criteria it states, and whether its closure note says they were met - the
+   verified column of a traceability matrix. The reading is done in Python
+   (d.vr); this only lays it out. */
+let verifyFlaggedOnly=false;
+const V_CLASS={'verified':'b-done','partly met':'b-bl','not met':'b-cx-red','no verdict':'b-no','open':'b-ns','referred':'b-no'};
+function treeOrder(){
+  const out=[];
+  (function rec(list){list.forEach(d=>{out.push(d);rec(childrenOf(d.id));});})(roots());
+  return out;
+}
+function traceOf(d){
+  let cur=d,deliv=null,n=0;
+  while(cur.pa!=null&&byId.has(String(cur.pa))&&n++<50){
+    cur=byId.get(String(cur.pa));
+    if(cur.ty==='Deliverable'){deliv=cur;break;}
+  }
+  const parent=d.pa!=null?byId.get(String(d.pa)):null;
+  const bits=[];
+  if(deliv)bits.push(deliv.t);
+  if(parent&&(!deliv||String(parent.id)!==String(deliv.id)))bits.push(parent.t);
+  return bits.join(' › ');
+}
+function renderVerify(){
+  const reqs=treeOrder().filter(d=>d.vr);
+  const n=reqs.length, withAc=reqs.filter(d=>d.vr.ac).length;
+  const cnt=s=>reqs.filter(d=>d.vr.s===s).length;
+  const flagged=reqs.filter(d=>d.vr.fl.length);
+  let h=`<div class="rm-sum"><div class="rm-sum-txt"><b>${n}</b> requirement${n===1?'':'s'} (Features and Stories) &middot;
+    ${withAc} state acceptance criteria &middot; ${cnt('verified')} verified &middot; ${cnt('partly met')+cnt('not met')} partly or not met &middot;
+    <span class="${flagged.length?'warn':''}">${flagged.length} flagged</span></div></div>
+    <div class="filters"><span class="btn${verifyFlaggedOnly?' on':''}" onclick="verifyFlaggedOnly=!verifyFlaggedOnly;render()">${verifyFlaggedOnly?'Showing flagged only':'Show flagged only'}</span></div>`;
+  const rows=verifyFlaggedOnly?flagged:reqs;
+  if(!rows.length)return h+'<p class="muted">Nothing to show.</p>';
+  h+=`<table><tr><th>ID</th><th>Requirement</th><th>Status</th><th>AC</th><th>Verification</th><th>Gap goes to</th><th>Needs action</th></tr>`;
+  rows.forEach(d=>{
+    const v=d.vr;
+    const gap=(v.s==='partly met'||v.s==='not met')
+      ?(v.fi.length?v.fi.map(i=>byId.has(String(i))?`<button class="idbtn" onclick="openDetail(${i})">${i}</button>`:esc(i)).join(', '):esc(v.fu||'-'))
+      :(v.s==='referred'?'see the row it was split from':'');
+    h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td>
+      <td>${esc(d.t)}<div class="pg-sub">${esc(traceOf(d))}</div></td><td>${badge(d.s)}</td>
+      <td>${v.ac?v.ac:'<span class="warn">none</span>'}</td>
+      <td><span class="badge ${V_CLASS[v.s]||'b-no'}">${esc(v.s)}</span></td>
+      <td class="muted-s">${gap}</td><td>${v.fl.map(f=>`<div class="warn" style="font-size:11px">${esc(f)}</div>`).join('')}</td></tr>`;
+  });
+  h+='</table><p class="muted">Verification is read from the AC verdicts in each closure note ("(1) ... - met"). A closure before the register adopted closure notes (<code>meta.settings.closure_notes_from</code>) is shown but not flagged.</p>';
   return h;
 }
 
@@ -767,7 +939,8 @@ function fullPath(c){
 }
 const KB_COLS=[['todo','To do'],['doing','Doing'],['done','Done']];
 function kbCol(d){return d.s==='Implementing'?'doing':(d.s==='Done'||d.s==='Cancelled')?'done':'todo';}
-const kbHours=cs=>Math.round(cs.reduce((a,c)=>a+(c.d.s==='Cancelled'?0:(c.d.e||0)),0)*100)/100;
+// Leaves only: a parent card's hours are its children's, already on the board.
+const kbHours=cs=>Math.round(cs.reduce((a,c)=>a+(c.d.s==='Cancelled'||c.pa?0:(c.d.e||0)),0)*100)/100;
 
 function kbCard(c,laned){
   const d=c.d,path=laned?c.path:fullPath(c);
@@ -779,7 +952,7 @@ function kbCard(c,laned){
     <div class="kb-top"><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button>${tag}</div>
     <div class="kb-title">${esc(d.t)||'<em class="warn">(no title)</em>'}</div>
     ${path.length?`<div class="kb-path">&rsaquo; ${path.map(esc).join(' &rsaquo; ')}</div>`:''}
-    <div class="kb-meta">${[d.ty,d.e?d.e+'h':'no estimate',d.p].filter(Boolean).map(esc).join(' &middot; ')}</div>${flag}</div>`;
+    <div class="kb-meta">${[d.ty,c.pa?(c.h?c.h+'h in sprint':'no work in sprint'):(d.e?d.e+'h':'no estimate'),d.p].filter(Boolean).map(esc).join(' &middot; ')}</div>${flag}</div>`;
 }
 function kbCells(cards,laned){
   return `<div class="kb-cols">${KB_COLS.map(([k,l])=>{
@@ -822,7 +995,7 @@ function renderCurrent(){
     <span class="btn${boardLanes?' on':''}" onclick="boardLanes=!boardLanes;render()" title="Group the cards by the deliverable they serve">By deliverable</span></div>
     ${kbFigures(b.m)}`;
   if(!RUNNING)h+=`<p class="muted">No sprint in this register's calendar runs today, so this is ${boardSprint}, the latest sprint with cards.</p>`;
-  const cards=Object.entries(b.cards).map(([id,x])=>({d:byId.get(id),role:x.r,lane:x.l,path:x.p})).filter(c=>c.d&&visible(c.d));
+  const cards=Object.entries(b.cards).map(([id,x])=>({d:byId.get(id),role:x.r,lane:x.l,path:x.p,h:x.h,pa:x.pa})).filter(c=>c.d&&visible(c.d));
   if(!cards.length)return h+`<p class="muted">No card from this project is in ${boardSprint}.</p>`;
   h+=`<div class="kb-cols kb-colheads">${KB_COLS.map(([k,l])=>{
     const cs=cards.filter(c=>kbCol(c.d)===k);
@@ -1058,8 +1231,8 @@ function renderRoadmap(){
 
 function render(){
   rebuildSprints();
-  const tabs=[['current','Current Sprint'],['tree','Breakdown'],['deliverables','Deliverables'],['roadmap','Roadmap'],['sprints','Sprint Board'],['analytics','Analytics']];
-  const body={current:renderCurrent,tree:renderTree,deliverables:renderDeliverables,roadmap:renderRoadmap,sprints:renderBoard,analytics:renderAnalytics}[activeTab]();
+  const tabs=[['current','Current Sprint'],['tree','Breakdown'],['deliverables','Deliverables'],['verify','Verification'],['roadmap','Roadmap'],['sprints','Sprint Board'],['analytics','Analytics']];
+  const body={current:renderCurrent,tree:renderTree,deliverables:renderDeliverables,verify:renderVerify,roadmap:renderRoadmap,sprints:renderBoard,analytics:renderAnalytics}[activeTab]();
   const showFilters=(activeTab==='sprints'||activeTab==='analytics');
   document.getElementById('app').innerHTML=`${renderKPIs()}
   <div class="tabs">${tabs.map(([k,l])=>`<div class="tab ${activeTab===k?'active':''}" onclick="activeTab='${k}';render()">${l}</div>`).join('')}</div>
@@ -1093,7 +1266,7 @@ SHELL = '''<!DOCTYPE html>
 
 
 def generate_html(project_name, items, stats, schedule=None, sprints=None,
-                  boards=None):
+                  boards=None, closure_rule_from=None):
     """Assemble the dashboard.
 
     The JS and CSS are plain strings, not f-strings, so braces stay as the
@@ -1151,6 +1324,13 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None,
         entry = (schedule or {}).get(str(row['id']))
         if entry:
             row.update(entry)
+    # Each live requirement's AC count, verification and flags.
+    for row, it in zip(compact, items):
+        if it.get('Type') in REQUIREMENT_TYPES and it.get('Status') != 'Cancelled':
+            v = verification(it)
+            row['vr'] = {'ac': ac_count(it.get('Acceptance Criteria')), 's': v['state'],
+                         'fu': v.get('follow_up') or '', 'fi': v.get('follow_ids') or [],
+                         'fl': verification_flags(it, v, closure_rule_from)}
     js = (JS.replace('__SPRINTS__', json.dumps(sprints or []))
             .replace('__BOARDS__', json.dumps(boards or {}))
             .replace('__ITEMS__', json.dumps(compact))
@@ -1196,7 +1376,8 @@ def main():
     sprints.sort(key=lambda s: s['Starts'])
     schedule = build_schedule(items, register.get('schedule_log'), sprints)
     boards = build_boards(register, sprints)
-    html = generate_html(project_name, items, stats, schedule, sprints, boards)
+    rule_from = ((register.get('meta') or {}).get('settings') or {}).get('closure_notes_from')
+    html = generate_html(project_name, items, stats, schedule, sprints, boards, rule_from)
 
     html = html.replace('__HASH__', register['meta'].get('values_hash',''))
     # A project whose Execution folders differ from the standard says so in the

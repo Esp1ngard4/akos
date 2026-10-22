@@ -429,9 +429,14 @@ SUMMARY_RULES = (
 
 
 def _done_in(wbs, sprint):
+    import wbs as WBS
+    # A parent's hours are its children's in the sprint, as on the board
+    # (wbs.py sprint_board), never its own estimate for the whole.
+    card = {c["id"]: c["hours"] for c in WBS.sprint_board(list(wbs.items.values()), sprint)}
     rows = [i for i in wbs.items.values() if i.get("Sprint Ended") == sprint and i.get("Status") == "Done"]
-    rows.sort(key=lambda i: -(i.get("Estimated Effort (h)") or 0))
-    return [{"title": i["Title"], "hours": i.get("Estimated Effort (h)"), "scope": wbs.scope,
+    hours = lambda i: card.get(i["ID"], i.get("Estimated Effort (h)"))
+    rows.sort(key=lambda i: -(hours(i) or 0))
+    return [{"title": i["Title"], "hours": hours(i), "scope": wbs.scope,
              "part_of": (wbs.items.get(i.get("Parent")) or {}).get("Title")} for i in rows]
 
 
@@ -925,7 +930,8 @@ def sprint_board(wbss, sprint):
     largest share of the sprint first; cards with no deliverable come last.
     """
     import wbs as WBS
-    hrs = lambda cs: round(sum(c["hours"] or 0 for c in cs), 2)
+    # Leaves only: a parent card's hours are its children's, already counted.
+    hrs = lambda cs: round(sum(c["hours"] or 0 for c in cs if not c.get("parent")), 2)
     projects = []
     for w in wbss:
         lanes = {}
@@ -936,7 +942,7 @@ def sprint_board(wbss, sprint):
             lane = lanes.setdefault(c["lane"], {"id": c["lane"], "cards": []})
             lane["cards"].append({"id": c["id"], "title": row.get("Title", ""),
                                   "status": row.get("Status", ""), "type": row.get("Type", ""),
-                                  "hours": row.get("Estimated Effort (h)"), "role": c["role"],
+                                  "hours": c["hours"], "parent": c["parent"], "role": c["role"],
                                   "path": c["path"], "column": board_column(row.get("Status"))})
         if not lanes:
             continue
@@ -1490,7 +1496,7 @@ def board_html(board, as_of):
     if not projects:
         return ""
     cards = [c for p in projects for l in p["lanes"] for c in l["cards"]]
-    hrs = lambda cs: "%gh" % round(sum(c["hours"] or 0 for c in cs), 2)
+    hrs = lambda cs: "%gh" % round(sum(c["hours"] or 0 for c in cs if not c.get("parent")), 2)
     heads = "".join('<div class="bd-colhead">%s<span>%d · %s</span></div>'
                     % (lab, len([c for c in cards if c["column"] == k]), hrs([c for c in cards if c["column"] == k]))
                     for k, lab in BOARD_COLUMNS)
@@ -1498,7 +1504,11 @@ def board_html(board, as_of):
     def card(c):
         tag = "" if c["role"] == "Committed" else '<span class="chip">%s</span>' % e(c["role"].lower())
         path = ('<div class="small">› %s</div>' % e(" › ".join(c["path"]))) if c["path"] else ""
-        meta = " · ".join(x for x in (c["type"], ("%gh" % c["hours"]) if c["hours"] else "no estimate") if x)
+        if c.get("parent"):
+            size = ("%gh in sprint" % c["hours"]) if c["hours"] else "no work in sprint"
+        else:
+            size = ("%gh" % c["hours"]) if c["hours"] else "no estimate"
+        meta = " · ".join(x for x in (c["type"], size) if x)
         return ('<div class="bd-card bd-%s"><strong>#%s</strong> %s%s%s<div class="small">%s</div></div>'
                 % (c["column"], c["id"], e(c["title"]), tag, path, e(meta)))
 

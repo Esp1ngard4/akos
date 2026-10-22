@@ -78,5 +78,6 @@ Two reports ship:
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-10-22 | **Sprint hours come from leaves.** The sprint update's board cards take their hours from `wbs.py sprint_board`, where a parent's are its children's on the board, and lane and column totals add leaves only; the *Delivered* list does the same. The figures read from `wbs.py metrics` follow TD.1 v1.9 with no change here. |
 | v1.1 | 2026-10-12 | **The status report says what the project is for, and whether it is getting there.** An Outcome section opens it, read from the project's brief (`templates/Project-Brief-template.md`, new): the outcome, what it serves, the done-when list, and each measure scored 0-1 against its pace, with trend and flags for behind pace, past due and stale. *On Outcome* is proposed and confirmed like the four, not counted in Overall. No brief or a lean one: the report runs as before; a broken table: findings, not failure. |
 | v1.0 | 2026-10-12 | Published as TSP.10: the project status report and the sprint update, each a JSON record and an HTML view, with the Essential 4 proposed and confirmed, the executive summary drafted and confirmed, and the sprint board on its own tab. Runs on AKOS's own registers and sprint records; needs structured sprint goals (TD.8 v1.2) and the RAID register's Changes and Trend (TD.2 v1.5). |

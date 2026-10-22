@@ -179,8 +179,62 @@ def check_deliverable(row):
                  % (" / ".join(DELIVERABLE_LEVELS), row.get("Type")))
 
 
+CLOSED = ("Done", "Cancelled")
+
+
 def has_children(data, item_id):
     return any(str(r.get("Parent")) == str(item_id) for r in R.rows(data, ITEMS))
+
+
+def subtree_ids(rows, item_id):
+    """IDs (as strings) of every row below `item_id`, Cancelled included."""
+    kids = {}
+    for r in rows:
+        kids.setdefault(str(r.get("Parent")), []).append(str(r.get("ID")))
+    out, stack = set(), list(kids.get(str(item_id), []))
+    while stack:
+        rid = stack.pop()
+        if rid in out:
+            continue                    # a cycle is check's to report
+        out.add(rid)
+        stack.extend(kids.get(rid, []))
+    return out
+
+
+def leaves_under(data, item_id):
+    """The live (not Cancelled) leaves at or below a row."""
+    rows = [r for r in R.rows(data, ITEMS) if r.get("Status") != "Cancelled"]
+    kids = {}
+    for r in rows:
+        kids.setdefault(str(r.get("Parent")), []).append(r)
+    out, stack, seen = [], list(kids.get(str(item_id), [])), set()
+    while stack:
+        r = stack.pop()
+        if str(r.get("ID")) in seen:
+            continue                    # a cycle is check's to report, not ours to loop on
+        seen.add(str(r.get("ID")))
+        below = kids.get(str(r.get("ID")))
+        if below:
+            stack.extend(below)
+        else:
+            out.append(r)
+    return out
+
+
+def estimate_gap(data, row):
+    """The 100% rule: a parent's own estimate against its leaves' sum.
+
+    (own, leaves' sum, unestimated leaves) when they disagree, else None. A
+    parent's estimate is the top-down figure made before it was broken down,
+    so it is compared with the breakdown, never added to it.
+    """
+    own = row.get("Estimated Effort (h)")
+    if not own or not has_children(data, row.get("ID")):
+        return None
+    leaves = leaves_under(data, row.get("ID"))
+    total = round(sum(l.get("Estimated Effort (h)") or 0 for l in leaves), 2)
+    unestimated = sum(1 for l in leaves if not l.get("Estimated Effort (h)"))
+    return None if total == own and not unestimated else (own, total, unestimated)
 
 
 def check_date(field, value):
@@ -543,6 +597,13 @@ def cmd_add(args):
     stamp_actuals(data, row, args, created)
     stamp_sprint_ended(data, row, args, created)
     R.rows(data, ITEMS).append(row)
+    # The 100% rule: work added under a parent that carries its own estimate
+    # must fit inside it, or that estimate becomes the original one.
+    parent = find(data, args.parent) if args.parent else None
+    if parent is not None and parent.get("Estimated Effort (h)"):
+        created.append("note: parent %s carries its own estimate (%gh). Its children "
+                       "are its estimate now; `check` compares the two"
+                       % (parent.get("ID"), parent["Estimated Effort (h)"]))
     # Stamped values are announced, as `set` announces them, so a wrong one
     # can be corrected.
     return finish(args, data, "Added item %s  %s%s" % (
@@ -605,6 +666,162 @@ def cmd_note(args):
         args.id, "below the closure note" if pinned else "at the top of Comments"))
 
 
+# --------------------------------------------------------------------------- #
+# Splitting partly done work. Carrying a partly done row whole credits
+# the hours done in one sprint to the sprint where it closes. A split closes
+# what was delivered in its sprint and keeps the rest open, and every piece
+# keeps the commitment history, so each sprint still shows what it committed
+# and delivered hours count once.
+
+SPLIT_MARK = re.compile(r"\bSplit from ID (\d+)\b")
+SPLIT_COPY = ("Class", "Nature", "Delivers", "Priority", "Owner", "Category",
+              "Sprint Planned", "Sprint Added", CARRIED)
+
+
+def split_piece_of(row):
+    """The ID a row was split from, when `split` made it a piece of its parent."""
+    hit = SPLIT_MARK.search(row.get("Comments") or "")
+    return hit.group(1) if hit and hit.group(1) == str(row.get("Parent")) else None
+
+
+def cmd_split(args):
+    """Close what was delivered in a sprint and keep the rest open.
+
+    The first split turns the row into the parent of the two pieces: it keeps
+    its ID, its sprint commitment, its baseline and its own estimate, which
+    the Breakdown then shows as the original. Splitting a piece again closes
+    that piece with what was delivered and adds the rest beside it, under the
+    same parent: a split cuts by sprint, not by meaning, so it adds no layer.
+    """
+    data = R.load(args.register)
+    row = find(data, args.id)
+    if row is None:
+        sys.exit("No item with ID %s." % args.id)
+    rid = str(row.get("ID"))
+    if has_children(data, rid):
+        sys.exit("Item %s has children: its effort is theirs. Close or carry "
+                 "them instead of splitting it." % rid)
+    if row.get("Status") in CLOSED:
+        sys.exit("Item %s is %s: there is nothing left to split."
+                 % (rid, row.get("Status")))
+    sprint = args.sprint or next(
+        (s for s in reversed([row.get("Sprint Planned")] + carried(row)
+                             + [row.get("Sprint Added")]) if s), None)
+    if not sprint:
+        sys.exit("Item %s names no sprint. Pass --sprint: the sprint the "
+                 "delivered part closes in." % rid)
+    known = sprint_calendar(data)
+    if known and sprint not in known:
+        sys.exit("%r is not a sprint in this register's calendar." % sprint)
+    if sprint not in sprint_ids(row):
+        sys.exit("Item %s was never in %s. A split closes the part delivered "
+                 "in a sprint the row was in." % (rid, sprint))
+    if args.delivered <= 0:
+        sys.exit("--delivered is the hours done; with none, carry the row whole.")
+    whole = lambda h: int(h) if h is not None and float(h).is_integer() else h
+    args.delivered = whole(args.delivered)
+    own = row.get("Estimated Effort (h)")
+    rest = whole(args.rest_effort if args.rest_effort is not None else (
+        round(own - args.delivered, 2) if own else None))
+    if rest is None:
+        sys.exit("Item %s has no estimate, so the rest cannot be derived. "
+                 "Pass --rest-effort." % rid)
+    if rest <= 0:
+        sys.exit("Nothing is left (%gh estimated, %gh delivered): close the "
+                 "row instead, or pass --rest-effort for what remains."
+                 % (own or 0, args.delivered))
+
+    piece_of = split_piece_of(row)
+    parent = find(data, piece_of) if piece_of else row
+    level = row.get("Type") if row.get("Type") in ("Story", "Task") else "Story"
+    title = parent.get("Title", "")      # pieces are named from what they split
+    changed, made = [], []
+    when = today_text()
+
+    def piece(title_text, effort):
+        new = {"ID": R.next_id(data, ITEMS) or 1, "Parent": parent["ID"],
+               "Title": title_text, "Type": level, "Estimated Effort (h)": effort}
+        for field in SPLIT_COPY:
+            if row.get(field):
+                new[field] = list(row[field]) if field == CARRIED else row[field]
+        if row.get("Acceptance Criteria"):
+            new["Acceptance Criteria"] = row["Acceptance Criteria"]
+        R.rows(data, ITEMS).append(new)
+        kids = [r for r in R.rows(data, ITEMS) if str(r.get("Parent")) == str(parent["ID"])]
+        if parent.get("Code"):
+            new["Code"] = "%s.%d" % (parent["Code"], len(kids))
+        return new
+
+    if piece_of:
+        # A piece split again: it closes as the delivered part, and the rest
+        # goes beside it, under the same parent.
+        done = row
+        done["Estimated Effort (h)"] = args.delivered
+        done["Title"] = args.done_title or "%s - done in %s" % (title, sprint)
+        changed.append("item %s: Estimated Effort %gh -> %gh delivered, retitled"
+                       % (rid, own or 0, args.delivered))
+    else:
+        done = piece(args.done_title or "%s - done in %s" % (title, sprint),
+                     args.delivered)
+        made.append(done)
+        # A parent's plan and actuals are its children's span: they move.
+        if row.get("Actual Start"):
+            done["Actual Start"] = row.pop("Actual Start")
+    remainder = piece(args.rest_title or "%s - rest after %s" % (title, sprint), rest)
+    made.append(remainder)
+    for field in ("Planned Start", "Planned End"):
+        if row.get(field):
+            remainder[field] = row.pop(field)
+    if row.get("Tracked Externally"):
+        remainder["Tracked Externally"] = row.pop("Tracked Externally")
+    if row.get("Description"):
+        remainder["Description"] = row["Description"]
+    remainder["Status"] = "Not Started"
+
+    # Close the delivered part in the sprint being closed, not in whichever
+    # sprint the close-out happens to run in.
+    ns = argparse.Namespace(status="Done", closure=args.closure,
+                            actual_end=args.actual_end, actual_start=None)
+    was = done.get("Status")
+    done["Status"] = "Done"
+    apply_closure(done, ns, changed, was)
+    if args.actual_end:
+        check_date("Actual End", args.actual_end)
+        done["Actual End"] = args.actual_end
+    stamp_actuals(data, done, ns, changed)
+    done["Sprint Ended"] = sprint
+    done.pop("Horizon", None)
+
+    for new in made:
+        add_note(new, "Split from ID %s at the %s close-out: %s." % (
+            parent["ID"], sprint, "the part delivered there" if new is done
+            else "what was left, %gh" % rest))
+    if piece_of:
+        add_note(done, "Split again at the %s close-out: %gh delivered here, "
+                       "%gh left in ID %s." % (sprint, args.delivered, rest,
+                                               remainder["ID"]))
+    add_note(parent, "Split at the %s close-out: %s%gh delivered in ID %s, %gh "
+                     "left in ID %s." % (
+                         sprint, "" if piece_of else "%gh estimated; " % (own or 0),
+                         args.delivered, done["ID"], rest, remainder["ID"]))
+
+    lines = ["Split item %s in %s" % (rid, sprint)]
+    if not piece_of:
+        lines.append("item %s is now the parent: its %gh is the original "
+                     "estimate, its sprint commitment and baseline stay"
+                     % (rid, own or 0))
+    lines.append("item %s: %s, Done in %s, %gh" % (done["ID"], done["Title"],
+                                                   sprint, args.delivered))
+    lines.append("item %s: %s, Not Started, %gh, committed as %s"
+                 % (remainder["ID"], remainder["Title"], rest,
+                    ", ".join(sprint_ids(remainder)) or "-"))
+    lines += changed
+    lines.append("Task tracker: the open task for ID %s now serves ID %s, with %gh "
+                 "left; planning carries ID %s on with --sprint-carried"
+                 % (rid, remainder["ID"], rest, remainder["ID"]))
+    return finish(args, data, "\n  ".join(lines))
+
+
 def cmd_check(args):
     data = R.load(args.register)
     items = R.rows(data, ITEMS)
@@ -640,6 +857,17 @@ def cmd_check(args):
                 errors.append("item %s: Parent %s closes a cycle" % (rid, parent))
         elif row.get("Type") not in DELIVERABLE_LEVELS and row.get("Type"):
             warnings.append("item %s: %s with no Parent" % (rid, row.get("Type")))
+
+        # Open parents only: on a closed one the difference is history, which
+        # the dashboard shows; a warning there would have nothing left to decide.
+        gap = estimate_gap(data, row) if row.get("Status") not in HORIZON_CLEARS_ON else None
+        if gap:
+            own, total, unest = gap
+            why = ("scope grew past the estimate" if total > own else
+                   "the breakdown is incomplete" + (" (%d leaf/leaves unestimated)" % unest if unest else ""))
+            warnings.append("item %s: its own estimate is %gh, its children sum to %gh - %s. "
+                            "The children are the estimate now; the parent's is the original"
+                            % (rid, own, total, why))
 
         if row.get("Key Deliverable") == "Y" and row.get("Type") not in DELIVERABLE_LEVELS:
             errors.append("item %s: Key Deliverable=Y on a %s"
@@ -706,6 +934,25 @@ def cmd_check(args):
                             "commitment means Not Started"
                             % (rid, (carried(row) or [row.get("Sprint Planned")])[-1],
                                status))
+        # A committed parent counts as an item and takes its hours
+        # from its children in the sprint, so with none of them there the
+        # work that finishes it is not named - a refinement gap.
+        latest = (carried(row) or [row.get("Sprint Planned")])[-1]
+        if latest and status not in CLOSED and has_children(data, rid):
+            below = [r for r in items if str(r.get("ID")) in subtree_ids(items, rid)
+                     and r.get("Status") != "Cancelled"]
+            if not any(committed_to(r, latest) or latest in (r.get("Sprint Added"),
+                                                             r.get("Sprint Ended"))
+                       for r in below):
+                warnings.append("item %s: committed to %s with none of its children "
+                                "in it - commit the remaining work under it"
+                                % (rid, latest))
+        # Work that keeps sliding is a planning problem. A split's
+        # rest inherits the commitment history, so this catches it too.
+        if status not in CLOSED and len(carried(row)) >= 2:
+            warnings.append("item %s: carried into %d sprints (%s) - re-scope it, "
+                            "break it down, or drop it out loud"
+                            % (rid, len(carried(row)), ", ".join(carried(row))))
         if not has_children(data, rid):
             if status == "Done" and not row.get("Actual End"):
                 warnings.append("item %s: Done with no Actual End - the "
@@ -947,12 +1194,32 @@ def cmd_rebaseline(args):
 # The task tracker holds the same work as labels, but nothing enforces that the two
 # agree, so it verifies rather than computes.
 
-def hours(rows):
-    return round(sum(r.get("Estimated Effort (h)") or 0 for r in rows), 2)
+def parent_ids(rows):
+    """IDs (as strings) of the rows with a live child among `rows`."""
+    return {str(r.get("Parent")) for r in rows
+            if r.get("Parent") not in (None, "") and r.get("Status") != "Cancelled"}
 
 
-def estimated(rows):
-    return [r for r in rows if r.get("Estimated Effort (h)")]
+def hours(rows, parents=frozenset()):
+    """Effort over the leaves among `rows`.
+
+    A parent's own estimate is the top-down figure its children replaced (the
+    100% rule), so a committed parent adds no hours: its hours in a sprint are
+    its children's there, already counted as leaves. It still counts as an
+    item - committing it is the promise that the deliverable lands.
+    """
+    return round(sum(r.get("Estimated Effort (h)") or 0 for r in rows
+                     if str(r.get("ID")) not in parents), 2)
+
+
+def estimated(rows, parents=frozenset()):
+    """The leaves among `rows` that carry an estimate; a parent needs none."""
+    return [r for r in rows
+            if str(r.get("ID")) not in parents and r.get("Estimated Effort (h)")]
+
+
+def leaf_count(rows, parents):
+    return sum(1 for r in rows if str(r.get("ID")) not in parents)
 
 
 def cycle_days(row):
@@ -992,11 +1259,14 @@ def sprint_board(rows, sprint):
       the sprint without having been committed or pulled into it);
     - `lane`: the ID of the nearest Deliverable at or above the row, else its
       root ancestor, else None - a row with no parent has nothing to serve;
-    - `path`: the titles between the lane and the row, top first.
+    - `path`: the titles between the lane and the row, top first;
+    - `hours`: a leaf's own estimate; a parent's is its leaves' among the
+      sprint's cards, since its own estimate covers the whole deliverable.
+      `parent` says which it is.
 
     The WBS dashboard's Current Sprint tab draws from this, and so should any
-    report that shows the sprint as a board, so a card sits in the same lane
-    wherever it is shown.
+    report that shows the sprint as a board, so a card sits in the same lane,
+    with the same hours, wherever it is shown.
     """
     by_id = {r.get("ID"): r for r in rows}
     committed, pulled, delivered = sprint_populations(rows, sprint)
@@ -1007,6 +1277,46 @@ def sprint_board(rows, sprint):
         role[r.get("ID")] = "Pulled in"
     for r in committed:
         role[r.get("ID")] = "Carried in" if sprint in carried(r) else "Committed"
+
+    kids = {}
+    for r in rows:
+        if r.get("Status") != "Cancelled" and r.get("Parent") not in (None, ""):
+            kids.setdefault(str(r.get("Parent")), []).append(r)
+
+    def card_hours(rid):
+        if str(rid) not in kids:
+            return by_id[rid].get("Estimated Effort (h)")
+        total, stack, seen = 0, list(kids[str(rid)]), set()
+        while stack:
+            r = stack.pop()
+            if str(r.get("ID")) in seen:
+                continue
+            seen.add(str(r.get("ID")))
+            if str(r.get("ID")) in kids:
+                stack.extend(kids[str(r.get("ID"))])
+            elif r.get("ID") in role:
+                total += r.get("Estimated Effort (h)") or 0
+        return round(total, 2)
+
+    kids = {}
+    for r in rows:
+        if r.get("Status") != "Cancelled" and r.get("Parent") not in (None, ""):
+            kids.setdefault(str(r.get("Parent")), []).append(r)
+
+    def card_hours(rid):
+        if str(rid) not in kids:
+            return by_id[rid].get("Estimated Effort (h)")
+        total, stack, seen = 0, list(kids[str(rid)]), set()
+        while stack:
+            r = stack.pop()
+            if str(r.get("ID")) in seen:
+                continue
+            seen.add(str(r.get("ID")))
+            if str(r.get("ID")) in kids:
+                stack.extend(kids[str(r.get("ID"))])
+            elif r.get("ID") in role:
+                total += r.get("Estimated Effort (h)") or 0
+        return round(total, 2)
 
     cards = []
     for rid, how in role.items():
@@ -1024,7 +1334,8 @@ def sprint_board(rows, sprint):
                 hit = len(chain) - 1         # no Deliverable above: the root
             lane = chain[hit].get("ID") if hit is not None else None
             path = [a.get("Title", "") for a in reversed(chain[:hit])] if hit else []
-        cards.append({"id": rid, "role": how, "lane": lane, "path": path})
+        cards.append({"id": rid, "role": how, "lane": lane, "path": path,
+                      "hours": card_hours(rid), "parent": str(rid) in kids})
     return cards
 
 
@@ -1040,18 +1351,22 @@ def sprint_metrics(data, sprint):
     carried = [r for r in committed if r not in delivered]
     spans = sorted(d for d in (cycle_days(r) for r in delivered) if d is not None)
     scope = data.get("meta", {}).get("scope", "?")
+    # Hours come from leaves only: a parent counts as an item.
+    parents = parent_ids(live)
 
     return {
         "sprint": sprint,
         "scope": scope,
-        "committed": {"n": len(committed), "h": hours(committed),
-                      "estimated": len(estimated(committed))},
-        "pulled_in": {"n": len(pulled), "h": hours(pulled)},
-        "delivered": {"n": len(delivered), "h": hours(delivered),
-                      "estimated": len(estimated(delivered))},
+        "committed": {"n": len(committed), "h": hours(committed, parents),
+                      "leaves": leaf_count(committed, parents),
+                      "estimated": len(estimated(committed, parents))},
+        "pulled_in": {"n": len(pulled), "h": hours(pulled, parents)},
+        "delivered": {"n": len(delivered), "h": hours(delivered, parents),
+                      "leaves": leaf_count(delivered, parents),
+                      "estimated": len(estimated(delivered, parents))},
         # IDs are unique within a register, not across them, so a combined
         # report has to say which project each one belongs to.
-        "carryover": {"n": len(carried), "h": hours(carried),
+        "carryover": {"n": len(carried), "h": hours(carried, parents),
                       "ids": ["%s#%s" % (scope, r.get("ID")) for r in carried]},
         "cycle_time": {"median_days": median_of(spans), "measured": len(spans),
                        "of": len(delivered), "days": spans},
@@ -1181,11 +1496,18 @@ def cmd_metrics(args):
 
     # A rate over rows that mostly lack an estimate is a different claim from
     # one where they all have it, and the retro should know which it has.
+    # Parents are counted as items but carry no hours, so coverage is over
+    # leaves: a parent is never "unestimated".
     gaps = []
-    if c["n"] and c["estimated"] < c["n"]:
-        gaps.append("%d of %d committed" % (c["n"] - c["estimated"], c["n"]))
-    if dl["n"] and dl["estimated"] < dl["n"]:
-        gaps.append("%d of %d delivered" % (dl["n"] - dl["estimated"], dl["n"]))
+    c_leaves, dl_leaves = c.get("leaves", c["n"]), dl.get("leaves", dl["n"])
+    if c_leaves and c["estimated"] < c_leaves:
+        gaps.append("%d of %d committed" % (c_leaves - c["estimated"], c_leaves))
+    if dl_leaves and dl["estimated"] < dl_leaves:
+        gaps.append("%d of %d delivered" % (dl_leaves - dl["estimated"], dl_leaves))
+    if c["n"] > c_leaves or dl["n"] > dl_leaves:
+        print("\n  Parents         %d committed, %d delivered: counted as items, "
+              "with their children's hours"
+              % (c["n"] - c_leaves, dl["n"] - dl_leaves))
     if gaps:
         print("\n  Coverage        no effort estimate on %s - the hour figures "
               "cover only the rest." % "; ".join(gaps))
@@ -1447,7 +1769,17 @@ def cmd_refined(args):
             gaps.append("description too thin to state a problem")
         if not str(row.get("Acceptance Criteria") or "").strip():
             gaps.append("no acceptance criteria")
-        if not row.get("Estimated Effort (h)"):
+        below = subtree_ids(list(rows.values()), rid)
+        if below:
+            # A parent takes its hours from its children in the
+            # sprint, so it needs no estimate of its own - it needs the work
+            # that finishes it among the candidates.
+            open_below = {i for i in below if rows[i].get("Status") not in CLOSED}
+            if not open_below:
+                gaps.append("no open work under it (close it, or add what finishes it)")
+            elif not open_below & set(wanted):
+                gaps.append("none of its open work is a candidate (name what finishes it)")
+        elif not row.get("Estimated Effort (h)"):
             gaps.append("no estimate")
         if row.get("Parent") in (None, ""):
             gaps.append("no parent")
@@ -1582,6 +1914,26 @@ def main():
     s.add_argument("text")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_note)
+
+    s = subs.add_parser("split", help="close the part of a row delivered in a "
+                                      "sprint and keep the rest open")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("--delivered", type=float, required=True,
+                   help="hours delivered in the sprint")
+    s.add_argument("--rest-effort", type=float,
+                   help="hours left (default: the estimate less --delivered)")
+    s.add_argument("--sprint", metavar="SPRINT",
+                   help="the sprint the delivered part closes in (default: the "
+                        "row's latest)")
+    s.add_argument("--done-title")
+    s.add_argument("--rest-title")
+    s.add_argument("--closure", required=True, metavar="NOTE",
+                   help="the delivered part's closure note: what happened, AC")
+    s.add_argument("--actual-end", metavar="DATE",
+                   help="when the delivered part finished (default: today)")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_split)
 
     s = subs.add_parser("check", help="validate IDs, parents and vocabularies")
     s.add_argument("register")

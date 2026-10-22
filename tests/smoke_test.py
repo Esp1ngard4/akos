@@ -1284,6 +1284,115 @@ def test_sync_commands(root, scratch):
           ok and "Check the old tool" not in out, out[:300])
 
 
+def test_effort_and_splits(root, scratch):
+    """Effort that rolls up, requirements that say whether they were verified,
+    and partly done work split so its hours count where they were done.
+
+    Driven through the command line on a small register: a parent estimated
+    before it was broken down, a deliverable committed with its last piece,
+    and a story split at a sprint's close and split again at the next.
+    """
+    import json
+    print("\nEffort, verification and splits")
+    work = os.path.join(scratch, "effort")
+    os.makedirs(work, exist_ok=True)
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs = os.path.join(scripts, "wbs.py")
+    reg = os.path.join(work, "WBS Atlas.json")
+    conv = os.path.join(work, "conventions.json")
+    for label, cmd in [
+            ("create", [os.path.join(scripts, "create_wbs.py"), reg, "Atlas"]),
+            ("seed", [wbs, "sprints", "seed", conv, "--scope", "Atlas", "--year", "2026",
+                      "--anchor", "2026-07-19"]),
+            ("import", [wbs, "sprints", "import", reg, "--from", conv]),
+            ("root", [wbs, "add", reg, "Website", "--type", "Deliverable"]),
+            ("guide", [wbs, "add", reg, "User guide", "--type", "Feature", "--parent", "1"]),
+            ("draft", [wbs, "add", reg, "Draft the guide", "--parent", "2"]),
+            ("last piece", [wbs, "add", reg, "Screenshots", "--parent", "2"]),
+            ("story", [wbs, "add", reg, "Search page", "--parent", "1"])]:
+        ok, out = run(cmd, work)
+        if not check("effort: %s" % label, ok, out):
+            return
+
+    def edit(**rows):
+        data = json.load(io.open(reg, encoding="utf-8"))
+        for r in data["items"]:
+            r.update(rows.get(str(r["ID"]), {}))
+        io.open(reg, "w", encoding="utf-8").write(json.dumps(data))
+
+    def metrics(sprint):
+        ok, out = run([wbs, "metrics", reg, "--sprint", sprint, "--json"], work)
+        try:
+            m = json.JSONDecoder().raw_decode(out[out.index("{"):])[0]
+        except ValueError:
+            return None
+        return (m["committed"]["n"], m["committed"]["h"], m["delivered"]["n"],
+                m["delivered"]["h"], m["carryover"]["n"], m["carryover"]["h"])
+
+    # The 100% rule: a parent's own estimate is compared with its leaves', never added.
+    edit(**{"2": {"Estimated Effort (h)": 10}, "3": {"Estimated Effort (h)": 18},
+            "4": {"Estimated Effort (h)": 2},
+            "5": {"Estimated Effort (h)": 10, "Acceptance Criteria": "(1) results. (2) filters."}})
+    ok, out = run([wbs, "check", reg], work)
+    check("effort: check warns when a parent's estimate and its leaves disagree",
+          "item 2" in out and "10" in out and "20" in out, out[:300])
+
+    # A deliverable committed with its last piece: 2 items, the piece's hours.
+    S1, S2, S3 = "S26.Q4.3", "S26.Q4.4", "S26.Q4.5"
+    for cmd in ([wbs, "set", reg, "--id", "3", "--status", "Done", "--sprint-ended", "S26.Q4.2",
+                 "--closure", "What happened: drafted. AC: (1) met."],
+                [wbs, "set", reg, "--id", "2", "--sprint-planned", S1],
+                [wbs, "set", reg, "--id", "4", "--sprint-planned", S1]):
+        run(cmd, work)
+    ok, out = run([wbs, "check", reg], work)
+    check("effort: a committed parent with its work in the sprint is not flagged",
+          "none of its children" not in out, out[:300])
+    check("effort: a committed parent counts as an item with its children's hours",
+          metrics(S1) == (2, 2, 0, 0, 2, 2), str(metrics(S1)))
+
+    # Split a 10h story with 6h done, then split the rest again.
+    run([wbs, "set", reg, "--id", "5", "--sprint-planned", S2, "--status", "Implementing"], work)
+    ok, out = run([wbs, "split", reg, "--id", "5", "--delivered", "6", "--sprint", S2, "--closure",
+                   "What happened: results. AC: (1) met. (2) partial: rest in the new row."], work)
+    check("split: runs, and says what to change in the task tracker", ok and "Task tracker:" in out, out[:300])
+    data = json.load(io.open(reg, encoding="utf-8"))
+    kids = [r for r in data["items"] if r.get("Parent") == 5]
+    check("split: the row becomes the parent of a done piece and the rest",
+          sorted((r["Status"], r["Estimated Effort (h)"]) for r in kids)
+          == [("Done", 6), ("Not Started", 4)], str(kids)[:300])
+    check("split: the sprint shows what it committed and what was delivered",
+          metrics(S2) == (3, 10, 1, 6, 2, 4), str(metrics(S2)))
+    rest = [r for r in kids if r["Status"] == "Not Started"][0]["ID"]
+    run([wbs, "set", reg, "--id", str(rest), "--sprint-carried", S3, "--reason", "split at the close"], work)
+    ok, out = run([wbs, "split", reg, "--id", str(rest), "--delivered", "1", "--sprint", S3,
+                   "--closure", "What happened: filters begun. AC: (2) partial."], work)
+    data = json.load(io.open(reg, encoding="utf-8"))
+    check("split: a piece split again adds the rest beside it, not a level deeper",
+          ok and len([r for r in data["items"] if r.get("Parent") == 5]) == 3, out[:300])
+    check("split: the earlier sprint keeps its figures",
+          metrics(S2) == (4, 10, 1, 6, 3, 4), str(metrics(S2)))
+    ok, _ = run([wbs, "split", reg, "--id", "5", "--delivered", "1", "--closure", "x"], work)
+    check("split: a row with children is refused", not ok)
+    last = max(r["ID"] for r in data["items"])
+    run([wbs, "set", reg, "--id", str(last), "--sprint-carried", "S26.Q4.6", "--reason", "slid"], work)
+    ok, out = run([wbs, "check", reg], work)
+    check("split: a rest carried into two sprints is flagged", "carried into 2 sprints" in out, out[:300])
+
+    html = os.path.join(work, "WBS Dashboard.html")
+    ok, out = run([os.path.join(scripts, "refresh_wbs.py"), reg, html, "Atlas"], work)
+    page = io.open(html, encoding="utf-8").read() if ok else ""
+    try:
+        boards = json.loads(page.split("const BOARDS=", 1)[1].split(";\n", 1)[0])
+    except (IndexError, ValueError):
+        boards = {}
+    card = ((boards.get(S1) or {}).get("cards") or {}).get("2") or {}
+    check("dashboard: a parent card reads its children's hours in the sprint",
+          card.get("h") == 2 and card.get("pa") is True, str(card))
+    check("dashboard: total effort counts leaves only (18 + 2 + 6 + 1 + 3)", '"total_effort": 30' in page,
+          re.search(r'"total_effort": [0-9.]+', page).group(0) if '"total_effort"' in page else "none")
+    check("dashboard: the Verification tab is there", "Verification" in page)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1313,6 +1422,7 @@ def main():
         test_catalogue(root, scratch)
         test_tsp_fields(root, scratch)
         test_sync_commands(root, scratch)
+        test_effort_and_splits(root, scratch)
         test_concurrent_save(root, scratch)
         test_execution_layout(root, scratch)
         test_content_system(root, scratch)
@@ -1330,7 +1440,8 @@ def main():
                 print("  - %s" % f)
             return 1
         print("All checks passed (%d tools, plus the installer, the "
-              "reconciliation case, the catalogue, the shared modules, the "
+              "reconciliation case, the catalogue, the shared modules, effort "
+              "and splits, the "
               "concurrent-save check, the Execution layout, the "
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
