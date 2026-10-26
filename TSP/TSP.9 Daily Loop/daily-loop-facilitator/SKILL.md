@@ -11,7 +11,7 @@ Anything a person does before planning (exercise, reading, whatever puts them in
 
 ## Requirements
 
-Nothing to install. Reads git, the day records, and the WBS register through `wbs-manager` if it is installed. Uses `sprint-facilitator`'s `sprint_record.py` for the ceremony check, and `notebook-capture` for the diary offer, each when present. Without them, those steps are skipped.
+Nothing to install. Reads git, the day records, and the WBS register through `wbs-manager` if it is installed. Uses `sprint-facilitator`'s `sprint_record.py` for the ceremony check, `weekly-review-facilitator`'s records for the weekly check, and `notebook-capture` for the diary offer, each when present. Without them, those steps are skipped.
 
 ## Which moment
 
@@ -145,6 +145,8 @@ python <skills>/sprint-facilitator/scripts/sprint_record.py status "<sprint reco
 ```
 
 It prints sentences meant to be read out, or `No ceremony is due or outstanding`, in which case **say nothing**. A daily routine that reports a non-event every day trains its reader to skim. Raise a finding **before** proposing frogs: an overdue retro is a real claim on tomorrow. **Report and hand over; never run a ceremony from inside the stand-up.** A retro squeezed into the tail of a stand-up is the failure the two cadences are kept apart to prevent.
+
+**The weekly review, the same way.** Find the newest weekly record (`kind: weekly-record`). If none is newer than seven days, say so in one line ("No weekly review recorded since 18-Oct") and treat it as a frog candidate, like a ceremony that is due; `weekly-review-facilitator` runs it. If one is, say nothing. If there are no weekly records at all, say nothing: the check starts with the first review.
 
 ### 4c. Today's frogs
 

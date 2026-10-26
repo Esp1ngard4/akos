@@ -11,7 +11,7 @@ A **frog** is the most important thing to complete that day, one to three of the
 
 **The pairing is the point.** The evening chooses while the day's context is still loaded, and the morning confirms after a night's distance. Each half catches what the other cannot. They are one tool, and one skill with two flows, because the record is what joins them. The morning's decision is the one thing the evening cannot otherwise see: a frog swapped in the morning looks, by evening, exactly like a frog not done.
 
-**The evening is also a watchdog.** A routine that runs every day is where a missed fortnightly ceremony surfaces by itself. Each evening the stand-up asks the sprint records whether a ceremony is due, and raises one before proposing frogs. It reports and hands over; it never runs the ceremony.
+**The evening is also a watchdog.** A routine that runs every day is where a missed fortnightly ceremony surfaces by itself. Each evening the stand-up asks the sprint records whether a ceremony is due, and the weekly records whether a week has passed without a review, and raises either before proposing frogs. It reports and hands over; it never runs the ceremony or the review.
 
 ## Status: In Progress
 
@@ -40,7 +40,7 @@ A **frog** is the most important thing to complete that day, one to three of the
 - **The record is the product; the conversation is scaffolding.** The screen shows only what must be decided now. The record keeps only what no register already holds. Git holds what changed, the WBS holds status, effort and dates, and RAID holds the risk. A record that restates them writes the day out twice and is read once. What is left is what was believed and turned out wrong, and why a premise was rejected. A stand-up record that ran to ninety lines by restating commit messages is where this rule came from.
 - **`status: closed`, not the file's existence, is the evidence the stand-up ran.** The morning opens the record, so a file can exist for a day whose evening never ran.
 - **"What did I do today" is read from where the work leaves a trace.** A task tracker sees only work tracked as tasks. Building a tool or writing a document leaves no trace there. One day that took a governance document through four revisions and published a tool showed zero events in the tracker's activity log, so a stand-up reading only the tracker reports an empty day and is confidently wrong. Git, the registers and the day's own notes are read first.
-- **Risks are a plain question, not a scan.** Reading every RAID register each evening turns a ten-minute routine into an assessment. The scan belongs to a weekly review; the stand-up just asks.
+- **Risks are a plain question, not a scan.** Reading every RAID register each evening turns a ten-minute routine into an assessment. The scan belongs to the weekly review (TSP.11); the stand-up just asks.
 - **Inboxes are reminded, never read.** Automating triage is a bigger and riskier problem than the rest of the routine put together.
 
 ## Adapting it to your tools
@@ -80,10 +80,6 @@ The reminder can name them: "email, chat, the paper notebook". Keep it a reminde
 
 A routine that comes first (exercise, priming, reading) belongs before the Morning flow and outside it. If you want it in the record, add a line to the Morning flow in your copy, not a step.
 
-### A weekly review
-
-Not shipped in AKOS yet. Where one exists, the evening checks its records the same way it checks the sprint's, and says in one line when none has been recorded for a week.
-
 ## How it is tested
 
 `tests/smoke_test.py` installs the skill into an empty project and checks the record each flow reads from the other: the template holds the four sections and `### Morning`, and each frog marker one flow writes is one the other reads (`**Frogs for tomorrow:**` under `Next steps`, `**Frogs:**` under `### Morning`). It checks that the ceremony command the evening names exists in TSP.8, and that neither of the two skills this one replaced still ships beside it.
@@ -94,6 +90,7 @@ What is **not** tested is whether the agent drafts a good day or chooses good fr
 
 - **TSP.8 Sprint Ceremonies**: the evening runs `sprint_record.py status` and raises a ceremony that is due. The sprint decides what the fortnight holds; the loop decides what each day holds.
 - **TSP.1 WBS Register**: the work in flight, and the rows a frog cites.
+- **TSP.11 Weekly Review**: the evening says in one line when no weekly record is newer than a week. The review reads the day records and does the risk scan the stand-up leaves out.
 - **TSP.7 Notebook Manager**: takes the evening's diary offer. The diary is for reflections and memories, not for the stand-up.
 - **TSP.3 TSP Register**: row 9.
 
@@ -108,11 +105,11 @@ What is **not** tested is whether the agent drafts a good day or chooses good fr
 | Item | Detail |
 |---|---|
 | Register-only mode unexercised on real work | See *Status*. A real week run this way is what moves the tool to `Implemented` |
-| No weekly review in AKOS | The risk scan the stand-up deliberately leaves out has no home here yet |
 
 ## Version history
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-10-26 | The weekly review ships as TSP.11, so the evening checks its records: one line when no weekly record is newer than seven days, silent until the first. *A weekly review* leaves *Adapting it to your tools*, and its open item closes. **To move an installed copy:** `install.py update daily-loop-facilitator`. |
 | v1.1 | 2026-10-08 | `morning-planner` and `standup-facilitator` merged into one skill, `daily-loop-facilitator`, with a Morning and an Evening flow. v1.0 justified one tool but never two skills, and the split cost a second copy of every shared rule (the frog, the day's shape, the voice, the ground rules) and a template one skill owned and the other borrowed. Behaviour is unchanged. **To move an installed copy:** `install.py add daily-loop-facilitator`, then delete the two old folders and their entries in `tools.lock.json`; `update` on either old name reports that it no longer exists upstream. |
 | v1.0 | 2026-10-02 | Published as TSP.9. The morning and evening routines as one tool with two skills and a shared day record, run on git and the registers alone. Calendar time blocks, tracker labels and inbox reads are described as adaptations rather than shipped. |

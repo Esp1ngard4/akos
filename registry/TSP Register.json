@@ -84,6 +84,18 @@
       "Description": "TD.10 v1.1: the status report opens with the project's outcome and measures, read from its brief (templates/Project-Brief-template.md, new); On Outcome proposed and confirmed like the four, not counted in Overall.",
       "ID": 14,
       "Tool": "Reporting"
+    },
+    {
+      "Changed On": "2026-10-26",
+      "Description": "TD.11 v1.0: the weekly review published as TSP.11, run on the day records, the sprint records and the registers alone.",
+      "ID": 15,
+      "Tool": "Weekly Review"
+    },
+    {
+      "Changed On": "2026-10-26",
+      "Description": "TD.9 v1.2: the evening checks the weekly records (TSP.11) and says in one line when none is newer than seven days, silent until the first; A weekly review leaves Adapting it to your tools.",
+      "ID": 16,
+      "Tool": "Daily Loop"
     }
   ],
   "control_activities": [],
@@ -134,8 +146,8 @@
         ]
       }
     },
-    "updated": "2026-10-12T11:26:19",
-    "values_hash": "sha256:01d5b81d2831623bb4141cf1bb6269c718b6bd167558d1b11d0d4511b83be826",
+    "updated": "2026-10-26T17:01:17",
+    "values_hash": "sha256:e84a35286915e9fa9e5542edaf6000dbf3a93c2ffde5770b4ee458c4b66876c6",
     "version": 1
   },
   "tools": [
@@ -277,6 +289,20 @@
       "Skill": "reporting",
       "Status": "In Progress",
       "Type": "Tool"
+    },
+    {
+      "Description": "The weekly level between the daily loop and the sprint, with its own Markdown record per review. It reads the week's day records, goes over the work beyond the sprint in the registers (rows falling due outside it, RAID entries past their review date), checks mid-sprint whether the sprint is on track and scans the open risks, places the week ahead, and routes what it finds rather than acting on it. A task tracker, a calendar, inboxes and a goal tracker are described as adaptations, not shipped.",
+      "Doc Aux": "Yes",
+      "ID": 11,
+      "Last Reviewed": "2026-10-26",
+      "Links": "TSP/TSP.11 Weekly Review/TD.11 - Weekly Review.md",
+      "Name": "Weekly Review",
+      "Notes": "Usable: the review runs weekly on real work in its original setting. Register-only mode, as shipped, has been walked through on a scratch workspace but not yet on real work - see TD.11, Status. No code; daily-loop-facilitator, sprint-facilitator, wbs-manager, raid-manager, reporting and notebook-capture are each optional.",
+      "Primary Area": "Personal productivity",
+      "Relevancy": "Often",
+      "Skill": "weekly-review-facilitator",
+      "Status": "In Progress",
+      "Type": "Work instruction"
     }
   ]
 }

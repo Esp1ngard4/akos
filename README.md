@@ -67,6 +67,7 @@ has described.
 | TSP.8 | [Sprint Ceremonies](TSP/TSP.8%20Sprint%20Ceremonies/) — grooming, close-out, retrospective, planning | `sprint-facilitator`, `sprint-planning-precheck` |
 | TSP.9 | [Daily Loop](TSP/TSP.9%20Daily%20Loop/) — the morning plan and the evening stand-up, one record per day | `daily-loop-facilitator` |
 | TSP.10 | [Reporting](TSP/TSP.10%20Reporting/) — project status with the Essential 4, and the sprint update with its board | `reporting` |
+| TSP.11 | [Weekly Review](TSP/TSP.11%20Weekly%20Review/) — the week between the day and the sprint: beyond the sprint, the sprint check, the week ahead | `weekly-review-facilitator` |
 
 TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with
@@ -78,7 +79,8 @@ needed. Most teams already run a task tracker and a calendar, each in its own wa
 [TD.8](TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) says where
 they plug in and what to watch for, rather than pretending one setting fits all. TSP.9 is
 the same idea at the scale of a day, and its evening stand-up is what notices a sprint
-ceremony that was due.
+ceremony that was due, or a week gone without a review. TSP.11 is that weekly review: what
+falls between the day and the sprint, and whether the sprint is still on track.
 
 TSP.3 has **two** skills, which is the same claim from the other direction: one owns
 the register row, the other owns the tool definition documents, and neither does the

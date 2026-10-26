@@ -1106,6 +1106,63 @@ def test_daily_loop(root, scratch):
     check("install.py add %s" % DAILY_SKILL, ok, out)
 
 
+WEEKLY_TOOL = "TSP.11 Weekly Review"
+WEEKLY_SKILL = "weekly-review-facilitator"
+WEEK_SECTIONS = ["## Get clear", "## Last week", "## Beyond the sprint", "## Sprint check",
+                 "## The week ahead", "## Notes"]
+
+
+def test_weekly_review(root, scratch):
+    """TSP.11 has no code; what can break is its record and the commands it names.
+
+    The record's date is what the daily loop's evening reads to say a week went
+    without a review, so the template's kind and sections are asserted, and the
+    evening is checked for the weekly check. The review runs other tools'
+    scripts (sprint_record.py goals, report.py sprint); a renamed command would
+    fail only in a real review, so each one the skill names must exist.
+    """
+    print("\nTSP.11 Weekly Review")
+    tool = os.path.join(root, "TSP", WEEKLY_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    path = os.path.join(tool, WEEKLY_SKILL, "SKILL.md")
+    if not check("%s has SKILL.md" % WEEKLY_SKILL, os.path.isfile(path), path):
+        return
+    text = io.open(path, encoding="utf-8").read()
+    check("%s declares name and description" % WEEKLY_SKILL,
+          "name: %s" % WEEKLY_SKILL in text[:300] and "description:" in text[:300], text[:120])
+    check("TD.11 present", any(n.startswith("TD.11") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool), "; ".join(broken_links(tool)[:5]))
+
+    block = re.search(r"```markdown\n(---\nkind: weekly-record.*?)```", text, re.S)
+    if not check("the skill owns a weekly-record template", bool(block)):
+        return
+    template = block.group(1)
+    missing = [x for x in WEEK_SECTIONS if x not in template]
+    check("the template holds every section", not missing, ", ".join(missing))
+    check("the template carries the sprint and whether it is a planning day",
+          "sprint:" in template and "planning_day:" in template)
+
+    for script, rel in (("sprint_record.py", ("TSP.8 Sprint Ceremonies", "sprint-facilitator", "scripts", "sprint_record.py")),
+                        ("report.py", ("TSP.10 Reporting", "reporting", "scripts", "report.py"))):
+        src = io.open(os.path.join(root, "TSP", *rel), encoding="utf-8").read()
+        named = re.findall(r"%s\s+([a-z]+)" % re.escape(script), text)
+        offered = set(re.findall(r'add_parser\(\s*"([a-z]+)"', src))
+        check("every %s command the review names exists" % script,
+              named and all(c in offered for c in named), str(named))
+
+    daily = io.open(os.path.join(root, "TSP", DAILY_TOOL, DAILY_SKILL, "SKILL.md"), encoding="utf-8").read()
+    evening = daily.split("\n## Evening\n", 1)[-1]
+    check("the daily loop's evening checks for a weekly record",
+          "kind: weekly-record" in evening and WEEKLY_SKILL in evening)
+
+    project = os.path.join(scratch, "weekly-project")
+    os.makedirs(project, exist_ok=True)
+    ok, out = run([os.path.join(root, "install.py"), "add", WEEKLY_SKILL,
+                   "--into", project, "--catalogue", root], root)
+    check("install.py add %s" % WEEKLY_SKILL, ok, out)
+
+
 def test_tsp_fields(root, scratch):
     """A row written by tsp.py must be a row the dashboard can show.
 
@@ -1429,6 +1486,7 @@ def main():
         test_notebook_manager(root, scratch)
         test_sprint_ceremonies(root, scratch)
         test_daily_loop(root, scratch)
+        test_weekly_review(root, scratch)
         test_reporting(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
@@ -1445,7 +1503,7 @@ def main():
               "concurrent-save check, the Execution layout, the "
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
-              "ceremonies, the daily loop and reporting)." % len(TOOLS))
+              "ceremonies, the daily loop, the weekly review and reporting)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

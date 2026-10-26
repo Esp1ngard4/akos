@@ -30,6 +30,7 @@ python install.py add <skill> --into <your-project>
 | TSP.8 | **Sprint Ceremonies** | In Progress | `sprint-facilitator`, `sprint-planning-precheck` | [TD.8](../TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) |
 | TSP.9 | **Daily Loop** | In Progress | `daily-loop-facilitator` | [TD.9](../TSP/TSP.9%20Daily%20Loop/TD.9%20-%20Daily%20Loop.md) |
 | TSP.10 | **Reporting** | In Progress | `reporting` | [TD.10](../TSP/TSP.10%20Reporting/TD.10%20-%20Reporting.md) |
+| TSP.11 | **Weekly Review** | In Progress | `weekly-review-facilitator` | [TD.11](../TSP/TSP.11%20Weekly%20Review/TD.11%20-%20Weekly%20Review.md) |
 
 ## What each is for
 
@@ -53,6 +54,8 @@ python install.py add <skill> --into <your-project>
 
 **TSP.10 Reporting** — The project status report and the sprint update, each a JSON record and an HTML view generated from the WBS, RAID and the sprint records. The status report proposes the Essential 4 (On Time, On Scope, On Quality, Resources) with their evidence for the owner to confirm or override with a reason; the sprint update sets the last sprint's outcome beside the new sprint's commitments across projects, with the sprint's cards as a board on its own tab. Both open with an executive summary drafted in plain language and confirmed by the owner.
 
+**TSP.11 Weekly Review** — The weekly level between the daily loop and the sprint, with its own Markdown record per review. It reads the week's day records, goes over the work beyond the sprint in the registers (rows falling due outside it, RAID entries past their review date), checks mid-sprint whether the sprint is on track and scans the open risks, places the week ahead, and routes what it finds rather than acting on it. A task tracker, a calendar, inboxes and a goal tracker are described as adaptations, not shipped.
+
 ## Status meanings
 
 | Status | Meaning |
@@ -64,4 +67,4 @@ python install.py add <skill> --into <your-project>
 
 ---
 
-Generated from `registry/TSP Register.json` on 2026-10-12.
+Generated from `registry/TSP Register.json` on 2026-10-26.
