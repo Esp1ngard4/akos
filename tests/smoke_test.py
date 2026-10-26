@@ -1163,6 +1163,75 @@ def test_weekly_review(root, scratch):
     check("install.py add %s" % WEEKLY_SKILL, ok, out)
 
 
+TRACKER_TOOL = "TSP.12 Action Tracker"
+TRACKER_SKILL = "action-tracker-manager"
+TRACKER_META = ["scope:", "owner:", "anchor:", "related_wbs:", "related_raid:",
+                "created:", "last_reviewed:", "status:"]
+TRACKER_SECTIONS = ["## Current position", "## Sections", "## Status key", "## Attention required",
+                    "### Actions", "## Closed actions", "## Update history"]
+TRACKER_STATUS = ["⬜ Not Started", "🔄 In Progress", "⛔ Blocked", "✅ Done", "🚫 Cancelled"]
+
+
+def test_action_tracker(root, scratch):
+    """TSP.12 has no code; what can break is the template and the rules around it.
+
+    A tracker is edited by hand and by the agent, so the template is the only
+    shape every tracker starts from: its meta keys, its sections, the five
+    status values, and the Status column that tells a dropped action from a
+    delivered one. The two date rules the walk-through added (a dated Latest
+    update, a TBD's checkpoint in the Due date cell) must survive in both the
+    template and the conventions, and the weekly review must still read the
+    trackers. Create, update and close are exercised in the walk-through in
+    TD.12, since there is no script to run.
+    """
+    print("\nTSP.12 Action Tracker")
+    tool = os.path.join(root, "TSP", TRACKER_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    skill = os.path.join(tool, TRACKER_SKILL)
+    path = os.path.join(skill, "SKILL.md")
+    if not check("%s has SKILL.md" % TRACKER_SKILL, os.path.isfile(path), path):
+        return
+    text = io.open(path, encoding="utf-8").read()
+    check("%s declares name and description" % TRACKER_SKILL,
+          "name: %s" % TRACKER_SKILL in text[:300] and "description:" in text[:300], text[:120])
+    check("TD.12 present", any(n.startswith("TD.12") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool), "; ".join(broken_links(tool)[:5]))
+    check("the tool ships no scripts", not os.path.isdir(os.path.join(skill, "scripts")))
+
+    template_path = os.path.join(skill, "templates", "action-tracker.md")
+    if not check("the template is shipped", os.path.isfile(template_path), template_path):
+        return
+    template = io.open(template_path, encoding="utf-8").read()
+    meta = re.match(r"<!-- action-tracker-meta\n(.*?)-->", template, re.S)
+    check("the template opens with the meta block", bool(meta), template[:80])
+    missing = [k for k in TRACKER_META if not meta or k not in meta.group(1)]
+    check("the meta block holds every key", not missing, ", ".join(missing))
+    missing = [x for x in TRACKER_SECTIONS if x not in template]
+    check("the template holds every section", not missing, ", ".join(missing))
+    missing = [x for x in TRACKER_STATUS if x not in template]
+    check("the template names the five status values", not missing, ", ".join(missing))
+    closed = template.split("## Closed actions", 1)[-1].split("\n|", 1)[-1].split("\n", 1)[0]
+    check("closed actions keep their Status", "Status" in closed, closed)
+    check("the template's TBD carries its checkpoint", "TBD · checkpoint YYYY-MM-DD" in template)
+
+    conv_path = os.path.join(skill, "references", "conventions.md")
+    if check("the conventions are shipped", os.path.isfile(conv_path), conv_path):
+        conv = io.open(conv_path, encoding="utf-8").read()
+        check("the conventions state the ID, checkpoint and dated-update rules",
+              "<CODE>-NN" in conv and "TBD · checkpoint" in conv and "opens with its date" in conv)
+
+    weekly = io.open(os.path.join(root, "TSP", WEEKLY_TOOL, WEEKLY_SKILL, "SKILL.md"), encoding="utf-8").read()
+    check("the weekly review reads the trackers",
+          "action-tracker-meta" in weekly and TRACKER_SKILL in weekly)
+
+    project = os.path.join(scratch, "tracker-project")
+    os.makedirs(project, exist_ok=True)
+    ok, out = run([os.path.join(root, "install.py"), "add", TRACKER_SKILL,
+                   "--into", project, "--catalogue", root], root)
+    check("install.py add %s" % TRACKER_SKILL, ok, out)
+
+
 def test_tsp_fields(root, scratch):
     """A row written by tsp.py must be a row the dashboard can show.
 
@@ -1487,6 +1556,7 @@ def main():
         test_sprint_ceremonies(root, scratch)
         test_daily_loop(root, scratch)
         test_weekly_review(root, scratch)
+        test_action_tracker(root, scratch)
         test_reporting(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)

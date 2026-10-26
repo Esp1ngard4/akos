@@ -1,6 +1,6 @@
 ---
 name: weekly-review-facilitator
-description: Runs the weekly review - the level between the daily loop and the sprint. It reminds the get-clear pass, reads the week's day records, goes over the work beyond the sprint in the registers (rows falling due outside it, RAID entries past their review date), checks mid-sprint whether the sprint is on track and scans the open risks and issues, places the week ahead, and writes the week's record. Use whenever the user says "let's do my weekly review", "weekly review", "review the week", "plan my week", or asks whether the weekly review ran. Not for sprint planning, grooming, the close-out or the retro (that is sprint-facilitator), and not for the daily stand-up (that is daily-loop-facilitator).
+description: Runs the weekly review - the level between the daily loop and the sprint. It reminds the get-clear pass, reads the week's day records, goes over the work beyond the sprint in the registers (rows falling due outside it, RAID entries past their review date, overdue action-tracker rows owed by others), checks mid-sprint whether the sprint is on track and scans the open risks and issues, places the week ahead, and writes the week's record. Use whenever the user says "let's do my weekly review", "weekly review", "review the week", "plan my week", or asks whether the weekly review ran. Not for sprint planning, grooming, the close-out or the retro (that is sprint-facilitator), and not for the daily stand-up (that is daily-loop-facilitator).
 ---
 
 # Weekly Review Facilitator
@@ -11,12 +11,13 @@ Once a week, the review keeps the whole system trustworthy. The sprint ceremonie
 
 ## Requirements
 
-Nothing to install. Reads the day records (`daily-loop-facilitator`), the sprint records and `sprint-facilitator`'s `sprint_record.py`, the WBS and RAID registers, and `reporting`'s `report.py` for the sprint update, each when present. Uses `notebook-capture` for the closing offer. Without any of them, that step is skipped and the record says so.
+Nothing to install. Reads the day records (`daily-loop-facilitator`), the sprint records and `sprint-facilitator`'s `sprint_record.py`, the WBS and RAID registers, the action trackers (`action-tracker-manager`), and `reporting`'s `report.py` for the sprint update, each when present. Uses `notebook-capture` for the closing offer. Without any of them, that step is skipped and the record says so.
 
 ## Relationship to other skills: facilitate, don't duplicate
 
 - **Sprint ceremonies:** `sprint-facilitator` owns them. This review never runs one; a finding goes to the sprint record's `## Noticed`, where the next ceremony looks.
 - **WBS and RAID:** read the registers; any change to a row or an entry goes through `wbs-manager` or `raid-manager`, never an edit here.
+- **Action trackers:** read them; a chase goes through `action-tracker-manager`, never an edit here.
 - **The day records:** `daily-loop-facilitator`'s, read-only here.
 - **The week's record:** this skill's own.
 - **The notebook:** only on a yes at step 7, through `notebook-capture`. Never write a notebook directly.
@@ -89,6 +90,7 @@ Pull both, then present once.
 
 - **Falling due outside the sprint:** WBS rows not committed to the current sprint, not `Done` or `Cancelled`, whose `Planned End` falls in the coming week or has passed. The register writes dates as `2026-Oct-2`, with no leading zero; compare in that form. For each, the user decides: **pull it in** (with its effect on committed work, through `wbs-manager`), **re-plan it** (a new promise, said out loud), or **leave it** (and say why). Never move a date as tidying.
 - **Waiting on someone:** open RAID entries whose `Review On` or `Next Review On` has passed, and open `Action` entries whose `DRI` is not the user. **The user, in a register, is its author** (`meta.settings.author`, which `raid-manager` writes); when none is set, ask once how they appear in the registers. Name them, and ask which need a chase. A chase is a log entry through `raid-manager`, on a yes.
+- **Waiting on someone, in the action trackers:** every active tracker (`action-tracker-manager`; files opening with an `action-tracker-meta` block, `status: Active`). Open rows whose `Owner` is not the tracker's `owner` and whose due date has passed, or whose `TBD` has no checkpoint or a passed one (`TBD · checkpoint YYYY-MM-DD`, in the Due date cell). **Three at most**: a `TBD` with no checkpoint first, then the most overdue, with the count of the rest. A chase is the row's `Latest update`, through `action-tracker-manager`, on a yes.
 
 Propose the changes as one batch; apply only the ones confirmed.
 

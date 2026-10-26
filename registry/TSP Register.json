@@ -96,6 +96,18 @@
       "Description": "TD.9 v1.2: the evening checks the weekly records (TSP.11) and says in one line when none is newer than seven days, silent until the first; A weekly review leaves Adapting it to your tools.",
       "ID": 16,
       "Tool": "Daily Loop"
+    },
+    {
+      "Changed On": "2026-10-26",
+      "Description": "TSP.12 published: the action tracker, re-scoped for a team, with dated updates and the TBD checkpoint in the Due date cell from its dry run.",
+      "ID": 17,
+      "Tool": "Action Tracker"
+    },
+    {
+      "Changed On": "2026-10-26",
+      "Description": "TD.11 v1.1: Waiting on someone also reads the action trackers (TSP.12): rows owed by others that are overdue, or TBD with no checkpoint or a passed one, three at most.",
+      "ID": 18,
+      "Tool": "Weekly Review"
     }
   ],
   "control_activities": [],
@@ -146,8 +158,8 @@
         ]
       }
     },
-    "updated": "2026-10-26T17:01:17",
-    "values_hash": "sha256:e84a35286915e9fa9e5542edaf6000dbf3a93c2ffde5770b4ee458c4b66876c6",
+    "updated": "2026-10-26T21:54:30",
+    "values_hash": "sha256:33998a4cdca9d4987cf4b24bab6ca5b90915d577d7968e658b208f8fea4fe962",
     "version": 1
   },
   "tools": [
@@ -303,6 +315,20 @@
       "Skill": "weekly-review-facilitator",
       "Status": "In Progress",
       "Type": "Work instruction"
+    },
+    {
+      "Description": "A team's shared list of the small actions agreed in a piece of work's sessions, one Markdown file per piece of work, below the deliverables the WBS tracks and the governed items RAID holds. Every action whoever owes it, the owner named rather than assumed; filed in the support folder of the WBS row or RAID item it serves and indexed nowhere. No scripts. A personal task manager, a ticketing tool and meeting notes are described as adaptations, not shipped.",
+      "Doc Aux": "Yes",
+      "ID": 12,
+      "Last Reviewed": "2026-10-26",
+      "Links": "TSP/TSP.12 Action Tracker/TD.12 - Action Tracker.md",
+      "Name": "Action Tracker",
+      "Notes": "Not yet used on real work: walked through once on a scratch workspace, which added dated updates, the checkpoint in the Due date cell and a Status for closed actions - see TD.12, Status. No code; wbs-manager and raid-manager are optional, for the anchors and their folders.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "action-tracker-manager",
+      "Status": "In Progress",
+      "Type": "Tool"
     }
   ]
 }

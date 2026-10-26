@@ -25,7 +25,7 @@ The weekly level of the loop, between the day and the sprint.
 | `weekly-review-facilitator` | `weekly-review-facilitator/SKILL.md` | The review's steps. **Owns the week's record template** |
 | Your weekly records | wherever you keep them; found by `kind: weekly-record` | **Source of truth**: one Markdown file per review |
 
-**Dependencies, all optional.** `daily-loop-facilitator` (TSP.9) writes the day records the review reads. `sprint-facilitator` (TSP.8) provides the goals and the sprint record's `Noticed`. `wbs-manager` (TSP.1) and `raid-manager` (TSP.2) hold the work and the risks. `reporting` (TSP.10) refreshes the sprint update for the sprint check. `notebook-capture` (TSP.7) takes the closing offer. Without any of them, that step is skipped and the record says so.
+**Dependencies, all optional.** `daily-loop-facilitator` (TSP.9) writes the day records the review reads. `sprint-facilitator` (TSP.8) provides the goals and the sprint record's `Noticed`. `wbs-manager` (TSP.1) and `raid-manager` (TSP.2) hold the work and the risks. `action-tracker-manager` (TSP.12) holds the small actions agreed with others. `reporting` (TSP.10) refreshes the sprint update for the sprint check. `notebook-capture` (TSP.7) takes the closing offer. Without any of them, that step is skipped and the record says so.
 
 ## What the skill covers (and this document doesn't repeat)
 
@@ -35,7 +35,7 @@ The weekly level of the loop, between the day and the sprint.
 
 - **A level of its own.** The daily stand-up is kept to ten minutes by leaving out anything that needs a table, a scan or a decision about the week. The sprint ceremonies run once a fortnight and look at the sprint. Between them, things go stale: an entry waiting on someone with nothing to bring it back, a date outside the sprint that passes unnoticed, a risk nobody looked at since planning, a deliverable three weeks out that needs preparing now. The weekly review is where those surface.
 - **The sprint check runs mid-sprint only.** On a sprint's first day, the close-out and planning covered the sprint the day before; the review reads the new plan instead of checking an old one.
-- **Beyond the sprint is read from the registers.** In its original setting this was a task tracker's inbox, overdue list and waiting-fors. Here the same questions are asked of the registers: rows outside the sprint whose planned end has come, RAID entries past their review date or waiting on someone else. A row falling due is never re-dated as tidying: it is pulled in with its effect, re-planned as a new promise, or left with a reason.
+- **Beyond the sprint is read from the registers.** In its original setting this was a task tracker's inbox, overdue list and waiting-fors. Here the same questions are asked of the registers: rows outside the sprint whose planned end has come, RAID entries past their review date or waiting on someone else. The action trackers are read the same way: rows owed by others that are overdue, or `TBD` with no checkpoint or a passed one, three at most. A row falling due is never re-dated as tidying: it is pulled in with its effect, re-planned as a new promise, or left with a reason.
 - **The record is the product; the conversation is scaffolding.** The record keeps only what no register already holds. Its date is the evidence the review ran, which the daily loop's evening reads.
 - **Findings are routed, not acted on.** A finding goes to the sprint record's `Noticed`, a chase to a RAID log entry, a pull-in through `wbs-manager`, each on a yes. The review never runs a ceremony or edits a register directly.
 - **Inboxes and personal trackers are reminded, never read.**
@@ -91,6 +91,7 @@ Not shipped in AKOS yet. Where one exists, the sprint check adds a line for comm
 - **TSP.9 Daily Loop**: writes the day records the review reads, and its evening says when no weekly record is newer than a week. The risk scan the stand-up leaves out happens here.
 - **TSP.8 Sprint Ceremonies**: the goals, and the `Noticed` table where findings go. The review never runs a ceremony.
 - **TSP.1 WBS Register** and **TSP.2 RAID Register**: the work beyond the sprint, the committed work, and the risks.
+- **TSP.12 Action Tracker**: the actions owed by others, read in *Waiting on someone*; a chase goes through its skill.
 - **TSP.10 Reporting**: the sprint update, refreshed for the sprint check.
 - **TSP.7 Notebook Manager**: takes the closing offer.
 - **TSP.3 TSP Register**: row 11.
@@ -112,4 +113,5 @@ Not shipped in AKOS yet. Where one exists, the sprint check adds a line for comm
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-26 | *Waiting on someone* also reads the action trackers (TSP.12): rows owed by someone other than the tracker's owner that are past their due date, or `TBD` with no checkpoint or a passed one, three at most, the missing checkpoints first. A chase is the row's Latest update, through `action-tracker-manager`. |
 | v1.0 | 2026-10-26 | Published as TSP.11. The weekly review as one skill with its own record, run on the day records, the sprint records and the registers alone: beyond the sprint read from the registers, the sprint check mid-sprint only, findings routed rather than acted on. A task tracker, a calendar, inboxes and a goal tracker are described as adaptations rather than shipped. |

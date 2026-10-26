@@ -68,6 +68,7 @@ has described.
 | TSP.9 | [Daily Loop](TSP/TSP.9%20Daily%20Loop/) — the morning plan and the evening stand-up, one record per day | `daily-loop-facilitator` |
 | TSP.10 | [Reporting](TSP/TSP.10%20Reporting/) — project status with the Essential 4, and the sprint update with its board | `reporting` |
 | TSP.11 | [Weekly Review](TSP/TSP.11%20Weekly%20Review/) — the week between the day and the sprint: beyond the sprint, the sprint check, the week ahead | `weekly-review-facilitator` |
+| TSP.12 | [Action Tracker](TSP/TSP.12%20Action%20Tracker/) — a team's shared list of the small actions agreed in a piece of work's sessions | `action-tracker-manager` |
 
 TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with
@@ -81,6 +82,8 @@ they plug in and what to watch for, rather than pretending one setting fits all.
 the same idea at the scale of a day, and its evening stand-up is what notices a sprint
 ceremony that was due, or a week gone without a review. TSP.11 is that weekly review: what
 falls between the day and the sprint, and whether the sprint is still on track.
+TSP.12 is the layer below the registers: the small actions a working session agrees,
+kept in one Markdown file the whole group can read and edit, filed with the work it serves.
 
 TSP.3 has **two** skills, which is the same claim from the other direction: one owns
 the register row, the other owns the tool definition documents, and neither does the
