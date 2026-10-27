@@ -1214,15 +1214,31 @@ def cmd_migrate(args):
 
     settings = data.setdefault("meta", {}).setdefault("settings", {})
     vocabs = settings.setdefault("vocabularies", {})
-    for name, values in (("type", C.TYPES), ("class", C.CLASSES),
-                         ("nature", C.NATURES), ("horizon", C.HORIZONS),
-                         ("delivers", C.DELIVERS), ("key deliverable", C.YESNO)):
-        if vocabs.get(name) != values:
-            vocabs[name] = values
+    # A register's vocabulary is the standard one plus any values the project
+    # added itself. Migrating adds what the standard has and the register lacks,
+    # and renames a value the standard renamed; it never drops one the project
+    # added, which would turn every row using it into an error.
+    for name, values, renames in (("type", C.TYPES, {}), ("class", C.CLASSES, {}),
+                                  ("nature", C.NATURES, {}), ("horizon", C.HORIZONS, {}),
+                                  ("delivers", C.DELIVERS, {}), ("key deliverable", C.YESNO, {}),
+                                  ("status", C.STATUSES, {"Backlog": "Portfolio Backlog"})):
+        have = vocabs.get(name)
+        if not have:
+            vocabs[name] = list(values)
             notes.append("vocabulary %r registered" % name)
-    if vocabs.get("status") != C.STATUSES:
-        vocabs["status"] = C.STATUSES
-        notes.append("vocabulary 'status' corrected (Portfolio Backlog)")
+            continue
+        renamed = [renames.get(v, v) for v in have]
+        added = [v for v in values if v not in renamed]
+        merged = [v for v in values] + [v for v in renamed if v not in values]
+        if added or renamed != have:
+            vocabs[name] = merged
+            notes.append("vocabulary %r: %s%s" % (
+                name, "added " + ", ".join(added) if added else "",
+                ("; " if added else "") + "renamed " + ", ".join(
+                    "%s -> %s" % (a, b) for a, b in renames.items() if a in have) if renamed != have else ""))
+        own = [v for v in renamed if v not in values]
+        if own and (added or renamed != have):
+            notes.append("vocabulary %r keeps the register's own: %s" % (name, ", ".join(own)))
     for row in items:
         if row.get("Status") == "Backlog":
             row["Status"] = "Portfolio Backlog"

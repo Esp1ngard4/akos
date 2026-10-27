@@ -156,6 +156,12 @@
       "Description": "TD.13 v1.1: the close-out, the weekly review and reporting now use the register.",
       "ID": 26,
       "Tool": "Stakeholder Register"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.1 v1.11: migrate adds the standard vocabulary values a register lacks and keeps the project's own, instead of replacing the list.",
+      "ID": 27,
+      "Tool": "WBS Register"
     }
   ],
   "control_activities": [],
@@ -206,8 +212,8 @@
         ]
       }
     },
-    "updated": "2026-10-27T10:50:11",
-    "values_hash": "sha256:8dc9bd902e9d4c63d0b1454e7792f71bccbb70e4bd3668b27712aa7a59bd7bee",
+    "updated": "2026-10-27T11:27:53",
+    "values_hash": "sha256:32101b5a7d590dc5e0220c97a5c39e60048124a94dd050f766e7d8ae53ce78ee",
     "version": 1
   },
   "tools": [

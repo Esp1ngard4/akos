@@ -1835,6 +1835,35 @@ def test_raid_lessons(root, scratch):
           ok and ".badge-lesson" in bhtml and "'Applied By'" in bhtml, out)
 
 
+def test_migrate_vocabulary(root, scratch):
+    """migrate adds what a register's vocabulary lacks and never drops a value
+    the project added: dropping one turns every row using it into an error."""
+    import json
+    print("\nMigrate keeps a register's own vocabulary")
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    work = os.path.join(scratch, "vocab")
+    os.makedirs(work, exist_ok=True)
+    reg = os.path.join(work, "WBS Atlas.json")
+    run_raw([os.path.join(scripts, "create_wbs.py"), reg, "Atlas"], work)
+    data = json.load(io.open(reg, encoding="utf-8"))
+    vocab = data["meta"]["settings"]["vocabularies"]
+    vocab["delivers"] = ["Tool", "Document", "Capability"]
+    vocab["status"] = ["Backlog" if v == "Portfolio Backlog" else v for v in vocab["status"]]
+    data["items"] = [{"ID": 1, "Title": "A capability", "Type": "Feature", "Class": "Product", "Nature": "Build",
+                      "Status": "Not Started", "Delivers": "Capability"}]
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data))
+    ok, out = run_raw([os.path.join(scripts, "wbs.py"), "migrate", reg, "--apply"], work)
+    vocab = json.load(io.open(reg, encoding="utf-8"))["meta"]["settings"]["vocabularies"]
+    check("migrate: the register's own value is kept, the standard's missing ones added",
+          ok and "Capability" in vocab["delivers"] and "Process" in vocab["delivers"], out[:300])
+    check("migrate: a renamed standard value is renamed in place",
+          "Portfolio Backlog" in vocab["status"] and "Backlog" not in vocab["status"], str(vocab["status"]))
+    ok, out = run_raw([os.path.join(scripts, "wbs.py"), "check", reg], work)
+    check("migrate: rows using the register's own value still pass check", " 0 error(s)" in out, out[-200:])
+    ok, out = run_raw([os.path.join(scripts, "wbs.py"), "migrate", reg], work)
+    check("migrate: a second run has nothing to do", "0 change(s)" in out, out[:200])
+
+
 def test_effort_and_splits(root, scratch):
     """Effort that rolls up, requirements that say whether they were verified,
     and partly done work split so its hours count where they were done.
@@ -1975,6 +2004,7 @@ def main():
         test_sync_commands(root, scratch)
         test_effort_and_splits(root, scratch)
         test_pull_ins(root, scratch)
+        test_migrate_vocabulary(root, scratch)
         test_raid_lessons(root, scratch)
         test_concurrent_save(root, scratch)
         test_execution_layout(root, scratch)

@@ -385,7 +385,7 @@ Definitions for each level are in "The four axes" above. All six vocabularies li
 python <skill-path>/scripts/wbs.py migrate "<register>" [--apply]
 ```
 
-Dry run unless `--apply`. Maps the old single-axis `Type` onto the three axes (`Tool` → Feature + Delivers Tool, `Improve` → Story + Nature Improve, and so on), fills `Parent` from the `Code` strings, registers the vocabularies, and drops `key_deliverables` **only if it is empty** — populated rows are flagged instead, since folding them into `items` as Feature rows is a judgment call. Snapshot the register first.
+Dry run unless `--apply`. Maps the old single-axis `Type` onto the three axes (`Tool` → Feature + Delivers Tool, `Improve` → Story + Nature Improve, and so on), fills `Parent` from the `Code` strings, brings the vocabularies up to date, and drops `key_deliverables` **only if it is empty** — populated rows are flagged instead, since folding them into `items` as Feature rows is a judgment call. **A register's own vocabulary values are kept**: the standard values it lacks are added and a renamed one is renamed in place, but a value the project added (a `Delivers` of its own, say) is never dropped, since every row using it would become an error. Snapshot the register first.
 
 The mapping is a sensible default, not an oracle: `DocSection` becomes a Story, which is right for a leaf section and wrong for a top-level deliverable that happens to produce documents. Read what it did before accepting it.
 
