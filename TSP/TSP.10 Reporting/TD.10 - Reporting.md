@@ -4,12 +4,15 @@
 
 Say how the work is going, to someone who does not read the registers. Reports are generated from the WBS, RAID and the sprint records, never written from memory, and each one opens with a short summary that a stakeholder can follow without any of the codes the registers use.
 
-Two reports ship:
+Three reports ship:
 
 - **The project status report**: what the project is for and whether it is getting there (its outcome and measures, from the project's brief), then the *Essential 4* (On Time, On Scope, On Quality, Resources), each proposed from the registers with its evidence and confirmed by the person who owns the project, plus the decisions and help the project needs, its key deliverables by month and its top risks.
 - **The sprint update**, after sprint planning: the last sprint's outcome beside the new sprint's commitments, across every project the sprint touches, with the sprint's cards as a board on a tab of their own.
+- **The project charter**, on demand: the project on one page for someone who reads none of the registers, from its brief and its registers, each section naming its source.
 
-**A report is three layers, and only the last one is built here.** The *data* lives in the registers. The *audience* (who receives which report, how often, through which channel) is a communications plan, not built here: until there is one, every report has one reader, the person running the work. The *views* are this tool. Scaling up means adding a view or a reader, not another tool.
+Any of them can be shared outside the work as a filtered copy (`export`), as HTML and optionally PDF.
+
+**A report is three layers, and only the last one is built here.** The *data* lives in the registers. The *audience* (who receives which report, how often, through which channel, at what share level) is the project's Stakeholder Register (TSP.13): with none, a report has one reader, the person running the work. The *views* are this tool. Scaling up means adding a view or a reader, not another tool.
 
 ## Status: In Progress
 
@@ -17,7 +20,7 @@ Two reports ship:
 |---|---|
 | Both reports | Run every sprint on real work in their original setting, where the status report is generated at the sprint close-out and the sprint update after planning |
 | As shipped here | Exercised end to end on a scratch project built with AKOS's own tools (`tests/smoke_test.py`); **not yet used on real work in this form** |
-| Not here yet | Audience filtering (what an external reader may see) and export to PDF. Being built in the original setting; will follow |
+| Sharing and the charter | Audiences, the external copy and the charter run in their original setting since October; here they are exercised by the smoke test only |
 
 ## Components
 
@@ -27,8 +30,9 @@ Two reports ship:
 | `reporting` | `reporting/SKILL.md`, `reporting/scripts/report.py` | The reports, the confirm flow and the rules for the executive summary |
 | Each report's record | `<project>/Reports/Status/<date> Status.json`; `Reports/Sprint Update/<sprint ID> Sprint Update.json` beside the sprint records | **Source of truth for a report**: what it found, then the confirmations, overrides and summary |
 | Each report's view | the same name, `.html` | Generated from the record; never edited by hand |
+| A shared copy | `<name> (external).html` (and `.pdf`), beside the record | What goes to someone outside the work, from `export` |
 
-**Dependencies.** `wbs-manager` (TSP.1) and `sprint-facilitator` (TSP.8) are required: the reports read the WBS through the WBS tool's own modules and `metrics`, and the sprint goals through `sprint_record.py goals`. `raid-manager` (TSP.2) is optional; without a RAID register the reports carry no risks, Changes or help.
+**Dependencies.** `wbs-manager` (TSP.1) and `sprint-facilitator` (TSP.8) are required: the reports read the WBS through the WBS tool's own modules and `metrics`, and the sprint goals through `sprint_record.py goals`. `raid-manager` (TSP.2) is optional; without a RAID register the reports carry no risks, Changes or help. `stakeholder-manager` (TSP.13) is optional; without it every project runs on the solo default.
 
 ## What the SKILL.md covers (and this document doesn't repeat)
 
@@ -48,6 +52,14 @@ Two reports ship:
 
 **The brief carries what the report needs.** There is no portfolio register here, so the outcome, what the project serves and its measures all live in the project's brief, beside its registers, written from `templates/Project-Brief-template.md`. A small project's brief is lean (no Measures table), and its report simply has no *On Outcome*.
 
+**What leaves the project is opted in, entry by entry.** An external copy holds a RAID entry only when it is marked `Sharable = Y`; one nobody has thought about stays internal. It drops what names who the work waits on, the evidence under each rating, the card-level board and the facts block, and it refuses a report whose ratings or summary are not confirmed: only what was agreed is shared. The share level comes from the communication that sends the report, so the register and the copy cannot disagree.
+
+**The charter is generated, never written.** A brief is where the words are authored; the registers hold the rest. A charter written by hand would be a third copy that drifts. Nothing in it is rated, so it can be shared straight away, and a shared charter shows stakeholders by role and group, never by name.
+
+**One trend convention: up is better.** Every report and the RAID board draw a trend the same way, an arrow in a tinted circle, with a key at the foot of the page. Records store the level, never the arrow, so no reader has to know which way an arrow pointed; records written under the older convention read correctly.
+
+**Explanations stay out of the reader's way.** How to read a section sits behind an info icon beside its title, opened by hover or tap, and printed inline; what the reader acts on stays on the page.
+
 **What waits on the reader is a request, not a record.** *Decisions required* lists Changes awaiting an outcome. A RAID Decision records a choice already made and asks nothing of anyone.
 
 **The sprint update stands on its own, and comes after planning.** A sprint spans projects: its goals, capacity and effort belong to the person, not to a register, so its story is a cross-project report, and a status report covers only its project. The update is an executive overview for people outside the work. Its card-level board is a deep dive, so it sits on its own tab: the overview is what opens and what prints.
@@ -59,7 +71,8 @@ Two reports ship:
 - **WBS Register (TSP.1)**: the source of deliverables, baselines, closures and sprint membership. The reports never write to it.
 - **RAID Register (TSP.2)**: risks, issues, Changes and their outcomes, and each entry's DRI and trend. Read only.
 - **Sprint Ceremonies (TSP.8)**: the close-out generates a status report per project, and planning ends with the sprint update. The sprint records supply goals, capacity and the fist of five.
-- **Nothing is sent anywhere.** A report is two files. Sharing one is the owner's act, through whatever channel the audience uses.
+- **Stakeholder Register (TSP.13)**: who receives each report and at what share level, read through its own module; contacts are never read.
+- **Nothing is sent anywhere.** A report is two files, and a shared copy a third. Sending it is the owner's act, through whatever channel the audience uses.
 
 ## Maintenance
 
@@ -71,13 +84,13 @@ Two reports ship:
 
 | Item | Detail |
 |---|---|
-| Audience filtering and export | Filter RAID rows by whether they are sharable for each audience a communications plan names; export to PDF for an external reader, printed from the view. Nothing marked not sharable may reach an external export |
+| A monthly report and the focus index | The original setting has a monthly review whose report counts active projects and a focus index (how thinly the committed hours were spread). AKOS has no monthly review, so neither ships here |
 | Reading measured values automatically | Before a status report the due measures are read by hand; reading them from their sources is for later |
 
 ## Version history
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.3 | 2026-10-27 | **Reports can be shared, and a charter says what the project is.** `export` writes a filtered copy for someone outside the work, as HTML and optionally PDF, holding only RAID entries marked `Sharable = Y` and refusing an unconfirmed report; `--comm` takes the share level from the project's Stakeholder Register, and a status report records who receives it. `report.py charter` puts the project on one page from its brief and registers. Trends are drawn one way everywhere, up is better, as chips with a key; explanations sit behind an info icon; the key deliverables map stacks on a phone. *On Time* counts only a rebaseline to a later date. |
 | v1.2 | 2026-10-22 | **Sprint hours come from leaves.** The sprint update's board cards take their hours from `wbs.py sprint_board`, where a parent's are its children's on the board, and lane and column totals add leaves only; the *Delivered* list does the same. The figures read from `wbs.py metrics` follow TD.1 v1.9 with no change here. |
 | v1.1 | 2026-10-12 | **The status report says what the project is for, and whether it is getting there.** An Outcome section opens it, read from the project's brief (`templates/Project-Brief-template.md`, new): the outcome, what it serves, the done-when list, and each measure scored 0-1 against its pace, with trend and flags for behind pace, past due and stale. *On Outcome* is proposed and confirmed like the four, not counted in Overall. No brief or a lean one: the report runs as before; a broken table: findings, not failure. |
-| v1.0 | 2026-10-12 | Published as TSP.10: the project status report and the sprint update, each a JSON record and an HTML view, with the Essential 4 proposed and confirmed, the executive summary drafted and confirmed, and the sprint board on its own tab. Runs on AKOS's own registers and sprint records; needs structured sprint goals (TD.8 v1.2) and the RAID register's Changes and Trend (TD.2 v1.5). |

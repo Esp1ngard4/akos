@@ -46,11 +46,87 @@ def sibling(skill):
 
 
 WBS_SCRIPTS = os.path.join(sibling("wbs-manager"), "scripts")
+
+
+def optional_sibling(skill):
+    """A sibling skill's folder, or None when it is not installed."""
+    skills = os.path.dirname(os.path.dirname(HERE))
+    for path in [os.path.join(skills, skill)] + sorted(
+            glob.glob(os.path.join(skills, "..", "*", skill))):
+        if os.path.isdir(path):
+            return os.path.abspath(path)
+    return None
+
+
+# ─── Stakeholders (stakeholder-manager, TSP.13) ─────────────────────────────
+#
+# Who receives a report comes from the project's Stakeholder Register, through
+# its own module: a communication names the report it carries and resolves to a
+# share level, owner or external, the same two words as AUDIENCES. A project
+# with no register, or with stakeholder-manager not installed, gets the solo
+# default (one status report, to the owner), which is what this tool assumed
+# before, so such a report reads exactly as it did. Contacts are never read:
+# no address reaches a record or a view.
+
+_STK = []
+
+
+def _stk():
+    if not _STK:
+        folder = optional_sibling("stakeholder-manager")
+        module = None
+        if folder:
+            scripts = os.path.join(folder, "scripts")
+            if scripts not in sys.path:
+                sys.path.append(scripts)
+            import stk_register as module
+        _STK.append(module)
+    return _STK[0]
+
+
+def solo_default(scope=""):
+    return {"meta": {"kind": "stakeholder-register", "scope": scope, "default": True, "settings": {}},
+            "groups": [],
+            "stakeholders": [{"ID": "S.1", "Name": "Owner", "Role": "Project manager", "Share Level": "owner",
+                              "Status": "Active"}],
+            "communications": [{"ID": "C.1", "What": "Status report", "Report": "status-report", "Mode": "push",
+                                "Audience": ["S.1"], "Cadence": "per sprint", "Status": "Active"}],
+            "change_log": []}
+
+
+def stakeholders(prjmgm, scope=""):
+    STK = _stk()
+    return STK.load_or_default(prjmgm, scope=scope) if STK else solo_default(scope)
+
+
+def resolve_people(data, comm):
+    """[(name, share level)] for a communication, each person once."""
+    STK = _stk()
+    if STK:
+        return [(x["Name"], x["Share Level"]) for x in STK.resolve_audience(data, comm)["people"]]
+    people = {p.get("ID"): p for p in data.get("stakeholders", [])}
+    return [(people[r].get("Name"), people[r].get("Share Level", "owner"))
+            for r in comm.get("Audience") or [] if r in people]
+
+
+def audiences(prjmgm, scope, kind):
+    """Each active communication carrying a report kind: what it is, how often,
+    its share level and its recipients' names."""
+    data = stakeholders(prjmgm, scope)
+    comms = []
+    for comm in data.get("communications", []):
+        if R.clean(comm.get("Status")) not in ("", "Active") or comm.get("Report") != kind:
+            continue
+        people = resolve_people(data, comm)
+        level = "external" if any(lv == "external" for _n, lv in people) else "owner"
+        comms.append({"id": comm.get("ID"), "what": comm.get("What"), "cadence": comm.get("Cadence"),
+                      "share_level": level, "recipients": [n for n, _lv in people]})
+    return {"default": bool(data["meta"].get("default")), "comms": comms}
 SPRINT_RECORD = os.path.join(sibling("sprint-facilitator"), "scripts", "sprint_record.py")
 # One folder per report type under a Reports folder, so reports stay findable
 # as types are added. The type stays in the file name as well: a report sent
 # on its own has lost its folder.
-TYPE_DIRS = {"status-report": "Status", "sprint-update": "Sprint Update"}
+TYPE_DIRS = {"status-report": "Status", "sprint-update": "Sprint Update", "charter": "Charter"}
 
 
 def reports_dir(root, kind):
@@ -208,7 +284,9 @@ def raid_card(e, as_of):
             "scope": e["_scope"], "type": e.get("Type"), "detail": e.get("Detail"),
             "description": e.get("Description", ""), "plan": e.get("Action Plan", ""),
             "dri": e.get("DRI"), "priority": priority(e), "moscow": e.get("MoSCoW"),
-            "trend": e.get("Trend"), "days_since_update": stale}
+            "trend": raid_level(e.get("Trend")), "days_since_update": stale,
+            # Opt-in: only Y reaches a reader outside the work (export).
+            "sharable": R.clean(e.get("Sharable")) or None}
 
 
 def top_risks(entries, as_of, n=3):
@@ -311,12 +389,17 @@ def signal_time(wbs, window, as_of):
             amber.append("%s: planned %s against baseline %s (%s)"
                          % (name, plan["text"], base["text"], D.describe(var)))
     subtree = {k for kd in kds for k in wbs.subtree(kd["ID"])}
+    notes = []
     for s in R.rows(wbs.data, "schedule_log"):
         if (s.get("Field", "").startswith("Baseline") and s.get("Item") in subtree
                 and window["Starts"] <= s.get("Changed On", "") <= window["Ends"]):
-            amber.append("#%s rebaselined %s -> %s on %s: %s"
-                         % (s["Item"], s.get("From"), s.get("To"), s["Changed On"], s.get("Reason", "")))
-    ev = red + amber or ["%d open key deliverable(s), none planned past its baseline" % len(kds)]
+            line = "#%s rebaselined %s -> %s on %s: %s" % (s["Item"], s.get("From"), s.get("To"),
+                                                          s["Changed On"], s.get("Reason", ""))
+            # A move to an earlier date is a commitment tightened, not a slip.
+            moved = D.variance(D.resolve(s.get("From")), D.resolve(s.get("To")))
+            (notes if moved and moved["amount"] < 0 else amber).append(
+                line + (" (earlier: not a slip)" if moved and moved["amount"] < 0 else ""))
+    ev = (red + amber or ["%d open key deliverable(s), none planned past its baseline" % len(kds)]) + notes
     return rate(red, amber), ev
 
 
@@ -404,10 +487,38 @@ def worst(ratings):
     return max(rs, key=lambda r: SEVERITY[r]) if rs else None
 
 
-def trend_arrow(prev, now):
+# \u2500\u2500\u2500 Trends \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+#
+# One convention in every report and on the RAID board: up is better.
+# A trend is a level, -2 (much worse) to +2 (much better); records store the
+# level, never an arrow, so no reader has to know which way an arrow pointed.
+# Records written before this convention hold arrows: a measure's under up-is-better,
+# everything else under RAID's old up-is-worse. legacy_level reads either.
+
+LEGACY_ARROW = {u"\u2191": 2, u"\u2197": 1, u"\u2192": 0, u"\u2198": -1, u"\u2193": -2}
+
+
+def trend_level(prev, now):
+    """A rating's trend: positive when severity fell (amber to green is +1)."""
     if prev not in SEVERITY or now not in SEVERITY:
         return None
-    return {2: u"\u2191", 1: u"\u2197", 0: u"\u2192", -1: u"\u2198", -2: u"\u2193"}[SEVERITY[now] - SEVERITY[prev]]
+    return SEVERITY[prev] - SEVERITY[now]
+
+
+def legacy_level(value, up_is_better=False):
+    """A stored trend as a level: a level as it is; an arrow from an older record
+    by the convention it was written under."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return max(-2, min(2, value))
+    lvl = LEGACY_ARROW.get(value)
+    if lvl is None:
+        return None
+    return lvl if up_is_better else -lvl
+
+
+def raid_level(value):
+    """RAID's Trend: \u2191 \u2197 \u2192 \u2198 \u2193 under up-is-better."""
+    return LEGACY_ARROW.get(R.clean(value) if value else value)
 
 
 # ─── The executive summary ───────────────────────────────────────────────────
@@ -461,7 +572,7 @@ def _awaiting_decision(raid):
 
 
 def _risk_words(risks):
-    return [{"risk": x["detail"], "description": x["description"], "trend": TREND_NAME.get(x.get("trend"))}
+    return [{"risk": x["detail"], "description": x["description"], "trend": TREND_NAME.get(legacy_level(x.get("trend")))}
             for x in risks]
 
 
@@ -647,7 +758,7 @@ def score_measure(row, as_of, prev_scores, find):
         out["flags"].append("stale")
     if mid in prev_scores and prev_scores[mid] is not None:
         d = score - prev_scores[mid]
-        out["trend"] = u"↑" if d > 0.005 else u"↓" if d < -0.005 else u"→"
+        out["trend"] = 1 if d > 0.005 else -1 if d < -0.005 else 0
     return out
 
 
@@ -875,6 +986,7 @@ def cmd_status(args):
                     and e.get("_pm") and R.clean(e.get("DRI")) != e["_pm"]],
            "risks": top_risks(raid, as_of), "milestones": milestone_map(wbs, as_of),
            "metrics": metrics, "outcome": outcome,
+           "audiences": audiences(prjmgm, wbs.scope, "status-report"),
            "summary": {"text": None, "confirmed_on": None}}
     rec["facts"] = status_facts(wbs, raid, sprint, facts, rec["risks"])
     rec["facts"]["outcome"] = outcome_facts(outcome)
@@ -1050,7 +1162,7 @@ def cmd_sprint(args):
             last = hist[-1] if hist else None
             projects.append({"scope": w.scope, "overall": last[1] if last else None,
                              "as_of": last[0] if last else None,
-                             "trend": trend_arrow(hist[-2][1], last[1]) if len(hist) > 1 else None})
+                             "trend": trend_level(hist[-2][1], last[1]) if len(hist) > 1 else None})
     maps = [milestone_map(w, as_of) for w in wbss]
     for w, mm in zip(wbss, maps):
         for col in mm["months"]:
@@ -1141,6 +1253,126 @@ def cmd_confirm(args):
     return 0
 
 
+# ─── Export: a copy for a reader outside the work, and a PDF ─────────────────
+#
+# Two audiences, the owner, who sees the report as it is, and an external
+# reader: the same vocabulary as the Stakeholder Register's share level (TSP.13),
+# so a communication there says which one a report goes to (export --comm).
+# What an external reader may see is opt-in: a RAID entry reaches them only when
+# it is marked Sharable = Y, so one nobody has thought about stays internal.
+
+AUDIENCES = ("external", "owner")
+BROWSERS = ("chrome", "google-chrome", "chromium", "chromium-browser", "msedge", "microsoft-edge")
+BROWSER_PATHS = (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                 r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                 r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                 r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                 "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge")
+
+
+def external_copy(rec):
+    """The record as an external reader may see it: risks and Changes only where
+    marked Sharable = Y; no Help required (it names who the work waits on); no
+    evidence lists; no card-level board; no facts block."""
+    x = json.loads(json.dumps(rec))
+    x["audience"] = "external"
+    shared = lambda cards: [c for c in cards or [] if c.get("sharable") == "Y"]
+    for key in ("risks", "decisions"):
+        if key in x:
+            x[key] = shared(x[key])
+    if "help" in x:
+        x["help"] = []
+    for s in (x.get("signals") or {}).values():
+        s["evidence"] = []
+    for c in x.get("carried") or []:
+        c["blockers"] = []          # RAID references, internal by default
+    x.pop("board", None)
+    x.pop("facts", None)
+    x.pop("audiences", None)        # an outside reader is not shown who else receives it
+    for p in (x.get("stakeholders") or {}).get("people") or []:
+        p.pop("name", None)          # a charter shows roles and groups, never names
+    for c in (x.get("stakeholders") or {}).get("comms") or []:
+        c["to"] = []
+    return x
+
+
+def find_browser():
+    import shutil
+    for name in BROWSERS:
+        hit = shutil.which(name)
+        if hit:
+            return hit
+    return next((p for p in BROWSER_PATHS if os.path.exists(p)), None)
+
+
+def print_pdf(html_path, pdf_path):
+    """Print a view to PDF with the machine's Chrome or Edge, headless: no new
+    dependency. Returns the browser used, or None when there is none."""
+    browser = find_browser()
+    if not browser:
+        return None
+    from pathlib import Path
+    subprocess.run([browser, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
+                    "--print-to-pdf=%s" % os.path.abspath(pdf_path), Path(html_path).resolve().as_uri()],
+                   capture_output=True, timeout=120)
+    return browser if os.path.exists(pdf_path) else None
+
+
+def comm_audience(record_path, rec, comm_id):
+    """The share level a communication sends this record at, from the register of
+    the project the record belongs to; refuses a communication carrying another report."""
+    prjmgm = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(record_path))))
+    STK = _stk()
+    data = stakeholders(prjmgm, rec.get("scope", ""))
+    comm = next((c for c in R.rows(data, "communications") if c.get("ID") == comm_id), None)
+    if not comm:
+        sys.exit("%s is not a communication in %s's stakeholder register." % (comm_id, rec.get("scope") or prjmgm))
+    if comm.get("Report") != rec.get("kind"):
+        sys.exit("%s carries %s, not this %s." % (comm_id, comm.get("Report") or "no report", rec.get("kind")))
+    return STK.resolve_audience(data, comm)["share_level"]
+
+
+def cmd_export(args):
+    rec = json.load(io.open(args.record, encoding="utf-8"))
+    if rec.get("kind") not in ("status-report", "sprint-update", "charter"):
+        sys.exit("Export takes a status report, a sprint update or a charter record.")
+    if args.comm:
+        level = comm_audience(args.record, rec, args.comm)
+        if args.audience and args.audience != level:
+            sys.exit("%s goes out at %s, but --audience says %s. Drop one." % (args.comm, level, args.audience))
+        args.audience = level
+    args.audience = args.audience or "external"
+    stem = args.record[:-5]
+    if args.audience == "external":
+        # An outside reader gets what the owner agreed, never a proposal.
+        open_ = [k for k, sg in (rec.get("signals") or {}).items() if not sg.get("confirmed")]
+        if not (rec.get("summary") or {}).get("text") and rec["kind"] != "charter":
+            open_.append("summary")       # a charter is all authored elsewhere: nothing to confirm
+        if open_ and not args.force:
+            sys.exit("Not confirmed yet: %s. Confirm with report.py confirm before sharing it, "
+                     "or pass --force." % ", ".join(open_))
+        rec = external_copy(rec)
+        stem += " (external)"
+        out = [r for r in json.load(io.open(args.record, encoding="utf-8")).get("risks") or []
+               if r.get("sharable") != "Y"]
+        if out:
+            print("  %d risk(s) or issue(s) left out: not marked Sharable = Y (%s)"
+                  % (len(out), ", ".join(r["ref"] for r in out)))
+    page = {"status-report": render_status, "charter": render_charter}.get(rec["kind"], render_update)(rec)
+    with io.open(stem + ".html", "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(page)
+    print("View: %s" % (stem + ".html"))
+    if not args.pdf:
+        return 0
+    browser = print_pdf(stem + ".html", stem + ".pdf")
+    if browser:
+        print("PDF:  %s" % (stem + ".pdf"))
+    else:
+        print("No Chrome or Edge found to print with: open the view and print it to PDF.")
+    return 0
+
+
 def cmd_render(args):
     rec = json.load(io.open(args.record, encoding="utf-8"))
     write_record(args.record, rec)
@@ -1152,7 +1384,7 @@ def write_record(path, rec):
     with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rec, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
-    page = {"status-report": render_status}.get(rec["kind"], render_update)(rec)
+    page = {"status-report": render_status, "charter": render_charter}.get(rec["kind"], render_update)(rec)
     with io.open(path[:-5] + ".html", "w", encoding="utf-8", newline="\n") as fh:
         fh.write(page)
 
@@ -1168,15 +1400,18 @@ CSS = """
   --page:#f6f6f4; --surface:#fcfcfb; --border:rgba(11,11,11,0.10); --ink:#0b0b0b; --ink2:#52514e;
   --muted:#898781; --grid:#e1e0d9; --s1:#2a78d6;
   --good:#0ca30c; --warn:#fab219; --crit:#d03b3b; --none:#c3c2b7;
-  --goodbg:#e8f5e8; --warnbg:#fdf3dc; --critbg:#f9e6e6; --nonebg:#efeee9; --donebg:#e3edfa; }
+  --goodbg:#e8f5e8; --warnbg:#fdf3dc; --critbg:#f9e6e6; --nonebg:#efeee9; --donebg:#e3edfa;
+  --goodink:#0a6e0a; --critink:#a82828; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark;
   --page:#0d0d0d; --surface:#1a1a19; --border:rgba(255,255,255,0.10); --ink:#ffffff; --ink2:#c3c2b7;
   --muted:#898781; --grid:#2c2c2a; --s1:#3987e5;
-  --goodbg:#16301a; --warnbg:#3a2f12; --critbg:#3a1a1a; --nonebg:#262624; --donebg:#17263a; } }
+  --goodbg:#16301a; --warnbg:#3a2f12; --critbg:#3a1a1a; --nonebg:#262624; --donebg:#17263a;
+  --goodink:#6fd66f; --critink:#f08a8a; } }
 :root[data-theme="dark"] { color-scheme: dark;
   --page:#0d0d0d; --surface:#1a1a19; --border:rgba(255,255,255,0.10); --ink:#ffffff; --ink2:#c3c2b7;
   --muted:#898781; --grid:#2c2c2a; --s1:#3987e5;
-  --goodbg:#16301a; --warnbg:#3a2f12; --critbg:#3a1a1a; --nonebg:#262624; --donebg:#17263a; }
+  --goodbg:#16301a; --warnbg:#3a2f12; --critbg:#3a1a1a; --nonebg:#262624; --donebg:#17263a;
+  --goodink:#6fd66f; --critink:#f08a8a; }
 * { box-sizing:border-box; margin:0; padding:0; }
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--page); color:var(--ink);
   font-size:13px; line-height:1.5; padding:20px 16px; }
@@ -1185,6 +1420,8 @@ header { margin-bottom:16px; }
 h1 { font-size:20px; font-weight:700; }
 .meta { color:var(--ink2); font-size:12px; margin-top:2px; }
 .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:14px; }
+/* A table wider than a phone scrolls inside its card instead of widening the page. */
+.card { overflow-x:auto; }
 h2 { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--ink2); margin-bottom:10px; }
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; }
 .grid2 > .card { margin-bottom:0; }
@@ -1206,7 +1443,27 @@ h2 { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.
 .e4-cell { border:1px solid var(--border); border-radius:8px; padding:10px; }
 .e4-head { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px; }
 .e4-name { font-weight:700; font-size:12.5px; }
-.arrow { font-size:16px; font-weight:700; color:var(--ink2); }
+.trend { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px;
+  border-radius:50%; vertical-align:middle; flex:none; }
+.trend svg { width:13px; height:13px; }
+.tr-up { background:var(--goodbg); color:var(--goodink); } .tr-down { background:var(--critbg); color:var(--critink); }
+.tr-flat { background:var(--nonebg); color:var(--ink2); }
+.tr-up.tr-fast { background:var(--good); color:#fff; } .tr-down.tr-fast { background:var(--crit); color:#fff; }
+h2:has(.info), h3:has(.info) { position:relative; }
+/* The popover hangs from the heading, not the icon, so it is never wider than the card. */
+.info { position:static; display:inline-flex; vertical-align:middle; margin-left:6px; cursor:help; outline:none;
+  text-transform:none; letter-spacing:normal; font-weight:400; }
+.info-i { width:15px; height:15px; border-radius:50%; border:1px solid var(--s1); background:var(--s1); color:#fff;
+  font:italic 700 10px/13px Georgia, serif; text-align:center; display:inline-block; }
+.info:hover .info-i, .info:focus .info-i { filter:brightness(0.82); }
+.info-pop { display:none; position:absolute; left:0; top:calc(100% + 6px); z-index:20; width:min(420px, 100%);
+  background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+  font-size:11.5px; line-height:1.45; box-shadow:0 4px 16px rgba(0,0,0,.14); }
+.info:hover .info-pop, .info:focus .info-pop { display:block; }
+@media print { .info-i { display:none; } .info { display:block; margin:4px 0 0; cursor:auto; }
+  .info-pop { display:block; position:static; width:auto; box-shadow:none; border:none; padding:0; color:var(--ink2); } }
+.trend-key { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin-bottom:6px; }
+.trend-key .k { display:inline-flex; align-items:center; gap:4px; }
 details summary { cursor:pointer; color:var(--ink2); font-size:11.5px; }
 details ul { margin:6px 0 0 16px; font-size:11.5px; color:var(--ink2); }
 .overall { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
@@ -1242,7 +1499,8 @@ td { padding:6px 8px; border-bottom:1px solid var(--grid); vertical-align:top; f
 .risk-desc { font-size:12px; color:var(--ink2); margin-top:4px; }
 .risk-desc strong { color:var(--ink); }
 .stale { font-size:11px; color:var(--muted); font-style:italic; white-space:nowrap; }
-.months { display:grid; gap:10px; align-items:start; }
+.months { display:grid; gap:10px; align-items:start; grid-template-columns:repeat(var(--cols, 4), minmax(0,1fr)); }
+@media (max-width:760px) { .months { grid-template-columns:1fr; } }
 .month { border:1px solid var(--border); border-radius:8px; padding:10px; min-width:0; }
 .month.current { box-shadow: inset 0 0 0 2px var(--s1); }
 .month h3 { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--ink2); margin-bottom:6px; }
@@ -1251,6 +1509,15 @@ td { padding:6px 8px; border-bottom:1px solid var(--grid); vertical-align:top; f
 .ms .cue { font-size:11px; color:var(--ink2); font-weight:600; }
 .list li { margin:0 0 6px 16px; }
 footer { color:var(--muted); font-size:11px; margin-top:8px; }
+.charter { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:14px; align-items:start; }
+@media (max-width:760px) { .charter { grid-template-columns:1fr; } }
+.src { font-size:10.5px; color:var(--muted); margin:-6px 0 8px; }
+.statement { font-size:16px; line-height:1.45; }
+.dw { margin:4px 0 0 18px; } .dw li { margin-bottom:3px; }
+.list { margin:4px 0 0 18px; }
+.kv { display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px solid var(--grid); font-size:12px; }
+.kv span { color:var(--ink2); } .kv strong { text-align:right; font-weight:600; }
+.kd { padding:6px 0; border-bottom:1px solid var(--grid); font-size:12px; }
 .summary { border-left:4px solid var(--s1); }
 .sum-text { font-size:14px; line-height:1.6; }
 .minis { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
@@ -1263,7 +1530,6 @@ footer { color:var(--muted); font-size:11px; margin-top:8px; }
 .ex-name { font-weight:700; }
 .outcome-grid { display:grid; grid-template-columns:180px 1fr; gap:12px; margin-top:10px; align-items:start; }
 @media (max-width:760px) { .outcome-grid { grid-template-columns:1fr; } }
-td.arrow { font-size:15px; }
 .tabs > input { position:absolute; opacity:0; pointer-events:none; }
 .tab-bar { display:flex; gap:4px; border-bottom:1px solid var(--grid); margin-bottom:14px; }
 .tab-bar label { padding:8px 14px; font-size:12.5px; font-weight:600; color:var(--ink2); cursor:pointer;
@@ -1299,8 +1565,44 @@ LABEL = {"green": "Green", "amber": "Amber", "red": "Red", None: "Not rated"}
 MEANING = {"green": "aligned with the plan", "amber": "not aligned, in recovery",
            "red": "not aligned, no recovery", None: ""}
 VERDICT = {"Yes": "green", "Partial": "amber", "No": "red"}
-TREND_NAME = {u"\u2191": "Worsening fast", u"\u2197": "Worsening", u"\u2192": "Stable",
-              u"\u2198": "Improving", u"\u2193": "Improving fast"}
+# By level. TREND_NAME is the facts block's word, TREND_WORD the chip's tooltip
+# and the key's. The chip is the arrow alone: a tinted circle,
+# diagonal for a step and straight for fast, a fast move filled solid.
+TREND_NAME = {2: "Improving fast", 1: "Improving", 0: "Stable", -1: "Worsening", -2: "Worsening fast"}
+TREND_WORD = {2: "much better", 1: "better", 0: "steady", -1: "worse", -2: "much worse"}
+TREND_CHIP = {2: (0, "tr-up tr-fast"), 1: (45, "tr-up"), 0: (90, "tr-flat"),
+              -1: (135, "tr-down"), -2: (180, "tr-down tr-fast")}
+TREND_SVG = ('<svg viewBox="0 0 16 16" style="transform:rotate(%ddeg)" fill="none" stroke="currentColor" '
+             'stroke-width="%s" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+             '<path d="M8 13.5V2.5M3.5 7 8 2.5 12.5 7"/></svg>')
+
+
+def trend_chip(level, since=None):
+    """A trend as every report and the RAID board show it: up is better, green
+    better, red worse, fast in bold. The word is the tooltip, never on the page.
+    Nothing for no trend."""
+    if level not in TREND_CHIP:
+        return ""
+    deg, cls = TREND_CHIP[level]
+    word = TREND_WORD[level].capitalize() + (" since %s" % since if since else "")
+    return ('<span class="trend %s" role="img" title="%s" aria-label="%s">%s</span>'
+            % (cls, e(word), e(word), TREND_SVG % (deg, "2.6" if abs(level) == 2 else "2")))
+
+
+def info_tip(text_html, label="How to read this"):
+    """An explanation kept out of the reader's way: an icon beside a
+    section title that opens it on hover (desktop) or tap (phone), no script,
+    and prints it inline. For how-to-read text only; content stays on the page."""
+    return ('<span class="info" tabindex="0" role="button" aria-label="%s"><span class="info-i" aria-hidden="true">i</span>'
+            '<span class="info-pop" role="tooltip">%s</span></span>' % (e(label), text_html))
+
+
+def trend_key():
+    """The one-line key at the foot of a page that shows a trend."""
+    return '<div class="trend-key"><span>Trend since the last reading:</span>%s</div>' % "".join(
+        '<span class="k">%s%s</span>' % (trend_chip(l), TREND_WORD[l]) for l in (2, 1, 0, -1, -2))
+
+
 CUES = re.compile(r"(because of|there is a risk that|which may result in|which is resulting in)", re.I)
 
 
@@ -1316,23 +1618,28 @@ def done_chip():
     return '<span class="status st-done"><span class="dot" aria-hidden="true">\u2713</span>delivered</span>'
 
 
-def page(title, subtitle, body):
+SHARED_FOOTER = "Shared from the project's registers; generated, never edited by hand."
+
+
+def page(title, subtitle, body, footer=None):
     return ("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n"
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
             "<meta name=\"generator\" content=\"reporting\">\n<title>%s</title>\n<style>%s</style>\n</head>\n"
             "<body><div class=\"page\"><header><h1>%s</h1><div class=\"meta\">%s</div></header>\n%s\n"
-            "<footer>Generated from the record beside this page; never edited by hand. "
-            "Confirm or override ratings with report.py confirm.</footer></div></body></html>\n"
-            % (e(title), CSS, e(title), subtitle, body))
+            "<footer>%s%s</footer></div></body></html>\n"
+            % (e(title), CSS, e(title), subtitle, body,
+               trend_key() if 'class="trend ' in body else "",
+               e(footer or "Generated from the record beside this page; never edited by hand. "
+                           "Confirm or override ratings with report.py confirm.")))
 
 
-def risks_html(risks):
+def risks_html(risks, empty="No open risks or issues."):
     if not risks:
-        return '<p class="muted">No open risks or issues.</p>'
+        return '<p class="muted">%s</p>' % e(empty)
     out = []
     for r in risks:
-        if r.get("trend"):
-            trend = '<span class="arrow" title="%s">%s</span>' % (e(TREND_NAME.get(r["trend"], "")), e(r["trend"]))
+        if legacy_level(r.get("trend")) is not None:
+            trend = trend_chip(legacy_level(r["trend"]))
         elif r.get("days_since_update") is not None:
             trend = '<span class="stale">no update in %dd</span>' % r["days_since_update"]
         else:
@@ -1346,10 +1653,15 @@ def risks_html(risks):
     return "".join(out)
 
 
-def roadmap_html(ms, with_scope=False, compact=False):
+def roadmap_html(ms, with_scope=False, compact=False, ids=True):
     """Month columns: last month, now, the next two, then anything undated.
     The edge columns hold whatever falls outside the window, with its date."""
     cols = ms["months"] + ([{"label": "Unscheduled", "current": False, "items": ms["unscheduled"]}] if ms["unscheduled"] else [])
+
+    def ref(it):
+        """The scope and the row ID; an outside reader gets the scope alone."""
+        scope = (e(it["scope"]) + " ") if with_scope and it.get("scope") else ""
+        return "%s#%s" % (scope, it["id"]) if ids else scope
 
     def card(it):
         if it.get("delivered"):
@@ -1360,15 +1672,15 @@ def roadmap_html(ms, with_scope=False, compact=False):
             chip = (status_chip("amber", "late") if it["late"] else status_chip("green", "on plan")) \
                 if (it["plan"] or it["baseline"]) else status_chip(None, "no date")
             when = "baseline %s · plan %s" % (it["baseline"] or "-", it["plan"] or "-")
-        return '<div class="ms">%s <strong>%s#%s</strong> %s%s%s</div>' % (
-            chip, (e(it["scope"]) + " ") if with_scope and it.get("scope") else "", it["id"], e(it["title"]),
+        return '<div class="ms">%s <strong>%s</strong> %s%s%s</div>' % (
+            chip, ref(it), e(it["title"]),
             ('<div class="cue">%s</div>' % e(it["cue"])) if it.get("cue") else "",
             "" if compact else '<div class="small">%s</div>' % e(when))
 
     earlier = ms.get("earlier") or []
     before = ('<details class="small" style="margin-top:6px"><summary>%d delivered earlier</summary>%s</details>'
-              % (len(earlier), "".join('<div>%s<strong>#%s</strong> %s%s</div>' % (
-                  (e(it["scope"]) + " ") if with_scope and it.get("scope") else "", it["id"], e(it["title"]),
+              % (len(earlier), "".join('<div><strong>%s</strong> %s%s</div>' % (
+                  ref(it), e(it["title"]),
                   (" · %s" % e(it["delivered"])) if it.get("delivered") else "") for it in earlier))
               if earlier else "")
     mcols = []
@@ -1378,9 +1690,13 @@ def roadmap_html(ms, with_scope=False, compact=False):
             items += before
         mcols.append('<div class="month%s"><h3>%s%s</h3>%s</div>'
                      % (" current" if c.get("current") else "", e(c["label"]), " · now" if c.get("current") else "", items))
-    return ('<div class="months" style="grid-template-columns:repeat(%d, minmax(0,1fr))">%s</div>'
-            '<p class="small" style="margin-top:8px">Key deliverables: open ones placed by planned end, else baseline; delivered ones by the date they landed, and those delivered before the window listed under the first column. The first '
-            'and last columns hold anything earlier or later, with its real date.</p>' % (len(mcols), "".join(mcols)))
+    # The column count is a variable, not the grid itself, so the phone rule can stack them.
+    return '<div class="months" style="--cols:%d">%s</div>' % (len(mcols), "".join(mcols))
+
+
+ROADMAP_INFO = ("Open key deliverables are placed by their planned end, else their baseline; delivered ones by the date "
+                "they landed, and those delivered before the window are listed under the first column. The first and "
+                "last columns hold anything earlier or later, with its real date.")
 
 
 def signal_cell(rec, key, label):
@@ -1389,17 +1705,36 @@ def signal_cell(rec, key, label):
     s = rec["signals"][key]
     prev = (rec.get("previous") or {}).get("ratings", {})
     r = s.get("confirmed") or s.get("proposed")
-    arrow = trend_arrow(prev.get(key), r) if s.get("confirmed") else None
+    level = trend_level(prev.get(key), r) if s.get("confirmed") else None
+    chip = trend_chip(level, (rec.get("previous") or {}).get("as_of"))
+    if rec.get("audience") == "external":
+        # The same chip as the owner's view; only the override's reason stays in.
+        return ('<div class="e4-cell"><div class="e4-head"><span class="e4-name">%s</span>%s</div>%s</div>'
+                % (e(label), chip, status_chip(r)))
     return ('<div class="e4-cell"><div class="e4-head"><span class="e4-name">%s</span>%s</div>%s%s%s'
-            '<details><summary>Evidence</summary><ul>%s</ul></details></div>'
-            % (e(label),
-               ('<span class="arrow" title="%s since %s">%s</span>' % (e(TREND_NAME[arrow]), e(rec["previous"]["as_of"]), arrow)) if arrow else "",
+            '%s</div>'
+            % (e(label), chip,
                status_chip(r), "" if s.get("confirmed") else '<span class="proposed">proposed</span>',
                ('<div class="override">Override: %s</div>' % e(s["reason"])) if s.get("reason") else "",
-               "".join("<li>%s</li>" % e(x) for x in s["evidence"])))
+               ('<details><summary>Evidence</summary><ul>%s</ul></details>'
+                % "".join("<li>%s</li>" % e(x) for x in s["evidence"])) if s.get("evidence") else ""))
 
 
 FLAG_RATING = {"missing": "red", "past due": "red", "behind pace": "amber", "stale": "amber"}
+
+
+def audiences_html(rec):
+    """Who receives the report, one line per communication; nothing for the solo
+    default or an external copy."""
+    a = rec.get("audiences") or {}
+    if a.get("default") or not a.get("comms"):
+        return ""
+    rows = "".join('<div class="ex-row"><span class="ex-name">%s %s</span><span class="small">%s · %s</span>'
+                   '<span class="small">%s</span></div>'
+                   % (e(c["id"]), e(c["what"]), e(c.get("cadence") or "no cadence"), e(c["share_level"]),
+                      e(", ".join(c["recipients"]) or "no one active"))
+                   for c in a["comms"])
+    return '<section class="card"><h2>Who receives this</h2><div class="ex-rows">%s</div></section>' % rows
 
 
 def outcome_html(rec):
@@ -1411,36 +1746,40 @@ def outcome_html(rec):
     head = ""
     if o.get("outcome"):
         head += '<p class="sum-text">%s</p>' % e(o["outcome"])
-    if o.get("serves"):
+    external = rec.get("audience") == "external"
+    if o.get("serves") and not external:      # codes an outside reader can't decode
         head += '<p class="small">Serves %s</p>' % e(o["serves"])
     if o.get("done_when"):
-        head += ('<details class="small" style="margin-top:6px"><summary>Done when (%d)</summary><ol style="margin:6px 0 0 18px">%s</ol></details>'
-                 % (len(o["done_when"]), "".join("<li>%s</li>" % e(x) for x in o["done_when"])))
+        head += ('<details class="small" style="margin-top:6px"%s><summary>Done when (%d)</summary><ol style="margin:6px 0 0 18px">%s</ol></details>'
+                 % (" open" if external else "", len(o["done_when"]), "".join("<li>%s</li>" % e(x) for x in o["done_when"])))
     if not o.get("present"):
         body = '<p class="muted" style="margin-top:8px">%s: On Outcome is not proposed.</p>' % e(o.get("reason") or "Nothing to rate")
     else:
         rows = []
         for m in o["measures"]:
             score = ("%.2f" % m["score"]) if m.get("score") is not None else "-"
-            exp = (" <span class='small'>of %.2f expected</span>" % m["expected"]) if m.get("expected") is not None else ""
+            # Taken at its start date, nothing was expected yet: say so rather than "of 0.00".
+            exp = ("" if m.get("expected") is None else " <span class='small'>at its starting value</span>"
+                   if m["expected"] == 0 else " <span class='small'>of %.2f expected</span>" % m["expected"])
             flags = "".join(" " + status_chip(FLAG_RATING.get(f), f) for f in m["flags"]) or " " + status_chip("green", "on pace")
             rows.append("<tr><td><strong>%s</strong></td><td>%s<div class='small'>%s · %s%s · every %s</div></td>"
                         "<td>%s → <strong>%s</strong> → %s<div class='small'>by %s · as of %s</div></td>"
-                        "<td>%s%s</td><td class='arrow'>%s</td><td>%s</td></tr>"
+                        "<td>%s%s</td><td>%s</td><td>%s</td></tr>"
                         % (e(m["id"]), e(m["measure"]), e(m["role"]), e(m["kind"]),
                            " · aspirational" if m["ca"] == "A" else "", e(m["every"] or "-"),
                            e(m["baseline"]), e(m["current"] or "-"), e(m["target"]), e(m["by"]), e(m["as_of"] or "-"),
-                           score, exp, e(m.get("trend") or ""), flags))
+                           score, exp, trend_chip(legacy_level(m.get("trend"), up_is_better=True)), flags))
         cell = signal_cell(rec, "outcome", "On Outcome") if "outcome" in rec["signals"] else ""
         body = ('<div class="outcome-grid"><div>%s</div><div><table><thead><tr><th></th><th>Measure</th>'
                 '<th>Baseline → now → target</th><th>Score</th><th>Trend</th><th>State</th></tr></thead><tbody>%s</tbody></table>'
-                '<p class="small" style="margin-top:8px">Score 0-1 like a key result; an aspirational measure is met at 0.7. '
-                'Pace is judged at the date each value was taken; a value not read within its cadence is stale. '
-                'On Outcome is not counted in Overall.</p></div></div>' % (cell, "".join(rows)))
+                '</div></div>' % (cell, "".join(rows)))
     if o.get("findings"):
         body += ('<p class="small" style="margin-top:8px"><strong>To fix in the brief:</strong> %s</p>'
                  % e("; ".join(o["findings"])))
-    return '<section class="card"><h2>Outcome</h2>%s%s</section>' % (head, body)
+    tip = info_tip("Each measure is scored 0-1 like a key result; an aspirational measure is met at 0.7. Pace is judged "
+                   "at the date each value was taken; a value not read within its cadence is stale. On Outcome is not "
+                   "counted in Overall.") if o.get("present") else ""
+    return '<section class="card"><h2>Outcome%s</h2>%s%s</section>' % (tip, head, body)
 
 
 def render_status(rec):
@@ -1450,11 +1789,12 @@ def render_status(rec):
     all_confirmed = all(sigs[k].get("confirmed") for k, _ in SIGNALS if k in sigs)
     cells = [signal_cell(rec, key, label) for key, label in SIGNALS + [("mood", "Mood")] if key in sigs]
     first = "" if rec.get("previous") else '<span class="small">First confirmed report of this scope: no trend yet.</span>'
-    e4 = ('<section class="card"><h2>Essential 4</h2><div class="overall"><strong>Overall</strong>%s%s %s</div>'
-          '<div class="e4">%s</div><p class="small" style="margin-top:10px">Overall is the worst of the four; Mood '
-          'is shown but not counted. Green: %s. Amber: %s. Red: %s.</p></section>'
-          % (status_chip(overall), "" if all_confirmed else '<span class="proposed">proposed</span>', first,
-             "".join(cells), MEANING["green"], MEANING["amber"], MEANING["red"]))
+    tip = info_tip(e("Overall is the worst of the four; Mood is shown but not counted. Green: %s. Amber: %s. Red: %s."
+                     % (MEANING["green"], MEANING["amber"], MEANING["red"])))
+    e4 = ('<section class="card"><h2>Essential 4%s</h2><div class="overall"><strong>Overall</strong>%s%s %s</div>'
+          '<div class="e4">%s</div></section>'
+          % (tip, status_chip(overall), "" if all_confirmed else '<span class="proposed">proposed</span>', first,
+             "".join(cells)))
 
     def lst(items, empty):
         if not items:
@@ -1462,15 +1802,25 @@ def render_status(rec):
         return '<ul class="list">%s</ul>' % "".join(
             "<li><strong>%s</strong> %s <span class='small'>(DRI %s)</span></li>"
             % (e(x["ref"]), e(x["detail"]), e(x.get("dri") or "-")) for x in items)
-    focus = ('<section class="grid2"><div class="card"><h2>Focus</h2>%s<h2 style="margin-top:12px">Highlights</h2>%s</div>'
-             '<div class="card"><h2>Decisions required</h2>%s<h2 style="margin-top:12px">Help required</h2>%s</div></section>'
-             % ('<p>%s</p>' % e(rec["focus"]) if rec.get("focus") else '<p class="muted">Not written yet: report.py confirm --focus "…"</p>',
-                '<p>%s</p>' % e(rec["highlights"]) if rec.get("highlights") else '<p class="muted">Not written yet: report.py confirm --highlights "…"</p>',
-                lst(rec["decisions"], "No change request is waiting for a decision."), lst(rec["help"], "Nothing waits on someone else.")))
-    milestones = ('<section class="card"><h2>Key deliverables</h2>%s</section>' % roadmap_html(rec["milestones"]))
-    risks = '<section class="card"><h2>Top risks and issues</h2>%s</section>' % risks_html(rec["risks"])
-    sub = "%s · %s → %s · as of %s" % (e(rec["sprint"]), e(rec["period"]["start"]), e(rec["period"]["end"]), e(rec["as_of"]))
-    return page("%s status" % rec["scope"], sub, summary_html(rec) + outcome_html(rec) + e4 + focus + milestones + risks)
+    external = rec.get("audience") == "external"
+    help_html = "" if external else ('<h2 style="margin-top:12px">Help required</h2>%s'
+                                     % lst(rec["help"], "Nothing waits on someone else."))
+    # An outside reader sees what was written, never the prompt to write it.
+    todo = (lambda flag: "") if external else (lambda flag: '<p class="muted">Not written yet: report.py confirm %s "…"</p>' % flag)
+    parts = [(t, rec.get(k), f) for t, k, f in (("Focus", "focus", "--focus"), ("Highlights", "highlights", "--highlights"))]
+    left = "".join('<h2%s>%s</h2>%s' % (' style="margin-top:12px"' if i else "", t, '<p>%s</p>' % e(v) if v else todo(f))
+                   for i, (t, v, f) in enumerate(p for p in parts if p[1] or not external))
+    focus = ('<section class="grid2">%s'
+             '<div class="card"><h2>Decisions required</h2>%s%s</div></section>'
+             % ('<div class="card">%s</div>' % left if left else "",
+                lst(rec["decisions"], "No change request is waiting for a decision."), help_html))
+    milestones = ('<section class="card"><h2>Key deliverables%s</h2>%s</section>' % (info_tip(e(ROADMAP_INFO)), roadmap_html(rec["milestones"], ids=not external)))
+    risks = '<section class="card"><h2>Top risks and issues</h2>%s</section>' % risks_html(
+        rec["risks"], "No risks or issues shared." if external else "No open risks or issues.")
+    sub = "%s · %s → %s · as of %s%s" % (e(rec["sprint"]), e(rec["period"]["start"]), e(rec["period"]["end"]),
+                                         e(rec["as_of"]), " · shared version" if external else "")
+    return page("%s status" % rec["scope"], sub, summary_html(rec) + outcome_html(rec) + e4 + focus + milestones + risks + audiences_html(rec),
+                SHARED_FOOTER if external else None)
 
 
 def goal_card(x, show_verdict):
@@ -1524,10 +1874,10 @@ def board_html(board, as_of):
             lanes.append('<div class="bd-lane"><div class="bd-lanehead"><span>%s</span><span class="small">%gh in sprint · %gh done</span></div>'
                          '<div class="bd-cols">%s</div></div>' % (title, l["hours"], l["done_hours"], cells))
         out.append('<h3 class="bd-project">%s <span class="small">%gh</span></h3>%s' % (e(p["scope"]), p["hours"], "".join(lanes)))
-    return ('<section class="card"><h2>Sprint board · as of %s</h2>'
-            '<p class="small">The deep dive behind the overview: every project\'s cards in this sprint, by the deliverable each serves. A snapshot: '
-            'rerun <code>report.py sprint</code> to bring it up to date; the confirmed summary is kept.</p>'
-            '<div class="bd-cols bd-heads">%s</div>%s</section>' % (e(as_of), heads, "".join(out)))
+    tip = info_tip("The deep dive behind the overview: every project's cards in this sprint, by the deliverable each "
+                   "serves. A snapshot: rerun <code>report.py sprint</code> to bring it up to date; the confirmed summary is kept.")
+    return ('<section class="card"><h2>Sprint board · as of %s%s</h2>'
+            '<div class="bd-cols bd-heads">%s</div>%s</section>' % (e(as_of), tip, heads, "".join(out)))
 
 
 def render_update(rec):
@@ -1577,10 +1927,11 @@ def render_update(rec):
         projects = '<section class="card"><h2>Projects</h2><div class="ex-rows">%s</div></section>' % "".join(
             '<div class="ex-row"><span class="ex-name">%s</span>%s%s<span class="small">%s</span></div>'
             % (e(p["scope"]), status_chip(p["overall"]) if p["overall"] else status_chip(None, "No confirmed status"),
-               ('<span class="arrow" title="%s since the previous confirmed status">%s</span>' % (e(TREND_NAME[p["trend"]]), p["trend"])) if p.get("trend") else "",
+               trend_chip(legacy_level(p.get("trend")), "the previous confirmed status"),
                ("confirmed %s" % e(p["as_of"])) if p.get("as_of") else "")
             for p in rec["projects"])
-    roadmap = '<section class="card"><h2>Key deliverables</h2>%s</section>' % roadmap_html(rec["roadmap"], with_scope=len(rec["projects_spanned"]) > 1, compact=True)
+    roadmap = '<section class="card"><h2>Key deliverables%s</h2>%s</section>' % (info_tip(e(ROADMAP_INFO)), roadmap_html(rec["roadmap"], with_scope=len(rec["projects_spanned"]) > 1, compact=True,
+                                                                                   ids=rec.get("audience") != "external"))
 
     hrows = []
     for h in rec.get("history", []):
@@ -1608,15 +1959,19 @@ def render_update(rec):
     af_rows = "".join('<div class="hbar"><span>%s</span><div class="track"><div class="fill" style="width:%d%%" title="%s: %gh"></div></div><span class="v">%gh</span></div>'
                       % (e(k), round(100 * v / top) if top else 0, e(k), v, v) for k, v in sorted(af.items(), key=lambda kv: -kv[1]))
     risks_effort = ('<section class="card"><h2>Top risks and issues</h2>%s<h2 style="margin-top:14px">This sprint\'s hours by area</h2>%s</section>'
-                    % (risks_html(rec["risks"]), af_rows or '<p class="muted">The record has no Area column.</p>'))
-    sub = "%s → %s · last sprint %s · %s" % (e(rec["period"]["start"]), e(rec["period"]["end"]), e(last["sprint"]),
-                                             e(", ".join(rec["projects_spanned"])))
+                    % (risks_html(rec["risks"], "No risks or issues shared." if rec.get("audience") == "external"
+                                  else "No open risks or issues."),
+                       af_rows or '<p class="muted">The record has no Area column.</p>'))
+    sub = "%s → %s · last sprint %s · %s%s" % (e(rec["period"]["start"]), e(rec["period"]["end"]), e(last["sprint"]),
+                                               e(", ".join(rec["projects_spanned"])),
+                                               " · shared version" if rec.get("audience") == "external" else "")
     overview = (summary_html(rec) + '<div class="grid2">' + last_html + this_html + "</div>"
                 + '<div style="height:14px"></div>' + projects + roadmap
                 + '<div class="grid2">' + history + risks_effort + "</div>")
     board = board_html(rec.get("board"), rec["as_of"])
     if not board:
-        return page("Sprint update · %s" % rec["sprint"], sub, overview)
+        return page("Sprint update · %s" % rec["sprint"], sub, overview,
+                    SHARED_FOOTER if rec.get("audience") == "external" else None)
     # The update is an executive overview for people outside the work; the
     # board is a deep dive. It gets its own tab so the page a stakeholder
     # opens (and prints) is the overview alone. Radio inputs, not script, so
@@ -1625,10 +1980,245 @@ def render_update(rec):
             '<input type="radio" name="view" id="v-board">'
             '<div class="tab-bar"><label for="v-overview">Overview</label><label for="v-board">Sprint board</label></div>'
             '<div class="tab-panel p-overview">%s</div><div class="tab-panel p-board">%s</div></div>' % (overview, board))
-    return page("Sprint update · %s" % rec["sprint"], sub, body)
+    return page("Sprint update · %s" % rec["sprint"], sub, body,
+                SHARED_FOOTER if rec.get("audience") == "external" else None)
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
+
+
+# ─── Project charter ────────────────────────────────────────────────────────
+#
+# What the project is, on one page, for someone who reads none of the registers:
+# a reviewer, a sponsor, a client. Generated, never written: the brief is where
+# the words are authored, the registers hold the rest. It carries the brief's
+# executive statement, not its full Why. Every section names its source, and a
+# missing one says so. Nothing is rated, so nothing waits on a confirmation.
+
+BRIEF_FULL_ONLY = ("Appetite and budget", "Scope", "Approach", "Who it is for")
+
+
+def md_sections(text):
+    """'## ' sections by the heading's leading words, so a dated suffix
+    ('## Scope — 04-Oct') still matches 'Scope'."""
+    out, name, buf = {}, None, []
+    for line in text.split("\n"):
+        if line.startswith("## "):
+            if name:
+                out[name] = "\n".join(buf)
+            name, buf = line[3:].split(" — ")[0].strip(), []
+        elif name:
+            buf.append(line)
+    if name:
+        out[name] = "\n".join(buf)
+    return out
+
+
+def md_inline(text):
+    """Escape, then **bold** and `code` - the only Markdown a record's prose carries."""
+    out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", e(text))
+    return re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
+
+
+def md_block(text):
+    """A brief's prose, shown as written: bullets as a list, the rest as paragraphs."""
+    out = []
+    for para in re.split(r"\n\s*\n", (text or "").strip()):
+        lines = [l for l in para.split("\n") if l.strip()]
+        if lines and all(l.lstrip().startswith("- ") for l in lines):
+            out.append('<ul class="list">%s</ul>' % "".join("<li>%s</li>" % md_inline(l.lstrip()[2:]) for l in lines))
+        elif lines:
+            out.append("<p>%s</p>" % md_inline(" ".join(l.strip() for l in lines)))
+    return "".join(out) or '<p class="muted">Nothing written.</p>'
+
+
+def brief_parts(path):
+    """A brief's sections as the charter shows them, and what it says about itself."""
+    text = io.open(path, encoding="utf-8").read()
+    head = text.split("\n")[:24]
+    size = next((m.group(1).lower() for m in (re.search(r"\*\*Size:\*\*\s*(\w+)", l) for l in head) if m), None)
+    revised = next((m.group(1) for m in (re.search(r"\*\*Last revised:\*\*\s*([\d-]+)", l) for l in head) if m), None)
+    parts = brief_sections(text)
+    secs = md_sections(text)
+    stop = next((m.group(1).strip() for m in (re.match(r"^\*\*Stop if:\*\*\s*(.*)", l)
+                                              for l in (secs.get("Outcome and done-when") or "").split("\n")) if m), None)
+    measures = [{"id": r.get("ID"), "measure": r.get("Measure"), "role": r.get("Role"), "ca": r.get("C/A"),
+                 "baseline": r.get("Baseline"), "target": r.get("Target"), "by": r.get("By")}
+                for r in parts["rows"]]
+    return {"file": os.path.basename(path), "size": size, "revised": revised, "serves": parts["serves"],
+            "statement": parts["statement"], "outcome": parts["outcome"], "done_when": parts["done_when"],
+            "stop_if": stop, "measures": measures,
+            "sections": {k: (secs.get(k) or "").strip() or None for k in BRIEF_FULL_ONLY}}
+
+
+def charter_stakeholders(prjmgm, scope):
+    """Groups, active stakeholders and communications; names for the owner's
+    copy, roles and groups for anyone else (the external copy drops the names)."""
+    data = stakeholders(prjmgm, scope)
+    groups = {g.get("ID"): g.get("Name") or g.get("ID") for g in data.get("groups", [])}
+    people = [p for p in data.get("stakeholders", []) if R.clean(p.get("Status")) in ("", "Active")]
+    by_id = {p.get("ID"): p for p in people}
+    comms = []
+    for c in data.get("communications", []):
+        if R.clean(c.get("Status")) not in ("", "Active"):
+            continue
+        res = resolve_people(data, c)
+        roles = [groups[r] if r in groups else (by_id.get(r) or {}).get("Role") or r for r in c.get("Audience") or []]
+        comms.append({"id": c.get("ID"), "what": c.get("What"), "cadence": c.get("Cadence"),
+                      "channel": c.get("Channel"), "to": [n for n, _lv in res], "to_roles": roles,
+                      "share_level": "external" if any(lv == "external" for _n, lv in res) else "owner"})
+    return {"default": bool(data["meta"].get("default")),
+            "groups": [{"id": k, "name": v} for k, v in groups.items()],
+            "people": [{"name": p.get("Name"), "role": p.get("Role"),
+                        "groups": [groups.get(g, g) for g in p.get("Groups") or []]} for p in people],
+            "comms": comms}
+
+
+def charter_deliverables(wbs):
+    """Every key deliverable not cancelled, by baseline: delivered with its date,
+    or open with its baseline and plan."""
+    out = []
+    for i in wbs.items.values():
+        if i.get("Key Deliverable") != "Y" or i.get("Status") == "Cancelled":
+            continue
+        base = D.resolve(i.get("Baseline End"))
+        done = i.get("Status") == "Done"
+        when = wbs.actual_end(i["ID"]) if done else wbs.plan_end(i["ID"])
+        out.append({"id": i["ID"], "title": i["Title"], "delivered": done,
+                    "baseline": base["text"] if base else None, "when": (when or {}).get("text"),
+                    "sort": ((when or {}).get("start") if not done else None) or (base or {}).get("start") or "9999"})
+    out.sort(key=lambda x: x["sort"])
+    for x in out:
+        x.pop("sort")
+    return out
+
+
+def cmd_charter(args):
+    prjmgm = os.path.abspath(args.project)
+    if not os.path.isdir(prjmgm):
+        sys.exit("No folder at %s" % prjmgm)
+    as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
+    regs = discover(prjmgm)
+    wbs = Wbs(regs["wbs"][0]) if len(regs["wbs"]) == 1 else None
+    raid = raid_entries(regs["raid"]) if regs["raid"] else None
+    bpath = os.path.join(prjmgm, BRIEF_NAME)
+    bpath = bpath if os.path.exists(bpath) else None
+    scope = wbs.scope if wbs else os.path.basename(prjmgm)
+    rec = {"kind": "charter", "version": 1, "scope": scope, "as_of": as_of.isoformat(),
+           "generated": datetime.now().isoformat(timespec="seconds"),
+           "brief": brief_parts(bpath) if bpath else None,
+           "deliverables": charter_deliverables(wbs) if wbs else None,
+           "stakeholders": charter_stakeholders(prjmgm, scope),
+           "risks": top_risks(raid, as_of) if raid is not None else None,
+           "sources": {"brief": BRIEF_NAME if bpath else None,
+                       "wbs": os.path.relpath(wbs.path, prjmgm) if wbs else None,
+                       "raid": [os.path.relpath(x, prjmgm) for x in regs["raid"]]},
+           "summary": {"text": None, "confirmed_on": None}}
+    out_dir = reports_dir(os.path.join(prjmgm, "Reports"), "charter")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "%s Charter.json" % as_of.isoformat())
+    write_record(path, rec)
+    b = rec["brief"]
+    print("Charter for %s (as of %s)" % (scope, as_of))
+    print("  brief: %s" % ("%s, %s, revised %s" % (b["file"], b["size"] or "size not said", b["revised"] or "?") if b else "none"))
+    print("  key deliverables: %s · risks: %s · stakeholders: %s"
+          % ("no WBS" if wbs is None else len(rec["deliverables"]),
+             "no RAID" if raid is None else len(rec["risks"]),
+             "solo default" if rec["stakeholders"]["default"] else "%d" % len(rec["stakeholders"]["people"])))
+    print("  Record: %s\n  View:   %s" % (path, path[:-5] + ".html"))
+    return 0
+
+
+def render_charter(rec):
+    external = rec.get("audience") == "external"
+    b = rec.get("brief")
+    nobrief = ('<p class="muted">No Project Brief yet: write one from templates/Project-Brief-template.md.</p>'
+               if not external else '<p class="muted">Not written yet.</p>')
+    lean = lambda what: '<p class="muted">A lean brief: %s.</p>' % what
+    src = lambda text: '<p class="src">%s</p>' % e(text)
+    from_brief = src("From the Project Brief%s" % (", revised %s" % b["revised"] if b and b.get("revised") else "")) if b else ""
+    card = lambda title, body: '<section class="card"><h2>%s</h2>%s</section>' % (e(title), body)
+
+    purpose = (from_brief + ('<p class="statement">%s</p>' % md_inline(b["statement"]) if b.get("statement")
+                             else '<p class="muted">The brief has no executive statement (<em>To … so that …</em>).</p>')) if b else nobrief
+    if b:
+        outc = from_brief + ('<p>%s</p>' % md_inline(b["outcome"]) if b.get("outcome") else "")
+        if b.get("done_when"):
+            outc += '<p class="small" style="margin-top:8px"><strong>Done when</strong></p><ol class="dw">%s</ol>' % "".join(
+                "<li>%s</li>" % md_inline(x) for x in b["done_when"])
+        if b.get("stop_if"):
+            outc += '<p class="small" style="margin-top:8px"><strong>Stop if:</strong> %s</p>' % md_inline(b["stop_if"])
+    else:
+        outc = nobrief
+    if b and b.get("measures"):
+        meas = from_brief + '<table><thead><tr><th></th><th>Measure</th><th>Baseline → target</th><th>By</th></tr></thead><tbody>%s</tbody></table>' % "".join(
+            '<tr><td><strong>%s</strong></td><td>%s<div class="small">%s%s</div></td><td>%s → <strong>%s</strong></td><td>%s</td></tr>'
+            % (e(m["id"]), e(m["measure"]), e(m["role"] or ""), " · aspirational" if m.get("ca") == "A" else "",
+               e(m["baseline"]), e(m["target"]), e(m["by"])) for m in b["measures"])
+    else:
+        meas = (from_brief + lean("no measures")) if b else nobrief
+
+    def brief_sec(name, what):
+        if not b:
+            return nobrief
+        text = (b.get("sections") or {}).get(name)
+        return from_brief + md_block(text) if text else from_brief + lean(what)
+
+    main = (card("Purpose", purpose) + card("Outcome and done-when", outc) + card("Measures", meas)
+            + card("Scope", brief_sec("Scope", "no scope written")) + card("Approach", brief_sec("Approach", "no approach written"))
+            + card("Who it is for", brief_sec("Who it is for", "no reader named")))
+
+    facts = [("Size", (b or {}).get("size")), ("Serves", None if external else (b or {}).get("serves")),
+             ("Brief revised", (b or {}).get("revised"))]
+    glance = (src("From the Project Brief") + "".join(
+        '<div class="kv"><span>%s</span><strong>%s</strong></div>' % (e(k), e(v)) for k, v in facts if v)) if b else nobrief
+    dl = rec.get("deliverables")
+    if dl is None:
+        kds = '<p class="muted">No WBS register.</p>'
+    elif not dl:
+        kds = src("From the WBS") + '<p class="muted">No key deliverables marked.</p>'
+    else:
+        def kd(x):
+            when = ("delivered %s" % x["when"] if x["delivered"] else "baseline %s%s" % (
+                x["baseline"] or "-", " · plan %s" % x["when"] if x.get("when") and x["when"] != x["baseline"] else ""))
+            return ('<div class="kd"><span>%s%s</span><div class="small">%s</div></div>'
+                    % ("" if external else "<strong>#%s</strong> " % x["id"], e(x["title"]), e(when)))
+        open_ = [x for x in dl if not x["delivered"]]
+        done = sorted((x for x in dl if x["delivered"]), key=lambda x: x.get("when") or "")
+        kds = src("From the WBS") + ("".join(kd(x) for x in open_) or '<p class="muted">All delivered.</p>')
+        if done:
+            kds += ('<details class="small" style="margin-top:8px"><summary>%d delivered</summary>%s</details>'
+                    % (len(done), "".join(kd(x) for x in done)))
+    st = rec.get("stakeholders") or {}
+    if st.get("default"):
+        stk = src("The default, with no Stakeholder Register") + '<p class="muted">Run solo: the owner is the only stakeholder, and receives the status report each sprint.</p>'
+    else:
+        people = "".join('<div class="kv"><span>%s</span><strong>%s</strong></div>'
+                         % (e(p.get("role") or ""), e(", ".join(p["groups"]) if external else p.get("name") or ""))
+                         for p in st.get("people") or [])
+        comms = "".join('<div class="small" style="margin-top:4px"><strong>%s</strong> to %s, %s</div>'
+                        % (e(c["what"]), e(", ".join(c["to_roles"] if external else c["to"]) or "no one"),
+                           e(c.get("cadence") or "no cadence")) for c in st.get("comms") or [])
+        stk = src("From the Stakeholder Register") + (people or '<p class="muted">No active stakeholder.</p>') + \
+            ('<p class="small" style="margin-top:8px"><strong>Communications</strong></p>' + comms if comms else "")
+    rk = rec.get("risks")
+    if rk is None:
+        risks = '<p class="muted">No RAID register.</p>'
+    elif not rk:
+        risks = src("From RAID") + '<p class="muted">%s</p>' % ("No risks or issues shared." if external else "No open risks or issues.")
+    else:
+        risks = src("From RAID") + "".join(
+            '<div class="kd"><strong>%s</strong> %s<div class="small">%s</div></div>'
+            % ("" if external else e(r["ref"]), e(r["detail"]),
+               CUES.sub(lambda m: "<strong>%s</strong>" % m.group(1), e(r["description"]))) for r in rk)
+    appetite = brief_sec("Appetite and budget", "no appetite set")
+    side = (card("At a glance", glance) + card("Appetite and budget", appetite) + card("Key deliverables", kds)
+            + card("Stakeholders", stk) + card("Top risks", risks))
+    sub = "Charter · as of %s%s" % (e(rec["as_of"]), " · shared version" if external else "")
+    footer = SHARED_FOOTER if external else ("Generated from the Project Brief and the registers; never edited by hand. "
+                                             "Change the brief, then run report.py charter again.")
+    return page("%s charter" % rec["scope"], sub, '<div class="charter"><div>%s</div><div>%s</div></div>' % (main, side),
+                footer=footer)
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1656,6 +2246,18 @@ def main():
     s.add_argument("--focus")
     s.add_argument("--highlights")
     s.set_defaults(func=cmd_confirm)
+    s = sub.add_parser("export", help="a copy for a reader outside the work, and its PDF")
+    s.add_argument("record")
+    s.add_argument("--comm", metavar="C.n", help="a communication in the project's Stakeholder Register: its share level sets the audience")
+    s.add_argument("--audience", choices=AUDIENCES, default=None,
+                   help="external (default): only what is marked Sharable; owner: the report as it is")
+    s.add_argument("--pdf", action="store_true", help="also print it to PDF with the machine's Chrome or Edge")
+    s.add_argument("--force", action="store_true", help="share a report whose ratings or summary are not confirmed")
+    s.set_defaults(func=cmd_export)
+    s = sub.add_parser("charter", help="the project on one page, from its brief and registers")
+    s.add_argument("project", help="the folder holding the project's brief and registers")
+    s.add_argument("--as-of", metavar="YYYY-MM-DD")
+    s.set_defaults(func=cmd_charter)
     s = sub.add_parser("render", help="rebuild the view from its record")
     s.add_argument("record")
     s.set_defaults(func=cmd_render)

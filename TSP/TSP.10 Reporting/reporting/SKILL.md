@@ -1,6 +1,6 @@
 ---
 name: reporting
-description: Generates reports from the registers - the sprint update (the last sprint's outcome beside the new sprint's commitments, across projects, after sprint planning) and a project status report with the Essential 4 (On Time, On Scope, On Quality, Resources) proposed from the WBS, RAID and sprint record - each as a JSON record plus an HTML view, opening with an executive summary drafted in plain language for the user to confirm. Use whenever the user asks for a status report, a project update, a sprint report, an executive summary, "how is the project doing", the Essential 4 or a RAG status, or wants to confirm or override a report's ratings or summary. Also used by the sprint ceremonies: status reports at the close-out, the sprint update after planning (sprint-facilitator). Not for the WBS or RAID dashboards themselves (wbs-manager, raid-manager).
+description: Generates reports from the registers - the sprint update (the last sprint's outcome beside the new sprint's commitments, across projects, after sprint planning) and a project status report with the Essential 4 (On Time, On Scope, On Quality, Resources) proposed from the WBS, RAID and sprint record - each as a JSON record plus an HTML view, opening with an executive summary drafted in plain language for the user to confirm. Also generates a one-page project charter from the brief and the registers, and shares a report outside the work as a filtered copy (`export`), at the share level the project's Stakeholder Register gives. Use whenever the user asks for a status report, a project update, a sprint report, an executive summary, a project charter or one-pager, "how is the project doing", the Essential 4 or a RAG status, wants to share a report with a sponsor or client, or wants to confirm or override a report's ratings or summary. Also used by the sprint ceremonies: status reports at the close-out, the sprint update after planning (sprint-facilitator). Not for the WBS or RAID dashboards themselves (wbs-manager, raid-manager).
 ---
 
 # Reporting (TSP.10)
@@ -14,7 +14,7 @@ Reports are generated from the registers, never written from memory. Each report
 
 ## Requirements
 
-Python 3, standard library only. Uses sibling skills, found beside this one in the skills folder: `wbs-manager` (its register and date modules, `wbs.py metrics --json` and `sprint_board()`) and `sprint-facilitator` (`sprint_record.py goals --json` and its table reader). `raid-manager` is optional: without a RAID register the reports run, with no risks, Changes or help to show.
+Python 3, standard library only. Uses sibling skills, found beside this one in the skills folder: `wbs-manager` (its register and date modules, `wbs.py metrics --json` and `sprint_board()`) and `sprint-facilitator` (`sprint_record.py goals --json` and its table reader). `raid-manager` is optional: without a RAID register the reports run, with no risks, Changes or help to show. `stakeholder-manager` is optional too: without it, or with no register in a project, every project runs on the solo default (the owner, a status report each sprint).
 
 ## The reports
 
@@ -22,6 +22,7 @@ Python 3, standard library only. Uses sibling skills, found beside this one in t
 |---|---|---|
 | **Sprint update**, after planning: the last sprint (goals and verdicts, what was delivered) beside this sprint (goals, committed items largest first, capacity, confidence); each project's overall status when several; key deliverables by month; goal history and focus; top risks; hours by area; and, on its own **Sprint board** tab, every project's cards by project and deliverable, To do / Doing / Done, as of the run (rerun mid-sprint to refresh it); a parent card reads its children's hours in the sprint, never its own estimate, and totals add leaves only. The overview is the page that opens and prints; the board is the deep dive | `report.py sprint --sprint <the sprint being started> --records "<sprint records>" --project "<project folder>" [--project ...]` | `Reports/Sprint Update/<sprint ID> Sprint Update.*`, beside the records folder (`--out-dir` to choose) |
 | **Project status**, at the close-out or on demand: the **Outcome** (what the project is for, its measures scored against their pace, and *On Outcome*), the Essential 4 with evidence and trend, decisions and help required, key deliverables by month (delivered and due), top risks | `report.py status "<project folder>" [--records "<sprint records>"] [--sprint <ID>] [--as-of YYYY-MM-DD]` | `<project folder>/Reports/Status/<date> Status.*` |
+| **Project charter**, on demand, for someone who reads none of the registers (a reviewer, a sponsor, a client): the project on one page. The brief's executive statement as its purpose, its outcome and done-when with *Stop if*, measures (baseline to target, no current values), scope, approach and who it is for; on the side the brief's size and what it serves, appetite and budget, key deliverables (open ones by date, delivered ones folded), stakeholders and communications, and the top risks. Each section names its source; a missing one says so (*No Project Brief yet*, *A lean brief*). Nothing is rated, so it can be shared straight away | `report.py charter "<project folder>" [--as-of YYYY-MM-DD]` | `<project folder>/Reports/Charter/<date> Charter.*` |
 
 A project folder is any folder holding the project's WBS register and, optionally, its RAID register; they are found by their `meta.kind`, so their file names do not matter. Pass every project the sprint spans to `sprint`; it refuses a sprint not yet planned, since nothing is committed. Without `--records`, `status` cannot read the sprint's capacity or confidence, and says less about Resources and Mood.
 
@@ -49,6 +50,28 @@ A same-day status rerun refuses to overwrite confirmed ratings (`--force` overri
 
 **Ratings are the user's.** Never confirm or override one without them: a confirmed rating is what the next report's trend is measured against.
 
+## Sharing a report
+
+A status report, sprint update or charter goes to someone outside the work through `export`, never as the file itself:
+
+```bash
+python scripts/report.py export "<record.json>"                    # external: a filtered copy, as HTML
+python scripts/report.py export "<record.json>" --pdf              # ... and printed to PDF
+python scripts/report.py export "<record.json>" --audience owner --pdf   # the report as it is, as a PDF
+python scripts/report.py export "<record.json>" --comm C.2        # the audience a communication in the Stakeholder Register sends it at
+```
+
+- **External is opt-in.** A RAID risk, issue or Change reaches the copy only when its entry is marked `Sharable = Y` (`raid-manager`); the command lists what it held back. *Help required* (it names who the work waits on), the evidence under each rating, the sprint board and the `facts` block are left out.
+- **Only what was agreed is shared.** An external export refuses a report whose ratings or summary are not confirmed (`--force` overrides).
+- **It reads as a page for someone outside:** no instructions to the owner, no empty sections, no WBS row IDs or objective codes, the done-when list open, and the same trend chips as the owner's view.
+- **The HTML is what is shared**, as a file or a link opened in a browser: `<name> (external).html`, beside the record. **The PDF is optional** (`--pdf`), printed by the machine's Chrome or Edge, headless: no new dependency; with neither, the command says so and the page is printed by hand.
+
+**The audience comes from the project's Stakeholder Register (TSP.13).** A status report records every communication that carries it (`audiences`: what, cadence, share level, recipients' names) and the owner's view says *Who receives this*; `export --comm C.n` takes the share level from that communication, and refuses one that carries another report, or a `--audience` that disagrees. A project with no register runs on the solo default, so its report reads as before. Contacts are never read. The external copy never says who else receives it, and a shared charter shows stakeholders by role and group, never by name.
+
+## Trends
+
+**One convention in every report and on the RAID board: up is better.** `trend_chip` shows a trend as an arrow in a tinted circle, with no word on the page: diagonal ↗ for a step better (green), ↘ worse (red), → steady, and straight ↑ / ↓ in a solid circle for a fast move. The word (*better*, *much worse*) is the tooltip, and `page` adds a one-line key at the foot of any page that shows a trend. Never draw a trend another way. Records store the level (-2 to +2), never an arrow; arrows in records written before this read with the convention they were written under (`legacy_level`). RAID's `Trend` is read with `raid_level`. On a phone, a table wider than the screen scrolls inside its card, and the key deliverables map stacks its months, one full-width column each.
+
 ## The executive summary
 
 **Two or three sentences a stakeholder can follow without the registers.** It is a status update, not a charter: the reader knows what the project is, so do not describe it.
@@ -66,7 +89,7 @@ Overall is the worst of the four; Mood (the fist of five) and On Outcome are sho
 
 | Signal | Amber | Red |
 |---|---|---|
-| On Time | a key deliverable planned past its baseline, or rebaselined this sprint | a baseline passed on an open key deliverable, with no plan beyond it |
+| On Time | a key deliverable planned past its baseline, or rebaselined to a later date this sprint (a move earlier is noted in the evidence, not counted) | a baseline passed on an open key deliverable, with no plan beyond it |
 | On Scope | an approved Change this sprint, or more hours pulled in than committed | a Change undecided past its decision date, or a key deliverable nothing schedules |
 | On Quality | a committed row without acceptance criteria, or a closure with an AC partial | a closure with an AC not met and no follow-up |
 | Resources | planned over available (a stretch, never red), or 50-80% of committed hours delivered, pro-rated mid-sprint | under 50% delivered |
@@ -96,7 +119,7 @@ The tool is meant to grow. A new report is a new command in `report.py` that:
 
 1. reads the registers it needs, through the same helpers (`discover`, `Wbs`, `raid_entries`, the sibling tools' `--json`);
 2. writes a record with a `kind`, a `facts` block in plain words and a `summary` slot, through `write_record`, which also renders the view;
-3. renders its view with the shared pieces (`page`, `summary_html`, `roadmap_html`, `risks_html`, `status_chip`), so every report reads as one system;
+3. renders its view with the shared pieces (`page`, `summary_html`, `roadmap_html`, `risks_html`, `status_chip`, `trend_chip`, `info_tip`), so every report reads as one system. Text that explains how to read a section (how a score is computed, what a threshold means) goes behind `info_tip` beside the section title, never as a caption under it; content the reader acts on stays on the page;
 4. gets checks in the repository's `tests/smoke_test.py`.
 
 Then add it to the table above.
