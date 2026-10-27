@@ -43,7 +43,7 @@ Support material for a WBS item (discovery, specs, plans, notes, inputs) always 
 
 **Organise by piece of work, not by document type.** People read later to find out what happened with one piece of work. A `Plan/` or `Discovery/` folder would scatter that story across several places.
 
-- **One folder per Feature:** `WP.<ID> <Brief Title>`, keyed off the stable `ID`, never `Code`. `Code` is renumbered as the WBS evolves, and a name keyed off it goes stale silently.
+- **One folder per Deliverable or Feature:** `WP.<ID> <Brief Title>`, keyed off the stable `ID`, never `Code`. `Code` is renumbered as the WBS evolves, and a name keyed off it goes stale silently.
 - **Flat until it isn't.** A Story's documents are loose files in its parent's folder, prefixed `WP<ID>` (e.g. `WP12 Gap Analysis.md` inside `WP.3 Dashboard Enhancement/`). Once a Story or sub-deliverable has about three documents of its own, it gets a nested `WP.<ID> <Title>/` folder.
 - **Two folders by kind, both for material that is not ours to edit,** created when there is something to put in them:
   - `Inputs/`: material received from outside (a client, a vendor, an external spec), kept as received;
@@ -235,6 +235,21 @@ python <skill-path>/scripts/wbs.py note "<register>" --id 42 "Scope revised: was
 
 It stamps the date and puts the entry on top, **below any closure note** — a closed row is read first for how it ended, so the closure stays pinned however much is added after it. One paragraph per entry, because the blank line is what separates them. Rows written before this convention hold their entries run together in one paragraph, oldest first; they are re-cut by reading them, not by script, since the entries are woven into prose.
 
+**Starting work the sprint never committed to asks first.** Moving a row to `Implementing` or `Done` (through `set` or `add`) is refused when the sprint running today has not committed to it: not planned or carried into it, not pulled in already, and not under a parent that is. **A parent counts only when it is committed itself:** a committed child does not make it so, since a parent's own acceptance criteria can stay unmet when every child is done. When a sprint means to close a parent (a goal naming a key deliverable), commit the parent at planning too; otherwise its close is asked like any other row. Ask the user which of two it is, then pass the answer:
+
+```bash
+python <skill-path>/scripts/wbs.py set "<register>" --id 58 --status Implementing --pulled-in "displaces nothing"   # or "delays <scope> 61"
+python <skill-path>/scripts/wbs.py set "<register>" --id 58 --status Done --closure "..." --outside-sprint "a correction of past work"
+```
+
+`--pulled-in` sets `Sprint Added`, notes the effect on the row and prints the line for the sprint record's *Committed items*, with `Area` left for the user to fill: add it the same day (sprint-facilitator, *A pull-in states its effect*). `--outside-sprint` notes why and marks nothing. Never pick the answer: it is the user's. Other edits to an uncommitted row are not asked about.
+
+**The daily check** lists rows pulled into the running sprint that its record does not name yet, across every WBS register under a root folder (found by `meta.kind`, so a register created mid-sprint is included). The record is found as the sprint ceremonies find theirs (`<sprint>.md`, first line `# Sprint `), or named with `--records`. It reads an item as `<scope> <ID> <title>`, `<scope> 3, 4 <title>` for several rows, or the IDs in brackets after the title. The daily loop's evening runs it:
+
+```bash
+python <skill-path>/scripts/wbs.py pullins [--root <folder>] [--sprint <ID>] [--records <folder>]
+```
+
 
 ### 3b. Validate
 
@@ -274,7 +289,7 @@ Grooming sets the horizon; planning turns it into a commitment.
 
 - **Grooming** — `--horizon Next` for the upcoming sprint, `Future` for the one after.
 - **Planning** — set `Sprint Planned` to a sprint ID the calendar holds, and **clear `Horizon` in the same edit** (`--horizon ""`). `check` will otherwise flag the row. **A commitment means `Not Started`:** committing a `Portfolio Backlog` or `Funnel` row (`--sprint-planned` or `--sprint-carried`) moves it to `Not Started` and says so, unless `--status` is passed with it. **A row already planned into an earlier sprint and not Done** keeps its `Sprint Planned`; add the new sprint with `--sprint-carried` and a `--reason` saying why it did not finish. Work committed at a planning counts to that sprint from that moment, even if it finishes before the sprint's start date.
-- When an item starts: Status → `Implementing`, `Sprint Added` → current sprint. `Actual Start` is stamped with it.
+- When an item starts: Status → `Implementing`, and `Actual Start` is stamped with it. A row the sprint did not commit to asks first: a pull-in (`Sprint Added` → current sprint) or work outside the sprint (see operation 3).
 - When an item completes: Status → `Done`, `Sprint Ended` → current sprint, `Horizon` must be gone, and `Actual End` is stamped.
 - Multiple items can share a sprint. After changes, **refresh the dashboard** (operation 5).
 

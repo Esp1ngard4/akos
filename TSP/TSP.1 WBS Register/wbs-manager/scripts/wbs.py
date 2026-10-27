@@ -8,6 +8,7 @@
     python wbs.py check   <register>
     python wbs.py rebaseline <register> --id 42 --baseline-end Q2-26 --reason "..."
     python wbs.py metrics <register>... --sprint S26.Q3.5
+    python wbs.py pullins [--root <folder>] [--sprint S26.Q3.5] [--records <folder>]
     python wbs.py migrate <register> [--apply]
     python wbs.py sprints seed   <conventions.json> --scope "Project name" --year 2026
     python wbs.py sprints import <register> --from <conventions.json>
@@ -547,6 +548,89 @@ def stamp_sprint_ended(data, row, args, changed):
                    "--sprint-ended to correct)" % (sid, ended["text"]))
 
 
+# --------------------------------------------------------------------------- #
+# Confirming a pull-in. Starting or closing work the sprint never committed to
+# is either a pull-in, whose effect on committed work is stated there and then
+# (the sprint ceremonies' rule), or work outside the sprint. The tool asks; it
+# never decides, and it never marks anything by itself.
+
+STARTS_WORK = ("Implementing", "Done")
+
+
+def current_sprint(data):
+    return sprint_on(data, date.today().isoformat())
+
+
+def committed_now(data, row, sprint):
+    """Committed to the sprint itself, pulled into it already, or under a row
+    that is: work on a committed parent's children is the parent's work. Never
+    by a committed child: a parent is a commitment of its own, whose AC can stay
+    unmet when every child is done, so it counts only when it was itself
+    planned, carried or pulled into the sprint."""
+    seen, cur = set(), row
+    while cur is not None and str(cur.get("ID")) not in seen:
+        if committed_to(cur, sprint) or cur.get("Sprint Added") == sprint:
+            return True
+        seen.add(str(cur.get("ID")))
+        cur = find(data, cur.get("Parent")) if cur.get("Parent") is not None else None
+    return False
+
+
+def scope_code(data):
+    """How a sprint record names this register: its meta.scope."""
+    return (data.get("meta", {}).get("scope") or "").strip()
+
+
+def row_ref(data, row_id):
+    return "%s %s" % (scope_code(data), row_id)
+
+
+def record_line(register_path, data, row, effect):
+    """The row's line for the sprint record's Committed items, in its shape.
+    `Area` is left for the user: the register does not know which area a
+    project serves."""
+    hours = row.get("Estimated Effort (h)")
+    return "| %s %s | %s |  |  | **pulled in %s**; effect: %s |" % (
+        row_ref(data, row["ID"]), row.get("Title", ""),
+        ("%gh" % hours) if hours is not None else "",
+        "%d-%s" % (date.today().day, D.MONTHS[date.today().month - 1]), effect)
+
+
+def pull_in_gate(data, row, args, changed, was):
+    """Refuse to start or close an uncommitted row without an answer. Returns
+    the record line for a pull-in, else None."""
+    pulled, outside = getattr(args, "pulled_in", None), getattr(args, "outside_sprint", None)
+    status = row.get("Status")
+    sprint = current_sprint(data)
+    if status not in STARTS_WORK or status == was or not sprint:
+        if pulled or outside:
+            sys.exit("--pulled-in and --outside-sprint answer a move to Implementing "
+                     "or Done in the running sprint; this edit is not one.")
+        return None
+    if committed_now(data, row, sprint):
+        if pulled or outside:
+            sys.exit("Item %s is committed to %s already: no answer is needed."
+                     % (row["ID"], sprint))
+        return None
+    if pulled and outside:
+        sys.exit("One answer: --pulled-in or --outside-sprint, not both.")
+    when = "%d-%s" % (date.today().day, D.MONTHS[date.today().month - 1])
+    if pulled:
+        row["Sprint Added"] = sprint
+        add_note(row, "Pulled into %s on %s; effect: %s." % (sprint, when, pulled.strip().rstrip(".")))
+        changed.append("Sprint Added=%s (pulled in; effect: %s)" % (sprint, pulled))
+        return record_line(args.register, data, row, pulled.strip().rstrip("."))
+    if outside:
+        add_note(row, "Worked outside the sprint (%s), %s: %s." % (sprint, when, outside.strip().rstrip(".")))
+        changed.append("noted as worked outside %s" % sprint)
+        return None
+    sys.exit("Item %s is not committed to %s, the sprint running today, so this "
+             "is a pull-in or work outside the sprint. Answer one:\n"
+             "  --pulled-in \"displaces nothing\"   (or \"delays <the committed item>\")\n"
+             "  --outside-sprint \"<why: a correction of past work, or work kept out of the sprint>\""
+             % (row["ID"], sprint))
+
+
 def finish(args, data, note):
     print(note)
     if getattr(args, "dry_run", False):
@@ -597,6 +681,7 @@ def cmd_add(args):
     stamp_actuals(data, row, args, created)
     stamp_sprint_ended(data, row, args, created)
     R.rows(data, ITEMS).append(row)
+    line = pull_in_gate(data, row, args, created, None)
     # The 100% rule: work added under a parent that carries its own estimate
     # must fit inside it, or that estimate becomes the original one.
     parent = find(data, args.parent) if args.parent else None
@@ -606,8 +691,11 @@ def cmd_add(args):
                        % (parent.get("ID"), parent["Estimated Effort (h)"]))
     # Stamped values are announced, as `set` announces them, so a wrong one
     # can be corrected.
-    return finish(args, data, "Added item %s  %s%s" % (
+    code = finish(args, data, "Added item %s  %s%s" % (
         row["ID"], args.title, "\n  " + "\n  ".join(created) if created else ""))
+    if line:
+        print("\n  Add to the sprint record's Committed items, today:\n  " + line)
+    return code
 
 
 def cmd_set(args):
@@ -648,10 +736,14 @@ def cmd_set(args):
     clear_horizon_on_close(row, args, changed)
     stamp_actuals(data, row, args, changed)
     stamp_sprint_ended(data, row, args, changed)
+    line = pull_in_gate(data, row, args, changed, was)
     check_deliverable(row)
     if not changed:
         sys.exit("Nothing to change. Pass at least one field.")
-    return finish(args, data, "Item %s: %s" % (args.id, ", ".join(changed)))
+    code = finish(args, data, "Item %s: %s" % (args.id, ", ".join(changed)))
+    if line:
+        print("\n  Add to the sprint record's Committed items, today:\n  " + line)
+    return code
 
 
 def cmd_note(args):
@@ -777,6 +869,23 @@ def cmd_split(args):
     if row.get("Description"):
         remainder["Description"] = row["Description"]
     remainder["Status"] = "Not Started"
+
+    # The delivered part keeps only the commitments up to the sprint it closes
+    # in: a later carry on it would count finished work as that sprint's
+    # carryover. The rest keeps the full history.
+    order = sorted(known, key=lambda k: known[k][0] or "") if known else []
+    pos = lambda sp: order.index(sp) if sp in order else sp
+    after = lambda sp: sp and (pos(sp) > pos(sprint) if (sp in order and sprint in order) else sp > sprint)
+    kept = [c for c in carried(done) if not after(c)]
+    if carried(done) != kept:
+        changed.append("item %s: Sprint Carried %s -> %s (only up to %s)"
+                       % (done["ID"], ", ".join(carried(done)), ", ".join(kept) or "none", sprint))
+        if kept:
+            done[CARRIED] = kept
+        else:
+            done.pop(CARRIED, None)
+    if after(done.get("Sprint Added")):
+        done.pop("Sprint Added")
 
     # Close the delivered part in the sprint being closed, not in whichever
     # sprint the close-out happens to run in.
@@ -1856,6 +1965,115 @@ def cmd_sprints_import(args):
 
 
 # --------------------------------------------------------------------------- #
+# The daily check: rows pulled into the sprint that its record does not name
+# yet. Every WBS register under a root, found by meta.kind, so one created
+# mid-sprint is included.
+
+SKIP_DIRS = ("PreviousV", "Reports", "AuxMat", ".git", "__pycache__", "node_modules")
+IDS = re.compile(r"^\s*#?\s*((?:\d+\s*(?:,|and|&|-|–)?\s*)*)(.*)$")
+PAREN_IDS = re.compile(r"\(\s*(\d+(?:\s*(?:,|and|&)\s*\d+)*)\s*\)")
+
+
+def wbs_registers(root):
+    found = []
+    for here, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+        for name in sorted(files):
+            if not name.endswith(".json"):
+                continue
+            path = os.path.join(here, name)
+            try:
+                if json.load(open(path, encoding="utf-8")).get("meta", {}).get("kind") == "wbs-register":
+                    found.append(path)
+            except (IOError, ValueError):
+                pass
+    return found
+
+
+def find_record(root, sprint):
+    """The sprint's record under root: `<sprint>.md` whose first line starts
+    `# Sprint `, as the sprint ceremonies find their records. None if absent."""
+    for here, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+        if sprint + ".md" in files:
+            path = os.path.join(here, sprint + ".md")
+            with open(path, encoding="utf-8") as fh:
+                if fh.readline().startswith("# Sprint "):
+                    return path
+    return None
+
+
+def record_refs(path, scopes):
+    """{(scope, id)} for every row the record's Committed items names. An item
+    names a row as `<scope> <ID> <title>`, or `<scope> 3, 4 <title>` for
+    several, or with the IDs in brackets after the title."""
+    if not path or not os.path.exists(path):
+        return None
+    scopes = sorted(scopes, key=len, reverse=True)
+    out, inside = set(), False
+    for line in open(path, encoding="utf-8").read().split("\n"):
+        if line.startswith("#"):
+            inside = line.strip().lstrip("#").strip().lower() == "committed items"
+            continue
+        if not inside or not line.startswith("|"):
+            continue
+        item = line.strip().strip("|").split("|")[0].strip().replace("**", "")
+        if item.startswith("~~"):
+            continue
+        code = next((sc for sc in scopes if sc and item.lower().startswith(sc.lower())), None)
+        if code is None:
+            continue
+        m = IDS.match(item[len(code):])
+        ids = m.group(1) or ""
+        if not ids.strip():
+            paren = PAREN_IDS.search(m.group(2) or "")
+            ids = paren.group(1) if paren else ""
+        for a, b in re.findall(r"(\d+)(?:\s*[-–]\s*(\d+))?", ids):
+            lo, hi = int(a), int(b) if b else int(a)
+            for n in (range(lo, hi + 1) if 0 <= hi - lo <= 50 else (lo, hi)):
+                out.add((code, n))
+    return out
+
+
+def cmd_pullins(args):
+    root = os.path.abspath(args.root or os.getcwd())
+    regs = [(p, R.load(p)) for p in wbs_registers(root)]
+    if not regs:
+        print("No WBS register under %s." % root)
+        return 0
+    sprint = args.sprint or next((current_sprint(d) for _p, d in regs if current_sprint(d)), None)
+    if not sprint:
+        print("No sprint runs today in any register's calendar: nothing to check.")
+        return 0
+    record = (os.path.join(args.records, sprint + ".md") if args.records
+              else find_record(root, sprint))
+    named = record_refs(record, [scope_code(d) for _p, d in regs])
+    missing = []
+    for path, data in regs:
+        code = scope_code(data)
+        for row in R.rows(data, ITEMS):
+            if row.get("Sprint Added") != sprint or row.get("Status") == "Cancelled":
+                continue
+            cur, seen, hit = row, set(), False
+            while cur is not None and str(cur.get("ID")) not in seen:
+                if named and (code, int(cur["ID"])) in named:
+                    hit = True
+                    break
+                seen.add(str(cur.get("ID")))
+                cur = find(data, cur.get("Parent")) if cur.get("Parent") is not None else None
+            if not hit:
+                effect = re.search(r"effect:\s*([^.\n]+)", row.get("Comments") or "")
+                missing.append(record_line(path, data, row, effect.group(1).strip() if effect else "?"))
+    if named is None:
+        print("%s has no sprint record yet: %d pulled-in row(s) to add once it exists." % (sprint, len(missing)))
+    if not missing:
+        print("No pull-in into %s is missing from its record." % sprint)
+        return 0
+    print("%d row(s) pulled into %s that the record does not name. Add to Committed items:" % (len(missing), sprint))
+    for line in missing:
+        print("  " + line)
+    return 0
+
 
 def main():
     p = argparse.ArgumentParser(description=__doc__,
@@ -1891,6 +2109,12 @@ def main():
         sub.add_argument("--closure", metavar="NOTE",
                          help="what happened and where each AC stands; "
                               "required when a row moves to Done or Cancelled")
+        sub.add_argument("--pulled-in", metavar="EFFECT",
+                         help="starting or closing a row the running sprint never committed "
+                              "to: it is pulled in, with its effect ('displaces nothing', "
+                              "'delays <item>'). Sets Sprint Added and prints the record line")
+        sub.add_argument("--outside-sprint", metavar="REASON",
+                         help="...or it is work outside the sprint, with why. Noted, nothing marked")
         sub.add_argument("--dry-run", action="store_true")
 
     s = subs.add_parser("add", help="add an item, claiming the next ID")
@@ -1962,6 +2186,12 @@ def main():
     s.add_argument("--json", action="store_true",
                    help="emit the same figures as a structure, for a caller to consume")
     s.set_defaults(func=cmd_metrics)
+
+    s = subs.add_parser("pullins", help="rows pulled into the running sprint that its record does not name yet")
+    s.add_argument("--sprint", help="default: the sprint running today")
+    s.add_argument("--root", help="the folder whose WBS registers and sprint record are read (default: the current one)")
+    s.add_argument("--records", help="the sprint records folder (default: the record found under --root)")
+    s.set_defaults(func=cmd_pullins)
 
     s = subs.add_parser("refined",
                         help="whether candidates carry what planning needs")
