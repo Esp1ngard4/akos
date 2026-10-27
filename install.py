@@ -18,6 +18,10 @@ lets a later update do a three-way merge - upstream changes applied, local chang
 kept, and a human asked only about the overlap.
 
 The record lives in tools.lock.json at the project root.
+
+With --docs, a tool's definition document (its TD) is placed too, in the
+project's own TSP folder, and locked as its own entry: a project that owns and
+evolves its TDs still sees where the catalogue's have moved on.
 """
 
 import argparse
@@ -26,6 +30,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -33,7 +38,7 @@ import tarfile
 import tempfile
 
 LOCK_NAME = "tools.lock.json"
-DEFAULT_DEST = ".github/skills"
+DEFAULT_DEST = ".agents/skills"
 SKIP = {".git", "__pycache__", ".pytest_cache", ".DS_Store"}
 SHARED_NAME = "_shared"
 CATALOGUE = os.path.dirname(os.path.abspath(__file__))
@@ -72,21 +77,35 @@ def digest(path):
     return "sha256:" + hashlib.sha256(content(path)).hexdigest()
 
 
-def walk(root):
-    """Every file under root as a sorted list of POSIX-style relative paths."""
+def is_td(rel):
+    """A tool definition document at the top of a tool folder: `TD.<n> - <Name>.md`."""
+    return "/" not in rel and rel.startswith("TD.") and rel.endswith(".md")
+
+
+ONLY = {"TD": is_td}
+
+
+def walk(root, only=None):
+    """Every file under root as a sorted list of POSIX-style relative paths.
+
+    `only` names a filter from ONLY: a TD entry is the TD files at the top of
+    its folder, never the skills or `_shared/` beside them upstream, nor
+    anything else a project keeps in that folder."""
+    keep = ONLY.get(only) if only else None
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP]
         for name in filenames:
             if name in SKIP:
                 continue
-            rel = os.path.relpath(os.path.join(dirpath, name), root)
-            out.append(rel.replace(os.sep, "/"))
+            rel = os.path.relpath(os.path.join(dirpath, name), root).replace(os.sep, "/")
+            if keep is None or keep(rel):
+                out.append(rel)
     return sorted(out)
 
 
-def hashes(root):
-    return dict((rel, digest(os.path.join(root, rel))) for rel in walk(root))
+def hashes(root, only=None):
+    return dict((rel, digest(os.path.join(root, rel))) for rel in walk(root, only))
 
 
 def is_binary(path):
@@ -173,6 +192,26 @@ def read_catalogue(root):
     return found
 
 
+def read_docs(root):
+    """Every tool's TD, keyed by its TSP ID: what `add --docs` places.
+
+    A TD is `TD.<n> - <Name>.md` at the top of the tool folder. Every tool has
+    one, including a tool with no skill, which is installed by its ID."""
+    found = {}
+    tsp = os.path.join(root, "TSP")
+    if not os.path.isdir(tsp):
+        return found
+    for tool in sorted(os.listdir(tsp)):
+        tool_dir = os.path.join(tsp, tool)
+        if not os.path.isdir(tool_dir):
+            continue
+        tds = [n for n in sorted(os.listdir(tool_dir)) if is_td(n)]
+        if tds:
+            found[tool.split(" ")[0]] = {"tool": tool, "tsp": tool.split(" ")[0],
+                                         "origin": "TSP/%s" % tool, "path": tool_dir, "files": tds}
+    return found
+
+
 def load_lock(project):
     path = os.path.join(project, LOCK_NAME)
     if not os.path.isfile(path):
@@ -209,6 +248,48 @@ def cmd_list(args):
         print("  %-18s %s" % (name, cat[name]["tool"]))
     print("\n  python install.py add <name> --into <project>")
     return 0
+
+
+def docs_key(tsp):
+    return "%s docs" % tsp
+
+
+def install_docs(doc, lock, project, docs_rel, catalogue):
+    """Place a tool's TD in <docs_rel>/<tool folder>/ and lock it as its own entry.
+
+    Once per tool, as `_shared/` is: a second skill of the same tool finds the
+    entry and leaves it alone. The entry carries `only: TD`, so every command
+    compares the TD files and nothing else in the folder.
+    """
+    key = docs_key(doc["tsp"])
+    dest_rel = "%s/%s" % (docs_rel.replace(os.sep, "/").strip("/"), doc["tool"])
+    dest = os.path.join(project, dest_rel.replace("/", os.sep))
+    commit = git(["rev-parse", "HEAD"], cwd=catalogue)
+    existing = lock["tools"].get(key)
+    if existing and os.path.isdir(dest):
+        missing, added, modified = compare(existing["files"], dest, "TD")
+        if missing or added or modified:
+            print("  %s is present and locally modified - left as it is." % key)
+            print("    'status' shows the differences; 'accept' declares them")
+            return key, "kept"
+        if existing.get("commit") == commit:
+            return key, "reused"
+    os.makedirs(dest, exist_ok=True)
+    for name in walk(dest, "TD"):                      # an older TD of this tool
+        os.remove(os.path.join(dest, name))
+    for name in doc["files"]:
+        shutil.copy2(os.path.join(doc["path"], name), os.path.join(dest, name))
+    lock["tools"][key] = {
+        "tsp": doc["tsp"],
+        "tool": doc["tool"],
+        "origin": doc["origin"],
+        "path": dest_rel,
+        "only": "TD",
+        "commit": commit,
+        "installed": dt.date.today().isoformat(),
+        "files": hashes(dest, "TD"),
+    }
+    return key, ("refreshed" if existing else "installed")
 
 
 def shared_key(tsp):
@@ -273,15 +354,37 @@ def install_shared(entry, lock, project, dest_parent, dest_parent_rel, catalogue
 
 def cmd_add(args):
     cat = read_catalogue(args.catalogue)
-    if args.skill not in cat:
+    docs = read_docs(args.catalogue) if args.docs else {}
+    tool_id = re.match(r"^TSP\.\d+$", args.skill)
+    if tool_id and not args.docs:
+        sys.exit("%s is a tool, not a skill: pass --docs <folder> to place its TD,\n"
+                 "or name one of its skills (python install.py list)." % args.skill)
+    if not tool_id and args.skill not in cat:
         sys.exit("Unknown skill '%s'. Try: python install.py list" % args.skill)
-    entry = cat[args.skill]
 
     project = os.path.abspath(args.into)
     if os.path.abspath(args.catalogue) == project:
         sys.exit("Refusing to install into the catalogue itself.\n"
                  "This repo lists tools; it is not a working environment.\n"
                  "Pass --into <your project>.")
+
+    if tool_id:
+        if args.skill not in docs:
+            sys.exit("No TD for %s in %s/TSP." % (args.skill, args.catalogue))
+        lock = load_lock(project)
+        if not lock.get("source"):
+            lock["source"] = (args.source
+                              or git(["remote", "get-url", "origin"],
+                                     cwd=args.catalogue, check=False)
+                              or os.path.abspath(args.catalogue))
+        key, action = install_docs(docs[args.skill], lock, project, args.docs, args.catalogue)
+        save_lock(project, lock)
+        rec = lock["tools"][key]
+        print("TD %s %s -> %s (%d file(s))" % (action, args.skill, rec["path"], len(rec["files"])))
+        print("  from %s @ %s" % (lock["source"], rec["commit"][:7]))
+        print("\nCommit the TD folder and %s together." % LOCK_NAME)
+        return 0
+    entry = cat[args.skill]
 
     dest_rel = "%s/%s" % (args.dest.replace(os.sep, "/").rstrip("/"), args.skill)
     dest = os.path.join(project, dest_rel.replace("/", os.sep))
@@ -312,6 +415,12 @@ def cmd_add(args):
             entry, lock, project, parent or project,
             os.path.dirname(dest_rel) or ".", args.catalogue)
 
+    doc_key = doc_action = None
+    if args.docs:
+        if entry["tsp"] not in docs:
+            sys.exit("No TD for %s in %s/TSP." % (entry["tsp"], args.catalogue))
+        doc_key, doc_action = install_docs(docs[entry["tsp"]], lock, project, args.docs, args.catalogue)
+
     shutil.copytree(entry["path"], dest, ignore=shutil.ignore_patterns(*SKIP))
 
     lock["tools"][args.skill] = {
@@ -333,16 +442,19 @@ def cmd_add(args):
         srec = lock["tools"][shared]
         print("  + %s %s -> %s (%d files, shared by this tool's skills)"
               % (SHARED_NAME, shared_action, srec["path"], len(srec["files"])))
-    print("\nCommit the skill folder and %s together, so the team gets both on "
-          "clone." % LOCK_NAME)
+    if doc_key and doc_key in lock["tools"]:
+        drec = lock["tools"][doc_key]
+        print("  + TD %s -> %s (%d file(s))" % (doc_action, drec["path"], len(drec["files"])))
+    print("\nCommit the skill folder%s and %s together, so the team gets %s on "
+          "clone." % (", its TD" if doc_key else "", LOCK_NAME, "them all" if doc_key else "both"))
     return 0
 
 
-def compare(recorded, root):
+def compare(recorded, root, only=None):
     """Recorded hashes vs what is on disk now."""
     if not os.path.isdir(root):
         return sorted(recorded), [], []
-    current = hashes(root)
+    current = hashes(root, only)
     missing = sorted(set(recorded) - set(current))
     added = sorted(set(current) - set(recorded))
     modified = sorted(p for p in set(recorded) & set(current)
@@ -361,7 +473,7 @@ def cmd_status(args):
     print("source: %s\n" % lock.get("source"))
     for name in sorted(lock["tools"]):
         rec = lock["tools"][name]
-        missing, added, modified = compare(rec["files"], local_root(project, rec))
+        missing, added, modified = compare(rec["files"], local_root(project, rec), rec.get("only"))
         merging = rec.get("merging")
 
         state = "clean"
@@ -405,10 +517,23 @@ def cmd_diff(args):
     try:
         up = materialize(source, ref, os.path.join(scratch, "up"))
         theirs = os.path.join(up, rec["origin"].replace("/", os.sep))
-        proc = subprocess.run(
-            ["git", "diff", "--no-index", "--", theirs, local_root(project, rec)],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        out = proc.stdout.decode("utf-8", "replace")
+        mine = local_root(project, rec)
+        if rec.get("only"):
+            # A TD entry: compare its files one by one, not the folders, which
+            # hold more than the TD on either side.
+            out = ""
+            for rel in sorted(set(walk(theirs, rec["only"])) | set(walk(mine, rec["only"]))):
+                a, b = os.path.join(theirs, rel), os.path.join(mine, rel)
+                proc = subprocess.run(
+                    ["git", "diff", "--no-index", "--",
+                     a if os.path.exists(a) else os.devnull, b if os.path.exists(b) else os.devnull],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                out += proc.stdout.decode("utf-8", "replace")
+        else:
+            proc = subprocess.run(
+                ["git", "diff", "--no-index", "--", theirs, mine],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            out = proc.stdout.decode("utf-8", "replace")
         print(out if out.strip() else "No difference from upstream %s." % ref)
         return 0
     finally:
@@ -485,7 +610,8 @@ def cmd_update(args):
         if not os.path.isdir(theirs_root):
             sys.exit("%s no longer exists upstream at %s." % (rec["origin"], ref))
 
-        base, theirs, mine = walk(base_root), walk(theirs_root), walk(mine_root)
+        only = rec.get("only")
+        base, theirs, mine = walk(base_root, only), walk(theirs_root, only), walk(mine_root, only)
         every = sorted(set(base) | set(theirs) | set(mine))
 
         def same(a_root, b_root, rel):
@@ -563,7 +689,7 @@ def cmd_update(args):
 
         rec["commit"] = new_commit
         rec["updated"] = dt.date.today().isoformat()
-        rec["files"] = hashes(mine_root)
+        rec["files"] = hashes(mine_root, only)
         save_lock(project, lock)
         print("\nLock updated to %s." % new_commit[:7])
         return 0
@@ -581,8 +707,10 @@ def cmd_accept(args):
         sys.exit("%s is missing from disk." % rec["path"])
 
     leftovers = [p for p in walk(root)
-                 if p.endswith(".upstream")
-                 or CONFLICT_MARKER in read_text(os.path.join(root, p))]
+                 if (rec.get("only") is None or ONLY[rec["only"]](p.replace(".upstream", "")))
+                 and p.endswith(".upstream")
+                 or (rec.get("only") is None or ONLY[rec["only"]](p))
+                 and CONFLICT_MARKER in read_text(os.path.join(root, p))]
     if leftovers and not args.force:
         sys.exit("Unresolved merge output still present:\n  %s\n"
                  "Resolve these first, or pass --force." % "\n  ".join(leftovers))
@@ -593,7 +721,7 @@ def cmd_accept(args):
         rec["updated"] = dt.date.today().isoformat()
     if args.message:
         rec["local_changes"] = args.message
-    rec["files"] = hashes(root)
+    rec["files"] = hashes(root, rec.get("only"))
     save_lock(project, lock)
 
     print("Accepted %s at %s (%d files)."
@@ -622,14 +750,17 @@ def main():
     p.add_argument("--catalogue", default=CATALOGUE)
     p.set_defaults(func=cmd_list)
 
-    p = subs.add_parser("add", help="vendor a skill into a project")
-    p.add_argument("skill")
+    p = subs.add_parser("add", help="vendor a skill (or, with --docs, a tool's TD) into a project")
+    p.add_argument("skill", help="a skill name, or a tool ID (TSP.4) with --docs for its TD alone")
     p.add_argument("--into", default=".", help="project root (default: cwd)")
     p.add_argument("--dest", default=DEFAULT_DEST,
                    help="skills directory (default: %s)" % DEFAULT_DEST)
     p.add_argument("--catalogue", default=CATALOGUE)
     p.add_argument("--source", help="URL to record (default: the catalogue's origin)")
     p.add_argument("--force", action="store_true", help="overwrite an existing copy")
+    p.add_argument("--docs", metavar="FOLDER",
+                   help="also place the tool's TD in FOLDER/<tool folder>/ (relative to --into), "
+                        "locked as its own entry")
     p.set_defaults(func=cmd_add)
 
     p = subs.add_parser("status", help="compare installed copies against the lock")

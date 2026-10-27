@@ -162,6 +162,18 @@
       "Description": "TD.1 v1.11: migrate adds the standard vocabulary values a register lacks and keeps the project's own, instead of replacing the list.",
       "ID": 27,
       "Tool": "WBS Register"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.4 v1.1: add --docs places a tool's TD in the project's TSP folder, locked as its own entry; add TSP.n --docs for a tool with no skill; where project-management tools go.",
+      "ID": 28,
+      "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.3 v1.7: the audit discovers .github, .claude and .agents skills at the root, matching where the installer installs.",
+      "ID": 29,
+      "Tool": "TSP Register"
     }
   ],
   "control_activities": [],
@@ -212,8 +224,8 @@
         ]
       }
     },
-    "updated": "2026-10-27T11:27:53",
-    "values_hash": "sha256:32101b5a7d590dc5e0220c97a5c39e60048124a94dd050f766e7d8ae53ce78ee",
+    "updated": "2026-10-27T13:12:41",
+    "values_hash": "sha256:eb018cc49973a8d2ae934b8e48b4e4bff396c5deb602cc6e37517af9a4bd0e99",
     "version": 1
   },
   "tools": [

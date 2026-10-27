@@ -113,16 +113,18 @@ def scan_fsp_folders(tools_root):
 
 
 def find_skill_roots(repo_root, tools_root):
-    """Every `.claude/skills` a skill could be installed in.
+    """Every skills folder a skill could be installed in.
 
-    The repo root holds most; a couple of tools ship their own nested one. Only
-    tool folders are scanned - skills under project folders belong to projects,
-    not to tools.
+    At the repo root: `.agents/skills` (where the installer puts them),
+    `.github/skills` and `.claude/skills`. A couple of tools
+    ship their own nested `.claude/skills`. Only tool folders are scanned -
+    skills under project folders belong to projects, not to tools.
     """
     roots = []
-    top = os.path.join(repo_root, ".claude", "skills")
-    if os.path.isdir(top):
-        roots.append(top)
+    for parts in ((".agents", "skills"), (".github", "skills"), (".claude", "skills")):
+        top = os.path.join(repo_root, *parts)
+        if os.path.isdir(top):
+            roots.append(top)
     # A catalogue has no .claude/skills: each skill sits beside its tool.
     if tools_root and os.path.isdir(tools_root):
         roots.append(tools_root)

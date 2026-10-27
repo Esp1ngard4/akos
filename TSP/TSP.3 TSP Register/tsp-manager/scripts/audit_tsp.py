@@ -8,8 +8,9 @@
 Read-only. Run it before the annual review, and whenever the register and the
 tool folders may have drifted.
 
-Skill roots are discovered automatically: the repo's `.claude/skills` plus any
-`.claude/skills` inside an tool folder. Project-scoped skills are deliberately
+Skill roots are discovered automatically: the repo's `.agents/skills`,
+`.github/skills` and `.claude/skills`, plus any `.claude/skills` inside a tool
+folder. Project-scoped skills are deliberately
 not scanned - they belong to projects, not to tools. Pass `--skills DIR`
 (repeatable) to override.
 
@@ -30,7 +31,7 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("register")
     p.add_argument("--tools-root", help="folder holding the TSP.<n> directories")
-    p.add_argument("--repo-root", help="for discovering .claude/skills (default: the folder above "
+    p.add_argument("--repo-root", help="for discovering .agents, .github and .claude skills (default: the folder above "
                    "the tools root, so the audit gives the same answer wherever it is run from)")
     p.add_argument("--skills", action="append", default=[],
                    help="explicit skill root (repeatable)")

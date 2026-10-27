@@ -122,8 +122,10 @@ python akos/install.py list
 python akos/install.py add wbs-manager --into <your-repo>
 ```
 
-That copies the skill into `<your-repo>/.github/skills/` and writes
+That copies the skill into `<your-repo>/.agents/skills/` and writes
 `tools.lock.json` recording where it came from and at which commit. **Commit both.**
+`.agents/skills/` is read by GitHub Copilot, Codex, Cursor and others; Claude Code
+reads only `.claude/skills/`, so for Claude Code add `--dest .claude/skills`.
 Everyone who clones your repo then has the tool — no setup step, and a later change
 to it shows up in a pull request like any other.
 
@@ -135,6 +137,14 @@ python akos/install.py update wbs-manager   # three-way merge upstream changes i
 ```
 
 `update` applies upstream changes, keeps yours, and asks about the overlap only.
+
+A project that will own and evolve its tools can take their definition documents
+too, into its own TSP folder, locked the same way:
+
+```bash
+python akos/install.py add wbs-manager --into <your-repo> --docs TSP
+python akos/install.py add TSP.4 --into <your-repo> --docs TSP   # a tool with no skill: its TD alone
+```
 [6. Sharing with a team](method/06-sharing-with-a-team.md) explains why it works this
 way; [TD.4](TSP/TSP.4%20Tool%20Installer/TD.4%20-%20Tool%20Installer.md) is the
 reference. A plain `cp -r` of the skill folder also works — you just lose the ability

@@ -226,7 +226,7 @@ def test_installer(root, scratch):
                    "--catalogue", root, "--source", root], root)
     if not check("add runs", ok, out):
         return
-    skill = os.path.join(project, ".github", "skills", "wbs-manager", "SKILL.md")
+    skill = os.path.join(project, ".agents", "skills", "wbs-manager", "SKILL.md")
     check("skill vendored into the project", os.path.isfile(skill), skill)
     lock = os.path.join(project, "tools.lock.json")
     if not check("lock written", os.path.isfile(lock), lock):
@@ -631,7 +631,7 @@ def test_content_system(root, scratch):
                    "--into", project, "--catalogue", root], root)
     if not check("install.py add brings the skill in", ok, out):
         return
-    skills_root = os.path.join(project, ".github", "skills")
+    skills_root = os.path.join(project, ".agents", "skills")
     check("_shared installed beside the skill",
           os.path.isdir(os.path.join(skills_root, "_shared")),
           "\n".join(sorted(os.listdir(skills_root))) if os.path.isdir(skills_root) else "")
@@ -689,7 +689,7 @@ def test_notebook_manager(root, scratch):
                    "--into", project, "--catalogue", root], root)
     if not check("install.py add brings the skill in", ok, out):
         return
-    skill = os.path.join(project, ".github", "skills", NOTEBOOK_SKILL)
+    skill = os.path.join(project, ".agents", "skills", NOTEBOOK_SKILL)
     assets = os.path.join(skill, "assets", "notebooks")
     check("assets/ installed with the skill", os.path.isdir(assets), skill)
     notebooks = os.path.join(project, "notebooks")
@@ -910,7 +910,7 @@ def test_sprint_ceremonies(root, scratch):
                        "--into", project, "--catalogue", root], root)
         if not check("install.py add %s" % name, ok, out):
             return
-    installed = os.path.join(project, ".github", "skills", "sprint-facilitator",
+    installed = os.path.join(project, ".agents", "skills", "sprint-facilitator",
                              "scripts", "sprint_record.py")
     check("the record script arrives with the skill", os.path.isfile(installed), installed)
     lock = json.load(io.open(os.path.join(project, "tools.lock.json"), encoding="utf-8"))
@@ -1243,7 +1243,7 @@ def test_reporting(root, scratch):
                        "--catalogue", root], root)
         if not check("install.py add %s" % name, ok, out[:300]):
             return
-    installed = os.path.join(target, ".github", "skills", "reporting", "scripts", "report.py")
+    installed = os.path.join(target, ".agents", "skills", "reporting", "scripts", "report.py")
     ok, out = run([installed, "status", project, "--records", records, "--sprint", "S26.Q4.1",
                    "--as-of", "2026-10-16"], work)
     check("the installed copy finds wbs-manager and sprint-facilitator beside it", ok, out[:300])
@@ -1864,6 +1864,73 @@ def test_migrate_vocabulary(root, scratch):
     check("migrate: a second run has nothing to do", "0 change(s)" in out, out[:200])
 
 
+def test_installer_docs(root, scratch):
+    """--docs places a tool's TD in the project's TSP folder, locked as its own
+    entry, and every command works on it while seeing the TD files only.
+
+    The project here is a project-management folder, as at work: skills under
+    its .agents/skills, TDs under its TSP folder. Upstream moves in a clone of
+    the catalogue, so update has a real base, theirs and mine to merge.
+    """
+    import json
+    print("\nInstaller: tool definitions (--docs)")
+    installer = os.path.join(root, "install.py")
+    project = os.path.join(scratch, "docs-project", "General", "0.PrjMgm")
+    os.makedirs(project, exist_ok=True)
+    lock_path = os.path.join(project, "tools.lock.json")
+    td8 = os.path.join(project, "TSP", "TSP.8 Sprint Ceremonies", "TD.8 - Sprint Ceremonies.md")
+    td4 = os.path.join(project, "TSP", "TSP.4 Tool Installer", "TD.4 - Tool Installer.md")
+
+    ok, out = run_raw([installer, "add", "sprint-facilitator", "--into", project, "--catalogue", root,
+                       "--docs", "TSP"], root)
+    lock = json.load(io.open(lock_path, encoding="utf-8")) if os.path.exists(lock_path) else {"tools": {}}
+    rec = lock["tools"].get("TSP.8 docs") or {}
+    check("docs: add --docs places the skill and its TD, each locked",
+          ok and os.path.isfile(td8) and "sprint-facilitator" in lock["tools"]
+          and rec.get("only") == "TD" and list(rec.get("files") or {}) == ["TD.8 - Sprint Ceremonies.md"], out[:300])
+    ok, out = run_raw([installer, "add", "sprint-planning-precheck", "--into", project, "--catalogue", root,
+                       "--docs", "TSP"], root)
+    check("docs: a second skill of the same tool reuses its TD", ok and "TD reused" in out, out[:300])
+    ok, out = run_raw([installer, "add", "TSP.4", "--into", project, "--catalogue", root], root)
+    check("docs: a tool ID without --docs is refused", not ok and "--docs" in out, out[:200])
+    ok, out = run_raw([installer, "add", "TSP.4", "--into", project, "--catalogue", root, "--docs", "TSP"], root)
+    check("docs: add TSP.4 --docs places a TD alone, for a tool with no skill",
+          ok and os.path.isfile(td4) and not os.path.isdir(os.path.join(project, ".agents", "skills", "TSP.4")), out[:300])
+
+    io.open(os.path.join(os.path.dirname(td4), "Our install notes.md"), "w", encoding="utf-8").write("ours\n")
+    ok, out = run_raw([installer, "status", "--project", project, "--check"], root)
+    check("docs: another file beside a TD is not drift", ok, out[-300:])
+    with io.open(td4, "a", encoding="utf-8") as fh:
+        fh.write("\n## Our adaptation\n\nInstalled into the PM folder.\n")
+    ok, out = run_raw([installer, "status", "--project", project, "--check"], root)
+    check("docs: an edited TD is reported", not ok and "TSP.4 docs" in out and "MODIFIED" in out, out[-300:])
+
+    # Upstream moves: a clone of the catalogue with a change to TD.4's opening line.
+    upstream = os.path.join(scratch, "docs-upstream")
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    subprocess.check_call(["git", "clone", "-q", root, upstream], **quiet)
+    up_td = os.path.join(upstream, "TSP", "TSP.4 Tool Installer", "TD.4 - Tool Installer.md")
+    text = io.open(up_td, encoding="utf-8").read().split("\n")
+    text[0] = text[0] + " (upstream revision)"
+    io.open(up_td, "w", encoding="utf-8", newline="\n").write("\n".join(text))
+    subprocess.check_call(["git", "-c", "user.email=smoke@test", "-c", "user.name=smoke", "commit", "-qam",
+                           "upstream TD change"], cwd=upstream, **quiet)
+    ok, out = run_raw([installer, "update", "TSP.4 docs", "--project", project, "--source", upstream], root)
+    merged = io.open(td4, encoding="utf-8").read()
+    check("docs: update merges the upstream TD change and keeps the local edit",
+          ok and "(upstream revision)" in merged and "## Our adaptation" in merged
+          and os.path.isfile(os.path.join(os.path.dirname(td4), "Our install notes.md")), out[-300:])
+    ok, out = run_raw([installer, "accept", "TSP.4 docs", "--project", project, "-m", "adapted for the PM folder"], root)
+    ok2, out2 = run_raw([installer, "status", "--project", project, "--check"], root)
+    check("docs: accept records the adapted TD, and status is clean again",
+          ok and ok2 and "declared: adapted for the PM folder" in out2, out2[-300:])
+    tsp_scripts = os.path.join(root, "TSP", "TSP.3 TSP Register", "tsp-manager", "scripts")
+    code = ("import sys; sys.path.insert(0, %r); import schema as S; "
+            "print([r.replace(chr(92), '/') for r in S.find_skill_roots(%r, None)])" % (tsp_scripts, project))
+    ok, out = run_raw(["-c", code], root)
+    check("docs: the TSP audit finds the project's .agents/skills by itself", ok and ".agents/skills" in out, out[:200])
+
+
 def test_effort_and_splits(root, scratch):
     """Effort that rolls up, requirements that say whether they were verified,
     and partly done work split so its hours count where they were done.
@@ -2005,6 +2072,7 @@ def main():
         test_effort_and_splits(root, scratch)
         test_pull_ins(root, scratch)
         test_migrate_vocabulary(root, scratch)
+        test_installer_docs(root, scratch)
         test_raid_lessons(root, scratch)
         test_concurrent_save(root, scratch)
         test_execution_layout(root, scratch)

@@ -26,7 +26,7 @@ The reasoning is in [6. Sharing with a team](../../method/06-sharing-with-a-team
 | This document | owned | `TSP.4 Tool Installer/` | Governance: purpose, model, conventions, history |
 | `install.py` | owned | repository root | The tool itself |
 | `tools.lock.json` | owned, per consuming project | root of the project it was installed into | **Source of truth** for what that project has and where it came from |
-| `.github/skills/<name>/` | used, per consuming project | root of the project it was installed into | The vendored copy. Committed, not gitignored — unlike a junction |
+| `.agents/skills/<name>/` (or `--dest`) | used, per consuming project | root of the project it was installed into | The vendored copy. Committed, not gitignored — unlike a junction |
 
 **This tool has no skill.** It runs a handful of times in a project's life, at
 moments where a human is deciding something, and it is not improved by being
@@ -64,6 +64,8 @@ the exact content the copy was taken from, and a tag can be moved.
 |---|---|
 | `list` | What the catalogue publishes |
 | `add <skill> --into <project>` | Vendor it and write the lock entry |
+| `add <skill> --into <project> --docs <folder>` | Also place the tool's TD in `<folder>/<tool folder>/`, locked as its own entry (`TSP.n docs`) |
+| `add TSP.n --into <project> --docs <folder>` | The TD alone, for a tool with no skill (or a TD wanted without its skill) |
 | `status [--check]` | Compare copies against the lock. Offline; `--check` exits non-zero on any difference |
 | `diff <skill>` | Ours against upstream |
 | `update <skill>` | Three-way merge. Exits non-zero and leaves the lock alone if anything conflicts |
@@ -77,8 +79,12 @@ what turns "drift is detectable" into "drift is detected".
 
 - **Lock location** is `tools.lock.json` at the project root, next to the other
   lock files a project has.
-- **Default destination** is `.github/skills/`. Override with `--dest` for
-  `.claude/skills/` or `.agents/skills/`.
+- **Default destination** is `.agents/skills/`, the folder most agents read:
+  GitHub Copilot (in VS Code too), Codex, Cursor and others. **Claude Code reads
+  only `.claude/skills/`** (tested 27-Oct-2026 with Claude Code 2.1.311: a skill
+  in `.agents/skills/` was neither listed nor invocable, one in `.claude/skills/`
+  was both), so a project using it installs with `--dest .claude/skills`.
+  `--dest .github/skills` serves Copilot only.
 - **Commit the skill folder and the lock together.** Either without the other is
   worse than neither: a lock with no skill is a promise, and a skill with no lock
   is exactly the unrecorded copy this tool exists to prevent.
@@ -89,6 +95,22 @@ what turns "drift is detectable" into "drift is detected".
 - **A declared difference is not a finding.** `accept -m "<why>"` is what
   separates a deliberate local change from a mistake, and `--check` cannot tell
   them apart without it.
+- **A tool's TD can travel with it** (`--docs`). A project that owns its tools
+  keeps their TDs in its own TSP folder and evolves them there, and still sees
+  where the catalogue's have moved: a TD entry gets `status`, `diff`, `update`
+  and `accept` like a skill. It is placed once per tool, keeps the upstream file
+  name (rename it and it no longer matches upstream), and its entry covers the
+  TD files only (`"only": "TD"`), so anything else the project keeps in that
+  folder is never drift. The installer never writes a TSP register: registering
+  the tools in the project's own register is `tsp-manager`'s.
+- **The project-management tools can live in the project-management folder.**
+  Install them `--into` that folder (`General/0.PrjMgm`, say): the skills land in
+  its `.agents/skills/`, the lock beside them, the TDs in `--docs TSP`. An
+  editor reads `.agents/skills/` at the root of each workspace folder, so whoever
+  adds that folder to their workspace gets the PM tools and someone who opens
+  only the repository root does not. A tool for the whole team is installed at
+  the repository root with its own lock; both are listed in the one project TSP
+  register.
 
 ## Relationship to other tools
 
@@ -122,4 +144,5 @@ copy, and `accept`, so the drift detection is itself under test.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-27 | **A tool's TD can be installed and locked too.** `add --docs <folder>` places the tool's TD in the project's TSP folder as its own lock entry, once per tool; `add TSP.n --docs` places a TD alone, for a tool with no skill. The entry covers the TD files only, so a project can keep its own notes beside a TD, evolve the TD, and still `update` from the catalogue with its edits kept. Conventions say where project-management tools go: their own folder, with its own `.github/skills/` and lock. The default destination becomes `.agents/skills/`, read by most agents; Claude Code reads only `.claude/skills/`, so it takes `--dest` (tested). Raised preparing an existing project's install. |
 | v1.0 | 2026-08-31 | Initial version. Written to answer how a team shares tools when the junction approach cannot survive a clone |
