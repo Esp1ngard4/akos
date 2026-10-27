@@ -82,6 +82,18 @@ TOOLS = [
                                     r, d, "--scope", "Demo"],
         "audit": lambda s, r: [os.path.join(s, "scripts", "audit_artifact_register.py"), r],
     },
+    {
+        "name": "TSP.13 Stakeholder Register",
+        "skill": "TSP/TSP.13 Stakeholder Register/stakeholder-manager",
+        "assets": [os.path.join("templates", "dashboard.html"),
+                   os.path.join("examples", "Stakeholders Atlas.json")],
+        "register": "Stakeholders Demo.json",
+        "dashboard": "Stakeholder Dashboard.html",
+        "collections": ["groups", "stakeholders", "communications", "change_log"],
+        "create": lambda s, r, d: [os.path.join(s, "scripts", "create_stk.py"),
+                                   os.path.dirname(r), "--scope", "Demo"],
+        "refresh": lambda s, r, d: [os.path.join(s, "scripts", "refresh_stk.py"), r, "--out", d],
+    },
 ]
 
 MIN_DASHBOARD_BYTES = 5000
@@ -882,6 +894,122 @@ def test_sprint_ceremonies(root, scratch):
           all(n in lock.get("tools", {}) for n in SPRINT_SKILLS), str(sorted(lock.get("tools", {}))))
 
 
+STK_TOOL = "TSP.13 Stakeholder Register"
+STK_SKILL = "stakeholder-manager"
+
+
+def test_stakeholder_register(root, scratch):
+    """TSP.13 on a scratch project in its own git repository.
+
+    The rules worth guarding are the ones a slip would break silently: no
+    address reaching the dashboard, the contacts file kept out of git (and the
+    tool saying so when it is not), an audience resolved to each person once
+    with the external copy split out, `per sprint` read from the project's own
+    calendar and said plainly when there is none, and the solo default for a
+    project with no register. The example register must pass its own check.
+    """
+    print("\nTSP.13 Stakeholder Register")
+    skill = os.path.join(root, "TSP", STK_TOOL, STK_SKILL)
+    scripts = os.path.join(skill, "scripts")
+    stk = os.path.join(scripts, "stk.py")
+    check("TD.13 present", any(n.startswith("TD.13") for n in os.listdir(os.path.join(root, "TSP", STK_TOOL))))
+    check("links resolve in the catalogue", not broken_links(os.path.join(root, "TSP", STK_TOOL)),
+          "; ".join(broken_links(os.path.join(root, "TSP", STK_TOOL))[:5]))
+
+    project = os.path.join(scratch, "stk-project")
+    plan = os.path.join(project, "planning")
+    os.makedirs(plan, exist_ok=True)
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    subprocess.check_call(["git", "init", "-q", "."], cwd=project, **quiet)
+
+    ok, out = run([os.path.join(scripts, "create_stk.py"), plan, "--scope", "Atlas"], project)
+    if not check("create runs", ok, out):
+        return
+    check("create prints the .gitignore line in a repository", "Contacts *.csv" in out, out)
+    reg = os.path.join(plan, "Stakeholders Atlas.json")
+    steps = [
+        ["add-group", plan, "Steering group"],
+        ["add", plan, "Sponsor One", "--groups", "G.1", "--power", "High", "--interest", "High",
+         "--current", "Supportive", "--desired", "Supportive"],
+        ["add", plan, "Client Lead", "--groups", "G.1", "--share", "external", "--power", "High",
+         "--interest", "High", "--current", "Neutral", "--desired", "Supportive"],
+        ["add", plan, "Finance Office", "--groups", "G.1", "--power", "High", "--interest", "Low",
+         "--current", "Neutral", "--desired", "Neutral"],
+        ["add-comm", plan, "Status report", "--report", "status-report", "--mode", "push",
+         "--audience", "S.1", "--cadence", "per sprint", "--channel", "email"],
+        ["add-comm", plan, "Steering update", "--mode", "push", "--audience", "G.1,S.2",
+         "--cadence", "monthly", "--channel", "email"],
+        ["contact", plan, "--id", "S.1", "--email", "sponsor@example.com"],
+        ["contact", plan, "--id", "S.2", "--email", "client@example.com"],
+        ["done", plan, "--id", "C.1", "--on", "2026-01-02"],
+    ]
+    for step in steps:
+        ok, out = run([stk] + step, project)
+        if not check("stk.py %s %s" % (step[0], step[2] if step[0] != "contact" else step[3]), ok, out):
+            return
+    ok, out = run([stk, "contact", plan, "--id", "S.1", "--phone", "+00 555 0100"], project)
+    check("contact never echoes the values", ok and "555" not in out and "example.com" not in out, out)
+
+    ok, out = run([stk, "audience", plan, "--id", "C.2", "--split"], project)
+    check("audience splits the external copy", ok and "-- external copy --" in out
+          and "client@example.com" in out and out.count("Client Lead") == 1, out)
+
+    ok, out = run([stk, "due", plan, "--as-of", "2026-01-20"], project)
+    check("no calendar: per sprint read as every 14 days, said", ok and "no sprint calendar" in out, out)
+    conventions = {"meta": {"kind": "agile-conventions", "version": 1, "scope": "Atlas"},
+                   "sprints": [{"Starts": "2026-01-01", "Ends": "2026-01-14"},
+                               {"Starts": "2026-01-15", "Ends": "2026-01-28"},
+                               {"Starts": "2026-01-29", "Ends": "2026-02-11"}]}
+    import json
+    with io.open(os.path.join(plan, "Agile Conventions Atlas.json"), "w", encoding="utf-8") as fh:
+        json.dump(conventions, fh)
+    ok, out = run([stk, "due", plan, "--as-of", "2026-01-20"], project)
+    check("per sprint: done last sprint is due this one", ok and "no sprint calendar" not in out
+          and re.search(r"due\s+Atlas\s+C\.1", out), out)
+    ok, out = run([stk, "due", plan, "--as-of", "2026-02-01", "--overdue"], project)
+    check("per sprint: a whole sprint missed is overdue", ok and re.search(r"overdue\s+Atlas\s+C\.1", out), out)
+    ok, out = run([stk, "due", "--all", "--root", project, "--as-of", "2026-01-20"], project)
+    check("--all finds the register under --root", ok and "C.1" in out, out)
+
+    ok, out = run([stk, "check", plan], project)
+    check("check: a stakeholder with no contacts row", "S.3" in out and "no row in the contacts file" in out, out)
+    check("check: a gap with no engagement action", "no Engagement Action" in out, out)
+    check("check: a contacts file git would take", "not ignored by git" in out, out)
+    with io.open(os.path.join(project, ".gitignore"), "w", encoding="utf-8") as fh:
+        fh.write("Contacts *.csv\n")
+    ok, out = run([stk, "check", plan], project)
+    check("check: quiet once git ignores it", "ignored by git" not in out and "tracked by git" not in out, out)
+    subprocess.check_call(["git", "add", "-f", os.path.join("planning", "Contacts Atlas.csv")], cwd=project, **quiet)
+    ok, out = run([stk, "check", plan], project)
+    check("check: a tracked contacts file is an error", not ok and "tracked by git" in out, out)
+
+    dash = os.path.join(plan, "Stakeholder Dashboard.html")
+    ok, out = run([os.path.join(scripts, "refresh_stk.py"), plan], project)
+    if check("refresh runs", ok, out) and os.path.isfile(dash):
+        html = io.open(dash, encoding="utf-8").read()
+        check("no address reaches the dashboard", "example.com" not in html)
+
+    empty = os.path.join(project, "no-register")
+    os.makedirs(empty, exist_ok=True)
+    code = ("import sys; sys.path.insert(0, %r); import stk_register as STK; "
+            "d = STK.load_or_default(%r, scope='X'); "
+            "print(d['meta'].get('default'), [l for c, l in STK.audiences_for(d, 'status-report')])"
+            % (scripts, empty))
+    ok, out = run(["-c", code], project)
+    check("the solo default: the owner and a status report", ok and out.startswith("True ['owner']"), out)
+
+    example = os.path.join(skill, "examples")
+    ok, out = run([stk, "check", example], project)
+    check("the example register passes its check, with its intended findings",
+          ok and "no Engagement Action" in out and "ERROR" not in out, out)
+
+    consumer = os.path.join(scratch, "stk-consumer")
+    os.makedirs(consumer, exist_ok=True)
+    ok, out = run([os.path.join(root, "install.py"), "add", STK_SKILL,
+                   "--into", consumer, "--catalogue", root], root)
+    check("install.py add %s" % STK_SKILL, ok, out)
+
+
 REPORT_TOOL = "TSP.10 Reporting"
 
 
@@ -1557,6 +1685,7 @@ def main():
         test_daily_loop(root, scratch)
         test_weekly_review(root, scratch)
         test_action_tracker(root, scratch)
+        test_stakeholder_register(root, scratch)
         test_reporting(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
@@ -1573,7 +1702,8 @@ def main():
               "concurrent-save check, the Execution layout, the "
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
-              "ceremonies, the daily loop, the weekly review and reporting)." % len(TOOLS))
+              "ceremonies, the daily loop, the weekly review, the action tracker, the "
+              "stakeholder register and reporting)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

@@ -12,8 +12,12 @@ Thumbs.db
 *.xlsx
 !TSP/TSP.3 TSP Register/tsp-manager/templates/dashboard.html
 !TSP/TSP.7 Notebook Manager/notebook-capture/assets/post-template.html
+!TSP/TSP.13 Stakeholder Register/stakeholder-manager/templates/dashboard.html
+
+# Stakeholder contacts are other people's personal data: never in git (TD.13).
+Contacts *.csv
 
 # Registers are JSON now, and JSON is not ignored - so there is no longer a list
-# of shipped-asset exceptions to keep in step with the tools. The two remaining
-# negations are HTML templates a tool ships: the TSP dashboard and the eDiary post.
+# of shipped-asset exceptions to keep in step with the tools. The remaining
+# negations are HTML templates a tool ships: the TSP and stakeholder dashboards and the eDiary post.
 PreviousV/

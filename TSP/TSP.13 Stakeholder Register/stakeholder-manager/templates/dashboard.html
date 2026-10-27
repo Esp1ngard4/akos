@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stakeholders</title>
+<meta name="generator" content="stakeholder-manager" data-values-hash="{{HASH}}">
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #1a1a2e; padding: 16px; }
+.header { margin-bottom: 20px; }
+.header h1 { font-size: 22px; font-weight: 700; color: #2F5496; }
+.header .subtitle { color: #666; font-size: 13px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e0e0e0; flex-wrap: wrap; }
+.tab { padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab:hover { color: #2F5496; }
+.tab.active { color: #2F5496; border-bottom-color: #2F5496; }
+.tab .count { font-weight: 400; color: #999; margin-left: 4px; }
+.panel { display: none; }
+.panel.active { display: block; }
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); text-align: center; }
+.kpi .value { font-size: 28px; font-weight: 700; color: #2F5496; }
+.kpi .value.bad { color: #dc2626; }
+.kpi .value.warn { color: #d97706; }
+.kpi .label { font-size: 11px; color: #888; margin-top: 2px; text-transform: uppercase; letter-spacing: .5px; }
+.box { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
+.box h3 { font-size: 13px; color: #444; margin-bottom: 8px; }
+.note { font-size: 12px; color: #666; margin-bottom: 12px; line-height: 1.5; }
+.empty { color: #999; padding: 16px 10px; font-size: 13px; }
+.muted { color: #999; }
+
+/* The power/interest grid: power on the vertical, interest on the horizontal. */
+.grid-wrap { display: grid; grid-template-columns: 28px 1fr 1fr; grid-template-rows: 1fr 1fr 24px; gap: 8px; }
+.axis-y { grid-row: 1 / 3; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+.axis-x { grid-column: 2 / 4; text-align: center; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+.quad { background: #f7f9fc; border: 1px solid #e3e8f0; border-radius: 8px; padding: 10px; min-height: 120px; }
+.quad.hot { background: #eef3fb; border-color: #c9d4e8; }
+.quad h4 { font-size: 12px; color: #2F5496; margin-bottom: 2px; }
+.quad .hint { font-size: 11px; color: #888; margin-bottom: 8px; }
+.who { display: inline-block; margin: 0 6px 6px 0; padding: 3px 8px; border-radius: 6px; background: #fff; border: 1px solid #dde3ec; font-size: 12px; }
+.quad .muted { font-size: 12px; }
+.who .gapmark { color: #b45309; font-weight: 700; margin-left: 4px; }
+
+/* Tables. */
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: .4px; padding: 8px 10px; border-bottom: 2px solid #e0e0e0; white-space: nowrap; }
+td { padding: 9px 10px; vertical-align: top; border-bottom: 1px solid #eef0f4; line-height: 1.45; }
+tbody tr:nth-child(even) td { background: #f7f9fc; }
+tbody tr:hover td { background: #eaf0fa; }
+td.id { white-space: nowrap; font-weight: 600; color: #2F5496; width: 1%; }
+td.nowrap { white-space: nowrap; }
+.name { font-weight: 600; font-size: 13px; }
+.sub { color: #666; margin-top: 2px; max-width: 60ch; }
+.chip { display: inline-block; margin: 0 4px 3px 0; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; border: 1px solid #e2e8f0; font-size: 11px; white-space: nowrap; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.st-overdue { background: #fee2e2; color: #b91c1c; }
+.st-due { background: #fef3c7; color: #92400e; }
+.st-ok { background: #dcfce7; color: #166534; }
+.st-event { background: #e0e7ff; color: #3730a3; }
+.st-inactive { background: #eef0f4; color: #666; }
+.gap-yes { background: #fef3c7; color: #92400e; }
+.gap-no { background: #dcfce7; color: #166534; }
+.ext { background: #fde68a; color: #78350f; }
+.own { background: #e0e7ff; color: #3730a3; }
+.sev { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.sev.error { background: #fee2e2; color: #b91c1c; }
+.sev.warning { background: #fef3c7; color: #92400e; }
+.sev.note { background: #e0e7ff; color: #3730a3; font-size: inherit; margin-bottom: 0; line-height: inherit; }
+.inactive td { color: #999; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1 id="title">Stakeholders</h1>
+  <div class="subtitle">Generated {{GENERATED}} from the register · contact details are kept in the project's contacts file and never shown here</div>
+</div>
+
+<div class="kpi-row" id="kpis"></div>
+
+<div class="tabs" id="tabs"></div>
+
+<div class="panel" id="p-grid">
+  <div class="box">
+    <h3>Power and interest</h3>
+    <p class="note">Where each active stakeholder sits, and so how they are managed. A mark after a name means their engagement is below where it is wanted.</p>
+    <div class="grid-wrap" id="grid"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-engagement">
+  <div class="box">
+    <h3>Engagement: current against desired</h3>
+    <p class="note">Gaps first. A gap with no engagement action is an audit finding.</p>
+    <div class="scroll" id="engagement"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-comms">
+  <div class="box">
+    <h3>Communications</h3>
+    <p class="note">Overdue first. Due dates are computed when the page is generated, from each communication's cadence and when it was last done; <em>per sprint</em> reads the shared sprint calendar.</p>
+    <div class="scroll" id="comms"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-groups">
+  <div class="box">
+    <h3>Groups</h3>
+    <p class="note">The audiences. Membership is held on each stakeholder; a person can be in several groups.</p>
+    <div class="scroll" id="groups"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-findings">
+  <div class="box">
+    <h3>Audit findings</h3>
+    <div class="scroll" id="findings"></div>
+  </div>
+</div>
+
+<div class="panel" id="p-log">
+  <div class="box">
+    <h3>Change log</h3>
+    <div class="scroll" id="log"></div>
+  </div>
+</div>
+
+<script>
+const SCOPE = {{SCOPE}};
+const GROUPS = {{GROUPS}};
+const PEOPLE = {{STAKEHOLDERS}};
+const COMMS = {{COMMS}};
+const FINDINGS = {{FINDINGS}};
+const CHANGES = {{CHANGES}};
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const active = r => !r.Status || r.Status === "Active";
+const groupName = id => (GROUPS.find(g => g.ID === id) || {}).Name || id;
+const personName = id => (PEOPLE.find(p => p.ID === id) || {}).Name || id;
+const refName = id => id.startsWith("G.") ? groupName(id) : personName(id);
+const STATE_LABEL = {overdue: "Overdue", due: "Due", ok: "On track", event: "On event", inactive: "Inactive"};
+
+document.getElementById("title").textContent = "Stakeholders · " + SCOPE;
+document.title = "Stakeholders · " + SCOPE;
+
+const live = PEOPLE.filter(active);
+const gaps = live.filter(p => p.gap > 0);
+const overdue = COMMS.filter(c => c.state === "overdue");
+const errors = FINDINGS.filter(f => f.Severity === "error");
+document.getElementById("kpis").innerHTML = [
+  [live.length, "Stakeholders", ""],
+  [GROUPS.filter(active).length, "Groups", ""],
+  [COMMS.filter(active).length, "Communications", ""],
+  [overdue.length, "Overdue", overdue.length ? "bad" : ""],
+  [gaps.length, "Engagement gaps", gaps.length ? "warn" : ""],
+  [FINDINGS.length, "Findings", errors.length ? "bad" : (FINDINGS.length ? "warn" : "")],
+].map(([v, l, cls]) => `<div class="kpi"><div class="value ${cls}">${v}</div><div class="label">${l}</div></div>`).join("");
+
+// The grid.
+const QUADS = [
+  ["High", "Low", "Keep satisfied", "Meet their needs; don't overload them", false],
+  ["High", "High", "Manage closely", "Engage fully; they make or break it", true],
+  ["Low", "Low", "Monitor", "Minimum effort; watch for change", false],
+  ["Low", "High", "Keep informed", "Inform regularly; they can help", false],
+];
+let g = `<div class="axis-y">Power →</div>`;
+QUADS.forEach(([pw, it, name, hint, hot]) => {
+  const here = live.filter(p => p.Power === pw && p.Interest === it);
+  g += `<div class="quad ${hot ? "hot" : ""}"><h4>${name}</h4><div class="hint">${hint}</div>` +
+       (here.length ? here.map(p => `<span class="who" title="${esc(p.Role || "")}">${esc(p.Name)}` +
+         (p.gap > 0 ? `<span class="gapmark" title="${esc(p.Current)} → ${esc(p.Desired)}">▲${p.gap}</span>` : "") +
+         `</span>`).join("") : `<span class="muted">nobody</span>`) + `</div>`;
+});
+g += `<div></div><div class="axis-x" style="grid-column:2/4">Interest →</div>`;
+const unplaced = live.filter(p => !p.quadrant);
+if (unplaced.length) g += `<div></div><div class="note" style="grid-column:2/4">Not placed (power or interest missing): ${unplaced.map(p => esc(p.Name)).join(", ")}</div>`;
+document.getElementById("grid").innerHTML = g;
+
+// Engagement.
+const eng = [...PEOPLE].sort((a, b) => (active(b) - active(a)) || (b.gap - a.gap) || a.ID.localeCompare(b.ID, undefined, {numeric: true}));
+document.getElementById("engagement").innerHTML = eng.length ? `<table><thead><tr>
+  <th>ID</th><th>Stakeholder</th><th>Quadrant</th><th>Current → Desired</th><th>Engagement action</th><th>Groups</th><th>Share</th></tr></thead><tbody>` +
+  eng.map(p => `<tr class="${active(p) ? "" : "inactive"}"><td class="id">${esc(p.ID)}</td>
+    <td><div class="name">${esc(p.Name)}</div><div class="sub">${esc([p.Role, p.Organisation].filter(Boolean).join(" · "))}</div>${p.Stake ? `<div class="sub">${esc(p.Stake)}</div>` : ""}</td>
+    <td class="nowrap">${esc(p.quadrant || "—")}</td>
+    <td class="nowrap"><span class="pill ${p.gap > 0 ? "gap-yes" : "gap-no"}">${esc(p.Current || "?")} → ${esc(p.Desired || "?")}${p.gap > 0 ? " · gap " + p.gap : ""}</span></td>
+    <td>${esc(p["Engagement Action"] || (p.gap > 0 ? "— none —" : ""))}</td>
+    <td>${(p.Groups || []).map(id => `<span class="chip">${esc(groupName(id))}</span>`).join("")}</td>
+    <td><span class="pill ${p["Share Level"] === "external" ? "ext" : "own"}">${esc(p["Share Level"] || "owner")}</span></td></tr>`).join("") +
+  `</tbody></table>` : `<div class="empty">No stakeholders yet.</div>`;
+
+// Communications.
+const ORDER = {overdue: 0, due: 1, event: 2, ok: 3, inactive: 4};
+const cs = [...COMMS].sort((a, b) => (ORDER[a.state] - ORDER[b.state]) || (a.due || "").localeCompare(b.due || ""));
+document.getElementById("comms").innerHTML = cs.length ? `<table><thead><tr>
+  <th>ID</th><th>Communication</th><th>Status</th><th>Next due</th><th>Last done</th><th>Cadence</th><th>Audience</th><th>Channel</th><th>Share</th></tr></thead><tbody>` +
+  cs.map(c => `<tr class="${active(c) ? "" : "inactive"}"><td class="id">${esc(c.ID)}</td>
+    <td><div class="name">${esc(c.What)}</div><div class="sub">${esc([c.Mode, c.Report, c.Owner].filter(Boolean).join(" · "))}</div></td>
+    <td><span class="pill st-${c.state}">${STATE_LABEL[c.state] || c.state}</span></td>
+    <td class="nowrap">${esc(c.due || "—")}</td>
+    <td class="nowrap">${esc(c["Last Done"] || "never")}</td>
+    <td class="nowrap">${esc(c.Cadence || "")}</td>
+    <td>${(c.Audience || []).map(id => `<span class="chip" title="${esc(id)}">${esc(refName(id))}</span>`).join("")}${c.recipients != null ? `<div class="sub">${c.recipients} ${c.recipients === 1 ? "person" : "people"}</div>` : ""}</td>
+    <td>${esc(c.Channel || "")}</td>
+    <td>${c.public ? `<span class="pill st-event">public</span>` : `<span class="pill ${c.share_level === "external" ? "ext" : "own"}">${esc(c.share_level)}</span>`}</td></tr>`).join("") +
+  `</tbody></table>` : `<div class="empty">No communications yet.</div>`;
+
+// Groups.
+document.getElementById("groups").innerHTML = GROUPS.length ? `<table><thead><tr><th>ID</th><th>Group</th><th>Members</th><th>Communications</th></tr></thead><tbody>` +
+  GROUPS.map(gr => `<tr class="${active(gr) ? "" : "inactive"}"><td class="id">${esc(gr.ID)}</td>
+    <td><div class="name">${esc(gr.Name)}</div><div class="sub">${esc(gr.Purpose || "")}</div></td>
+    <td>${PEOPLE.filter(p => active(p) && (p.Groups || []).includes(gr.ID)).map(p => `<span class="chip">${esc(p.Name)}</span>`).join("") || `<span class="muted">nobody</span>`}</td>
+    <td>${COMMS.filter(c => (c.Audience || []).includes(gr.ID)).map(c => `<span class="chip">${esc(c.What)}</span>`).join("") || `<span class="muted">none</span>`}</td></tr>`).join("") +
+  `</tbody></table>` : `<div class="empty">No groups yet.</div>`;
+
+// Findings and log.
+document.getElementById("findings").innerHTML = FINDINGS.length ? `<table><thead><tr><th>Severity</th><th>Item</th><th>Finding</th></tr></thead><tbody>` +
+  FINDINGS.map(f => `<tr><td><span class="sev ${f.Severity}">${f.Severity}</span></td><td class="id">${esc(f.Item || "")}</td><td>${esc(f.Finding)}</td></tr>`).join("") +
+  `</tbody></table>` : `<div class="empty">The audit is clean.</div>`;
+document.getElementById("log").innerHTML = CHANGES.length ? `<table><thead><tr><th>Date</th><th>Item</th><th>Change</th><th>Reason</th></tr></thead><tbody>` +
+  [...CHANGES].reverse().map(c => `<tr><td class="nowrap">${esc(c["Changed On"])}</td><td class="id">${esc(c.Item)}</td><td>${esc(c.Change)}</td><td>${esc(c.Reason || "")}</td></tr>`).join("") +
+  `</tbody></table>` : `<div class="empty">No changes yet.</div>`;
+
+// Tabs.
+const TABS = [["p-grid", "Grid", live.length], ["p-engagement", "Engagement", gaps.length], ["p-comms", "Communications", overdue.length],
+              ["p-groups", "Groups", GROUPS.length], ["p-findings", "Findings", FINDINGS.length], ["p-log", "Change log", CHANGES.length]];
+const tabs = document.getElementById("tabs");
+tabs.innerHTML = TABS.map(([id, label, n]) => `<div class="tab" data-p="${id}">${label}<span class="count">${n}</span></div>`).join("");
+const show = id => {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.p === id));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === id));
+};
+tabs.addEventListener("click", e => { const t = e.target.closest(".tab"); if (t) show(t.dataset.p); });
+show(overdue.length ? "p-comms" : "p-grid");
+</script>
+</body>
+</html>

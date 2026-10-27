@@ -108,6 +108,12 @@
       "Description": "TD.11 v1.1: Waiting on someone also reads the action trackers (TSP.12): rows owed by others that are overdue, or TBD with no checkpoint or a passed one, three at most.",
       "ID": 18,
       "Tool": "Weekly Review"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TSP.13 published: the stakeholder register, found by meta.kind under a root, the sprint calendar from the project's own conventions or WBS, contacts checked against git.",
+      "ID": 19,
+      "Tool": "Stakeholder Register"
     }
   ],
   "control_activities": [],
@@ -158,8 +164,8 @@
         ]
       }
     },
-    "updated": "2026-10-26T21:54:30",
-    "values_hash": "sha256:33998a4cdca9d4987cf4b24bab6ca5b90915d577d7968e658b208f8fea4fe962",
+    "updated": "2026-10-27T08:10:54",
+    "values_hash": "sha256:df06cbc52e6d4e60a90e5b5218e3b558ece11641761125db21b2c96f27828bf4",
     "version": 1
   },
   "tools": [
@@ -327,6 +333,20 @@
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "action-tracker-manager",
+      "Status": "In Progress",
+      "Type": "Tool"
+    },
+    {
+      "Description": "For one project, who has a stake in it, where each stands and what flows to them: groups, stakeholders with power, interest and current against desired engagement, and a communications plan with each communication's audience, cadence, channel, share level and last sending. Resolves an audience to people and addresses at the moment of sending, says what is due or overdue, and generates a dashboard. Contacts per project in a CSV kept out of git, which the tool checks. Sends nothing.",
+      "Doc Aux": "Yes",
+      "ID": 13,
+      "Last Reviewed": "2026-10-27",
+      "Links": "TSP/TSP.13 Stakeholder Register/TD.13 - Stakeholder Register.md",
+      "Name": "Stakeholder Register",
+      "Notes": "Not yet used on real work: exercised by the smoke test on a scratch git project and by the made-up example register. The close-out's sending, the weekly review's check and the reporting tool's audiences are described but not yet run by those skills - see TD.13, Open items. Standard library; wbs-manager or an agile conventions file optional, for the sprint calendar.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "stakeholder-manager",
       "Status": "In Progress",
       "Type": "Tool"
     }

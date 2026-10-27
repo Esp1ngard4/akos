@@ -1,0 +1,360 @@
+{
+  "change_log": [
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 1,
+      "Item": "G.1",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 2,
+      "Item": "G.2",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 3,
+      "Item": "G.3",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 4,
+      "Item": "S.1",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 5,
+      "Item": "S.2",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 6,
+      "Item": "S.3",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 7,
+      "Item": "S.4",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 8,
+      "Item": "S.5",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 9,
+      "Item": "C.1",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 10,
+      "Item": "C.2",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 11,
+      "Item": "C.3",
+      "Reason": "Added."
+    },
+    {
+      "Change": "added",
+      "Changed On": "2026-10-01",
+      "ID": 12,
+      "Item": "C.4",
+      "Reason": "Added."
+    },
+    {
+      "Change": "Last Done: (none) -> 2026-10-16",
+      "Changed On": "2026-10-16",
+      "ID": 13,
+      "Item": "C.1",
+      "Reason": "Done."
+    },
+    {
+      "Change": "Last Done: (none) -> 2026-10-02",
+      "Changed On": "2026-10-02",
+      "ID": 14,
+      "Item": "C.2",
+      "Reason": "Done."
+    },
+    {
+      "Change": "Last Done: (none) -> 2026-10-20",
+      "Changed On": "2026-10-20",
+      "ID": 15,
+      "Item": "C.4",
+      "Reason": "Done."
+    }
+  ],
+  "communications": [
+    {
+      "Audience": [
+        "S.2"
+      ],
+      "Cadence": "per sprint",
+      "Channel": "email",
+      "ID": "C.1",
+      "Last Done": "2026-10-16",
+      "Mode": "push",
+      "Owner": "Jordan Lee",
+      "Report": "status-report",
+      "Status": "Active",
+      "What": "Status report"
+    },
+    {
+      "Audience": [
+        "G.1"
+      ],
+      "Cadence": "monthly",
+      "Channel": "email",
+      "ID": "C.2",
+      "Last Done": "2026-10-02",
+      "Mode": "push",
+      "Owner": "Jordan Lee",
+      "Report": "sprint-update",
+      "Status": "Active",
+      "What": "Steering update"
+    },
+    {
+      "Audience": [
+        "G.3"
+      ],
+      "Cadence": "on event: a feature ready for review",
+      "Channel": "meeting",
+      "ID": "C.3",
+      "Mode": "interactive",
+      "Owner": "Jordan Lee",
+      "Status": "Active",
+      "What": "Client review"
+    },
+    {
+      "Audience": [
+        "G.2"
+      ],
+      "Cadence": "weekly",
+      "Channel": "link",
+      "ID": "C.4",
+      "Last Done": "2026-10-20",
+      "Mode": "pull",
+      "Owner": "Tom Becker",
+      "Status": "Active",
+      "What": "Team stand-up board"
+    }
+  ],
+  "groups": [
+    {
+      "ID": "G.1",
+      "Name": "Steering group",
+      "Purpose": "Decides scope, budget and priorities; meets monthly",
+      "Status": "Active"
+    },
+    {
+      "ID": "G.2",
+      "Name": "Delivery team",
+      "Purpose": "Builds the work; meets every day",
+      "Status": "Active"
+    },
+    {
+      "ID": "G.3",
+      "Name": "Client",
+      "Purpose": "The organisation the work is for",
+      "Status": "Active"
+    }
+  ],
+  "meta": {
+    "kind": "stakeholder-register",
+    "scope": "Atlas",
+    "settings": {
+      "fields": {
+        "change_log": [
+          "ID",
+          "Changed On",
+          "Item",
+          "Change",
+          "Reason"
+        ],
+        "communications": [
+          "ID",
+          "What",
+          "Report",
+          "Mode",
+          "Audience",
+          "Cadence",
+          "Channel",
+          "Owner",
+          "Last Done",
+          "Status",
+          "Notes"
+        ],
+        "groups": [
+          "ID",
+          "Name",
+          "Purpose",
+          "Status"
+        ],
+        "stakeholders": [
+          "ID",
+          "Name",
+          "Role",
+          "Organisation",
+          "Groups",
+          "Power",
+          "Interest",
+          "Current",
+          "Desired",
+          "Stake",
+          "Engagement Action",
+          "Share Level",
+          "Status",
+          "Notes"
+        ]
+      },
+      "vocabularies": {
+        "cadence": [
+          "per sprint",
+          "weekly",
+          "monthly",
+          "quarterly",
+          "on event"
+        ],
+        "engagement": [
+          "Unaware",
+          "Resistant",
+          "Neutral",
+          "Supportive",
+          "Leading"
+        ],
+        "level": [
+          "High",
+          "Low"
+        ],
+        "mode": [
+          "push",
+          "pull",
+          "interactive"
+        ],
+        "report": [
+          "status-report",
+          "sprint-update",
+          "closure"
+        ],
+        "share_level": [
+          "owner",
+          "external"
+        ],
+        "status": [
+          "Active",
+          "Inactive"
+        ]
+      }
+    },
+    "updated": "2026-10-27T08:06:28",
+    "values_hash": "sha256:818db1351ba4182173c85a5c3bd96ea007ef26da7472ee9c1c0bb5772d5ab59a",
+    "version": 1
+  },
+  "stakeholders": [
+    {
+      "Current": "Leading",
+      "Desired": "Leading",
+      "Groups": [
+        "G.2"
+      ],
+      "ID": "S.1",
+      "Interest": "High",
+      "Name": "Jordan Lee",
+      "Organisation": "Northwind",
+      "Power": "High",
+      "Role": "Project manager",
+      "Share Level": "owner",
+      "Stake": "Accountable for delivery",
+      "Status": "Active"
+    },
+    {
+      "Current": "Supportive",
+      "Desired": "Leading",
+      "Engagement Action": "A one-to-one before each steering update",
+      "Groups": [
+        "G.1"
+      ],
+      "ID": "S.2",
+      "Interest": "High",
+      "Name": "Alex Moreno",
+      "Organisation": "Northwind",
+      "Power": "High",
+      "Role": "Sponsor",
+      "Share Level": "owner",
+      "Stake": "Owns the budget; worried about the March date",
+      "Status": "Active"
+    },
+    {
+      "Current": "Neutral",
+      "Desired": "Supportive",
+      "Engagement Action": "Invite to each sprint review demo",
+      "Groups": [
+        "G.1",
+        "G.3"
+      ],
+      "ID": "S.3",
+      "Interest": "High",
+      "Name": "Priya Nair",
+      "Organisation": "Harbour Logistics",
+      "Power": "High",
+      "Role": "Client lead",
+      "Share Level": "external",
+      "Stake": "Needs the new routing live before peak season",
+      "Status": "Active"
+    },
+    {
+      "Current": "Supportive",
+      "Desired": "Supportive",
+      "Groups": [
+        "G.2"
+      ],
+      "ID": "S.4",
+      "Interest": "High",
+      "Name": "Tom Becker",
+      "Organisation": "Northwind",
+      "Power": "Low",
+      "Role": "Delivery lead",
+      "Share Level": "owner",
+      "Stake": "Wants a stable scope",
+      "Status": "Active"
+    },
+    {
+      "Current": "Unaware",
+      "Desired": "Neutral",
+      "Groups": [
+        "G.1"
+      ],
+      "ID": "S.5",
+      "Interest": "Low",
+      "Name": "Finance office",
+      "Organisation": "Northwind",
+      "Power": "High",
+      "Role": "Approves spend over the delegated limit",
+      "Share Level": "owner",
+      "Stake": "Sees the project only at budget review",
+      "Status": "Active"
+    }
+  ]
+}

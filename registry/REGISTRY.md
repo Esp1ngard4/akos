@@ -32,6 +32,7 @@ python install.py add <skill> --into <your-project>
 | TSP.10 | **Reporting** | In Progress | `reporting` | [TD.10](../TSP/TSP.10%20Reporting/TD.10%20-%20Reporting.md) |
 | TSP.11 | **Weekly Review** | In Progress | `weekly-review-facilitator` | [TD.11](../TSP/TSP.11%20Weekly%20Review/TD.11%20-%20Weekly%20Review.md) |
 | TSP.12 | **Action Tracker** | In Progress | `action-tracker-manager` | [TD.12](../TSP/TSP.12%20Action%20Tracker/TD.12%20-%20Action%20Tracker.md) |
+| TSP.13 | **Stakeholder Register** | In Progress | `stakeholder-manager` | [TD.13](../TSP/TSP.13%20Stakeholder%20Register/TD.13%20-%20Stakeholder%20Register.md) |
 
 ## What each is for
 
@@ -59,6 +60,8 @@ python install.py add <skill> --into <your-project>
 
 **TSP.12 Action Tracker** — A team's shared list of the small actions agreed in a piece of work's sessions, one Markdown file per piece of work, below the deliverables the WBS tracks and the governed items RAID holds. Every action whoever owes it, the owner named rather than assumed; filed in the support folder of the WBS row or RAID item it serves and indexed nowhere. No scripts. A personal task manager, a ticketing tool and meeting notes are described as adaptations, not shipped.
 
+**TSP.13 Stakeholder Register** — For one project, who has a stake in it, where each stands and what flows to them: groups, stakeholders with power, interest and current against desired engagement, and a communications plan with each communication's audience, cadence, channel, share level and last sending. Resolves an audience to people and addresses at the moment of sending, says what is due or overdue, and generates a dashboard. Contacts per project in a CSV kept out of git, which the tool checks. Sends nothing.
+
 ## Status meanings
 
 | Status | Meaning |
@@ -70,4 +73,4 @@ python install.py add <skill> --into <your-project>
 
 ---
 
-Generated from `registry/TSP Register.json` on 2026-10-26.
+Generated from `registry/TSP Register.json` on 2026-10-27.
