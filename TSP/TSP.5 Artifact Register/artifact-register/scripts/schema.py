@@ -58,7 +58,7 @@ def parent_of(row):
     return clean(row.get("Parent Digital")), clean(row.get("Parent Physical"))
 
 
-def scan_folder(root, stop_ids=()):
+def scan_folder(root, stop_ids=(), ignore=()):
     """Walk the folder a register describes and split it by the ID convention.
 
     Returns ({id: [relative paths]}, [unprefixed relative paths]).
@@ -78,6 +78,9 @@ def scan_folder(root, stop_ids=()):
     if not root or not os.path.isdir(root):
         return prefixed, bare
     stop = set(str(s) for s in stop_ids)
+    # Files a tool owns and names itself (an installer's lock), listed in the
+    # register's settings: skipped wherever they sit, never a way to hide a document.
+    skip = set(ignore or ())
 
     def walk(path, rel_base):
         try:
@@ -85,7 +88,7 @@ def scan_folder(root, stop_ids=()):
         except OSError:
             return
         for name in entries:
-            if name.startswith((".", "~$")) or name in SKIP_DIRS or name in SKIP_FILES:
+            if name.startswith((".", "~$")) or name in SKIP_DIRS or name in SKIP_FILES or name in skip:
                 continue
             full = os.path.join(path, name)
             rel = "%s/%s" % (rel_base, name) if rel_base else name

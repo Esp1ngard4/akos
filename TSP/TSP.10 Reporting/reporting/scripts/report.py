@@ -129,6 +129,21 @@ SPRINT_RECORD = os.path.join(sibling("sprint-facilitator"), "scripts", "sprint_r
 TYPE_DIRS = {"status-report": "Status", "sprint-update": "Sprint Update", "charter": "Charter"}
 
 
+# The project's reports folder: `Reports`, or `<NN>. Reports` where the project
+# numbers its folders (an artifact register writes its IDs into folder names).
+REPORTS_DIR = re.compile(r"^(\d+[.\s]\s*)?Reports$")
+
+
+def reports_root(folder):
+    """The reports folder in a project folder: an existing `Reports` or
+    `<NN>. Reports`, else `Reports`, created when the first report is written."""
+    if os.path.isdir(folder):
+        for name in sorted(os.listdir(folder)):
+            if REPORTS_DIR.match(name) and os.path.isdir(os.path.join(folder, name)):
+                return os.path.join(folder, name)
+    return os.path.join(folder, "Reports")
+
+
 def reports_dir(root, kind):
     return os.path.join(root, TYPE_DIRS[kind])
 
@@ -164,14 +179,19 @@ def discover(prjmgm):
     and a register renamed by hand is still a register."""
     found = {"wbs": [], "raid": []}
     for root, dirs, files in os.walk(prjmgm):
-        dirs[:] = [d for d in dirs if d not in ("PreviousV", "Reports", "AuxMat")]
+        dirs[:] = [d for d in dirs if d not in ("PreviousV", "AuxMat") and not REPORTS_DIR.match(d)]
         for name in files:
             if not name.endswith(".json"):
                 continue
             path = os.path.join(root, name)
+            # The kind is read as plain JSON: the register loader exits on a
+            # file with no meta block (a tool's lock file, say), and an exit is
+            # not an Exception, so one stray JSON would stop every report.
             try:
-                kind = R.load(path).get("meta", {}).get("kind")
-            except Exception:
+                with io.open(path, encoding="utf-8") as fh:
+                    meta = json.load(fh).get("meta")
+                kind = meta.get("kind") if isinstance(meta, dict) else None
+            except (OSError, ValueError, AttributeError):
                 continue
             if kind == "wbs-register":
                 found["wbs"].append(path)
@@ -939,7 +959,7 @@ def cmd_status(args):
     metrics = m.get("total", m) if m.get("total", m).get("committed") else None
     facts = record_facts(args.records, sprint)
 
-    out_dir = reports_dir(os.path.join(prjmgm, "Reports"), "status-report")
+    out_dir = reports_dir(reports_root(prjmgm), "status-report")
     stem = "%s Status" % as_of.isoformat()
     path = os.path.join(out_dir, stem + ".json")
     if os.path.exists(path) and not args.force:
@@ -1158,7 +1178,7 @@ def cmd_sprint(args):
     projects = []
     if len(wbss) > 1:
         for folder, w in zip(folders, wbss):
-            hist = confirmed_overalls(reports_dir(os.path.join(folder, "Reports"), "status-report"), as_of.isoformat())
+            hist = confirmed_overalls(reports_dir(reports_root(folder), "status-report"), as_of.isoformat())
             last = hist[-1] if hist else None
             projects.append({"scope": w.scope, "overall": last[1] if last else None,
                              "as_of": last[0] if last else None,
@@ -1194,7 +1214,7 @@ def cmd_sprint(args):
     rec["facts"] = update_facts(last, this, committed, wbss, raid, risks, facts)
     # Beside the sprint records by default: the update is the sprint's, and
     # the sprint spans projects, so no one project's Reports folder owns it.
-    out_dir = reports_dir(args.out_dir or os.path.join(os.path.dirname(records), "Reports"),
+    out_dir = reports_dir(args.out_dir or reports_root(os.path.dirname(records)),
                           "sprint-update")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s Sprint Update.json" % sprint)
@@ -2114,7 +2134,7 @@ def cmd_charter(args):
                        "wbs": os.path.relpath(wbs.path, prjmgm) if wbs else None,
                        "raid": [os.path.relpath(x, prjmgm) for x in regs["raid"]]},
            "summary": {"text": None, "confirmed_on": None}}
-    out_dir = reports_dir(os.path.join(prjmgm, "Reports"), "charter")
+    out_dir = reports_dir(reports_root(prjmgm), "charter")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s Charter.json" % as_of.isoformat())
     write_record(path, rec)

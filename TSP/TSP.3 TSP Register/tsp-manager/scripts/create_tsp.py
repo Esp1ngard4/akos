@@ -24,7 +24,7 @@ import schema as S                                              # noqa: E402
 # only what a new one starts with.
 VOCABULARIES = {
     "en": {
-        "status": ["Planned", "In progress", "Implemented", "Obsolete"],
+        "status": ["Planned", "In Progress", "Implemented", "Obsolete"],
         "type": ["Manual", "Work instruction", "Tool"],
         "relevancy": ["Critical", "Often", "Sometimes", "Specific - relevant",
                       "Specific - questionable", "Rarely", "Not in the last years"],

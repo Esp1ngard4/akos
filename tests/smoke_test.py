@@ -1233,6 +1233,15 @@ def test_reporting(root, scratch):
     html = io.open(shared, encoding="utf-8").read() if os.path.exists(shared) else ""
     check("charter: the shared copy shows roles and groups, never names",
           ok and "Client lead" in html and "Kim Client" not in html, out[:300])
+
+    # --- a project folder holding a lock and a numbered reports folder ----------
+    io.open(os.path.join(project, "tools.lock.json"), "w", encoding="utf-8").write('{"source": "x", "tools": {}}')
+    os.makedirs(os.path.join(project, "05. Reports"), exist_ok=True)
+    ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-21"], work)
+    check("a JSON that is not a register (a lock) is skipped, not fatal", ok, out[-300:])
+    check("a numbered reports folder is used as the project's reports folder",
+          os.path.isfile(os.path.join(project, "05. Reports", "Status", "2026-10-21 Status.json")), out[-200:])
     os.remove(brief)
 
     # --- installed together with what it needs, it finds its siblings ----------
@@ -1835,6 +1844,33 @@ def test_raid_lessons(root, scratch):
           ok and ".badge-lesson" in bhtml and "'Applied By'" in bhtml, out)
 
 
+def test_numbered_layout(root, scratch):
+    """A project that numbers its folders (an artifact register writes its IDs
+    into folder names) and holds an installer's lock: a new TSP register
+    accepts the catalogue's status words, and the artifact disk check skips the
+    files a tool owns while still flagging an unnumbered document."""
+    import json
+    print("\nNumbered project layout")
+    work = os.path.join(scratch, "numbered")
+    os.makedirs(work, exist_ok=True)
+    tsp = os.path.join(root, "TSP", "TSP.3 TSP Register", "tsp-manager", "scripts")
+    treg = os.path.join(work, "02. TSP Register.json")
+    run_raw([os.path.join(tsp, "create_tsp.py"), treg], work)
+    vocab = json.load(io.open(treg, encoding="utf-8"))["meta"]["settings"]["vocabularies"]["status"]
+    check("layout: a new TSP register uses the catalogue's status words", "In Progress" in vocab, str(vocab))
+    art = os.path.join(root, "TSP", "TSP.5 Artifact Register", "artifact-register", "scripts")
+    areg = os.path.join(work, "04. Artifact Register, Demo.json")
+    run_raw([os.path.join(art, "create_artifact_register.py"), areg, "Demo"], work)
+    settings = json.load(io.open(areg, encoding="utf-8"))["meta"]["settings"]
+    check("layout: a new artifact register ignores the installer's lock", "tools.lock.json" in settings.get("ignore", []),
+          str(settings))
+    io.open(os.path.join(work, "tools.lock.json"), "w", encoding="utf-8").write("{}")
+    io.open(os.path.join(work, "Loose notes.md"), "w", encoding="utf-8").write("x")
+    ok, out = run_raw([os.path.join(art, "audit_artifact_register.py"), areg, "--root", work], work)
+    check("layout: the disk check skips the ignored lock and still flags an unnumbered file",
+          "tools.lock.json" not in out and "Loose notes.md" in out, out[-400:])
+
+
 def test_migrate_vocabulary(root, scratch):
     """migrate adds what a register's vocabulary lacks and never drops a value
     the project added: dropping one turns every row using it into an error."""
@@ -2072,6 +2108,7 @@ def main():
         test_effort_and_splits(root, scratch)
         test_pull_ins(root, scratch)
         test_migrate_vocabulary(root, scratch)
+        test_numbered_layout(root, scratch)
         test_installer_docs(root, scratch)
         test_raid_lessons(root, scratch)
         test_concurrent_save(root, scratch)

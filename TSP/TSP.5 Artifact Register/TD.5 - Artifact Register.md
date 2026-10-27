@@ -111,6 +111,14 @@ available, because it reads as safe.
 
 ### The rule applies to the disk scan too
 
+**A file a tool owns and names itself can be ignored.** An installer's lock
+(`tools.lock.json`) sits in the project folder under a name the installer
+fixes, so it cannot carry an ID. `meta.settings.ignore` lists such names, and
+the disk scan skips them wherever they sit; a new register lists
+`tools.lock.json`. It is for names a tool fixes, never a way to hide a document.
+A folder a tool governs (its register, its reports) is not ignored: it is
+registered with its ID and `Managed By`, and the scan stops at it, as below.
+
 This is the part that took a rewrite to get right. The audit walks the folder the
 register describes, and its first version reported **218 findings on a 23-row
 register** — every file inside every subfolder, including folders that belonged to
@@ -199,6 +207,6 @@ and leave rows pointing at nothing.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.3 | 2026-10-27 | **The disk scan can ignore files a tool names itself.** `meta.settings.ignore`, `tools.lock.json` by default in a new register, so a project that installs its tools beside its registers keeps a clean audit. Found installing the tools into an existing project. |
 | v1.2 | 2026-09-01 | **The register is JSON.** Every write went through a script anyway, and a spreadsheet cost a subprocess to read, a dependency to install, and a file lock whenever the application or a sync client held it. The dropdowns a spreadsheet gave back are enforced more strictly by the commands - argparse refuses an invalid value where a dropdown only warns and paste bypasses entirely. `add` also gained the case it was missing: an artifact with no file. Most of a general reference register is physical, and requiring a path excluded the majority. The tool now has **no runtime dependencies at all** |
 | v1.1 | 2026-09-01 | IDs are zero-padded on filenames, because lexicographic and numeric order agree only when the number is padded — and the two differ by platform, so an unpadded register reads correctly on the desktop and wrongly in a browser. Width is stored per register (`Settings` sheet, default 2). `repad` migrates an existing register, changing only the number |
-| v1.0 | 2026-08-31 | Initial public version. Generalised from a personal reference-material system dating to 2016 and a separately-built per-project document control list, which turned out to be the same tool at two scopes using the same mechanism |

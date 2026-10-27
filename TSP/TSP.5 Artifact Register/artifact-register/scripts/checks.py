@@ -138,7 +138,7 @@ def run(data, root=None, tools=None, stale_years=STALE_YEARS):
     # --- the disk --------------------------------------------------------
     if root:
         stop = _stop_ids(rows, claimed)
-        prefixed, bare = S.scan_folder(root, stop)
+        prefixed, bare = S.scan_folder(root, stop, R.setting(data, "ignore", []))
         stats["disk"] = {"prefixed": len(prefixed), "bare": len(bare),
                          "boundaries": len(stop), "root": root}
         for name in bare:

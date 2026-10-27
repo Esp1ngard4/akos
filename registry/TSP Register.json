@@ -174,6 +174,30 @@
       "Description": "TD.3 v1.7: the audit discovers .github, .claude and .agents skills at the root, matching where the installer installs.",
       "ID": 29,
       "Tool": "TSP Register"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.10 v1.4: a JSON that is not a register is skipped; reports go into the project's reports folder whatever its number.",
+      "ID": 30,
+      "Tool": "Reporting"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.5 v1.3: the disk scan ignores files a tool names itself (meta.settings.ignore, tools.lock.json by default).",
+      "ID": 31,
+      "Tool": "Artifact Register"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.3 v1.8: a new register says In Progress, as the catalogue and the method do.",
+      "ID": 32,
+      "Tool": "TSP Register"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.4: open item, renumbering an installed folder leaves the lock's path stale.",
+      "ID": 33,
+      "Tool": "Tool Installer"
     }
   ],
   "control_activities": [],
@@ -224,8 +248,8 @@
         ]
       }
     },
-    "updated": "2026-10-27T13:12:41",
-    "values_hash": "sha256:eb018cc49973a8d2ae934b8e48b4e4bff396c5deb602cc6e37517af9a4bd0e99",
+    "updated": "2026-10-27T14:19:16",
+    "values_hash": "sha256:a512a0c33f752ad20d92a2ec374f92e5977b1038272c0160b74407ecc4b9ab15",
     "version": 1
   },
   "tools": [

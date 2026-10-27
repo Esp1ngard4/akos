@@ -136,6 +136,7 @@ copy, and `accept`, so the drift detection is itself under test.
 
 | Item | Detail |
 |---|---|
+| Renumbering an installed folder | The lock records each copy's path. A folder renamed after installation (an artifact register renumbering `02. TSP`, say) leaves the lock pointing at the old path, and `status` reports the copies missing. Fix the paths in the lock by hand; a `relocate` command would do it |
 | No return path | Sending an improvement back upstream is a manual pull request. Fine at this size; a `contribute` command would help once there are many consumers |
 | Binary conflicts are not merged | Both sides changed an `.xlsx` and ours is kept, with theirs written alongside as `.upstream`. There is no sensible automatic answer, but the reporting could be clearer about what differs |
 | Config-driven tools would remove most conflicts | Most divergence is configuration edited in place. Tools reading project config from outside the vendored folder would rarely conflict at all — the largest available improvement, and it belongs in the tools, not here |
