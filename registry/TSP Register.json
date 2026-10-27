@@ -198,6 +198,12 @@
       "Description": "TD.4: open item, renumbering an installed folder leaves the lock's path stale.",
       "ID": 33,
       "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.1 v1.12: card details link the parents and list the children; #item=<ID> opens the dashboard at a card.",
+      "ID": 34,
+      "Tool": "WBS Register"
     }
   ],
   "control_activities": [],
@@ -248,8 +254,8 @@
         ]
       }
     },
-    "updated": "2026-10-27T14:19:16",
-    "values_hash": "sha256:a512a0c33f752ad20d92a2ec374f92e5977b1038272c0160b74407ecc4b9ab15",
+    "updated": "2026-10-27T14:57:50",
+    "values_hash": "sha256:0f0280e98f33e656db37cf297d6b295f4a0278ebefc7509d16342add86cd3fba",
     "version": 1
   },
   "tools": [

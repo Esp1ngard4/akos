@@ -502,7 +502,18 @@ tr:hover td{background:#f0f4ff}
 .sheet-head .x{background:none;border:none;font-size:22px;line-height:1;cursor:pointer;
   color:#6b7280;padding:0 4px}
 .sheet-head .x:hover{color:#1a1a2e}
-.sheet-sub{font-size:12px;color:#6b7280;margin-top:4px}
+.sheet-sub{font-size:12px;color:#6b7280;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+/* Where a card sits: the levels above it as links, its children listed. */
+.crumbs{font-size:12px;color:#6b7280;display:flex;flex-wrap:wrap;gap:2px 4px;align-items:center;margin-bottom:4px}
+.linkbtn{font:inherit;font-size:11.5px;color:#4472C4;background:none;border:1px solid #e5e7eb;border-radius:5px;padding:1px 7px;cursor:pointer}
+.linkbtn:hover,.linkbtn:focus-visible{background:#eef2ff;outline:none}
+.backbtn{font:inherit;font-size:12px;color:#6b7280;background:none;border:none;padding:0;cursor:pointer}
+.backbtn:hover{color:#1a1a2e}
+.copied{font-size:11px;color:#166534}
+.kids{display:grid;gap:4px;margin-top:2px;white-space:normal}
+.kid{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;font-size:12.5px;padding:5px 8px;background:#f8fafc;border-radius:6px}
+.kid .t{min-width:0;overflow-wrap:anywhere}
+.kid .h{color:#6b7280;font-variant-numeric:tabular-nums;font-size:11.5px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;padding:12px 20px 4px}
 .chip{font-size:11px;background:#f1f5f9;color:#334155;border-radius:999px;padding:3px 9px}
 .chip b{color:#0f172a;font-weight:600}
@@ -535,7 +546,8 @@ tr:hover td{background:#f0f4ff}
 .kb-card.cx{opacity:.55}.kb-card.cx .kb-title{text-decoration:line-through}
 .kb-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
 .kb-title{font-weight:600;margin:3px 0 2px;line-height:1.35}
-.kb-path{font-size:11px;color:#6b7280;line-height:1.35}
+.kb-path{font-size:11px;color:#6b7280;line-height:1.5}
+.kb-path .idbtn{font-size:11px}
 .kb-meta{font-size:11px;color:#6b7280;margin-top:4px}
 .kb-tag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;background:#ede9fe;color:#5b21b6;white-space:nowrap}
 .kb-tag.pull{background:#ffedd5;color:#9a3412}
@@ -647,9 +659,38 @@ function treeControls(extra){
 /* byId is already a Map built above - do not redeclare it. */
 function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
-function openDetail(id){
+// A row's ancestors, top first: what the breadcrumb and a card's path link to.
+function ancestors(id){
+  const out=[],seen=new Set();let d=byId.get(String(id));
+  while(d&&d.pa!=null&&d.pa!==''&&!seen.has(String(d.pa))){
+    seen.add(String(d.pa));const p=byId.get(String(d.pa));if(!p)break;out.unshift(p);d=p;}
+  return out;
+}
+const crumbLink=p=>`<button class="idbtn" onclick="openDetail(${p.id})" title="ID ${esc(p.id)}: open this card">${esc(p.t)||esc(p.id)}</button>`;
+// The card open in the details, the cards opened before it (for Back), and the
+// address: #item=<ID> opens the dashboard at a card, and the browser's Back works.
+let detailId=null,detailTrail=[],hashOwn=false;
+function itemFromHash(){const m=location.hash.match(/^#item=(.+)$/);return m&&byId.has(decodeURIComponent(m[1]))?decodeURIComponent(m[1]):null;}
+function copyLink(id){
+  const url=location.href.split('#')[0]+'#item='+id;
+  const show=t=>{const el=document.getElementById('copied');if(el){el.textContent=t;el.hidden=false;}};
+  try{navigator.clipboard.writeText(url).then(()=>show('Copied'),()=>show(url));}catch(e){show(url);}
+}
+window.addEventListener('hashchange',()=>{
+  if(hashOwn){hashOwn=false;return;}
+  const id=itemFromHash();
+  if(id){if(detailTrail.length&&String(detailTrail[detailTrail.length-1])===id)detailTrail.pop();openDetail(id,true);}
+  else closeDetail(true);
+});
+
+function openDetail(id,viaHash){
   const d=byId.get(String(id)); if(!d)return;
-  const parent=d.pa?byId.get(String(d.pa)):null;
+  if(!viaHash){
+    if(detailId!=null&&String(detailId)!==String(d.id))detailTrail.push(detailId);
+    const h='#item='+d.id; if(location.hash!==h){hashOwn=true;location.hash=h;}
+  }
+  detailId=d.id;
+  const anc=ancestors(d.id);
   const kids=DATA.filter(k=>String(k.pa)===String(d.id));
   const chip=(l,v)=>v?`<span class="chip"><b>${esc(l)}</b> ${esc(v)}</span>`:'';
   const block=(l,v)=>v?`<dt>${esc(l)}</dt><dd>${esc(v)}</dd>`:'';
@@ -663,9 +704,12 @@ function openDetail(id){
       <div class="sheet" role="dialog" aria-modal="true" aria-label="Item ${esc(d.id)}">
         <div class="sheet-head">
           <div style="flex:1">
+            ${anc.length?`<div class="crumbs">${anc.map(crumbLink).join(' &rsaquo; ')} &rsaquo;</div>`:''}
             <h3>${esc(d.t)||'<em>(no title)</em>'}</h3>
-            <div class="sheet-sub">ID ${esc(d.id)} · Code ${esc(d.c)||'—'}
-              ${parent?` · parent ID ${esc(parent.id)} — ${esc(parent.t)}`:' · no parent'}</div>
+            <div class="sheet-sub">${detailTrail.length?'<button class="backbtn" onclick="history.back()">&larr; Back</button><span>&middot;</span>':''}
+              <span>ID ${esc(d.id)} · Code ${esc(d.c)||'—'}${anc.length?'':' · top level'}</span>
+              <button class="linkbtn" onclick="copyLink(${d.id})" title="Copy a link that opens the dashboard at this card">Copy link</button>
+              <span class="copied" id="copied" hidden></span></div>
           </div>
           <button class="x" onclick="closeDetail()" aria-label="Close">&times;</button>
         </div>
@@ -684,6 +728,8 @@ function openDetail(id){
         <dl>
           ${rollup?`<dt>Rolls up</dt><dd>${esc(rollup)}</dd>`:''}
           ${block('Description',d.de)}
+          ${kids.length?`<dt>Children (${kids.length})</dt><dd><div class="kids">${[...kids].sort(byCode).map(k=>
+            `<div class="kid"><button class="idbtn" onclick="openDetail(${k.id})" title="Open the full record">${k.id}</button><span class="t">${esc(k.t)||'<em>(no title)</em>'}</span>${badge(k.s)}<span class="h">${k.e?k.e+'h':''}</span></div>`).join('')}</div></dd>`:''}
           ${block('Acceptance criteria',d.ac)}
           ${block('Action plan',d.ap)}
           ${block('Key dependencies',d.dep)}
@@ -697,9 +743,11 @@ function openDetail(id){
     </div>`;
   document.body.style.overflow='hidden';
 }
-function closeDetail(){
+function closeDetail(viaHash){
   document.getElementById('detail').innerHTML='';
   document.body.style.overflow='';
+  detailId=null;detailTrail=[];
+  if(!viaHash&&location.hash){try{history.replaceState(null,'',location.href.split('#')[0]);}catch(e){}}
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
 
@@ -951,7 +999,9 @@ function kbCard(c,laned){
   return `<div class="kb-card${d.s==='Cancelled'?' cx':''}" style="border-left-color:${SCOL[d.s]||'#e5e7eb'}">
     <div class="kb-top"><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button>${tag}</div>
     <div class="kb-title">${esc(d.t)||'<em class="warn">(no title)</em>'}</div>
-    ${path.length?`<div class="kb-path">&rsaquo; ${path.map(esc).join(' &rsaquo; ')}</div>`:''}
+    ${(()=>{let a=ancestors(d.id);const i=c.lane!=null?a.findIndex(x=>String(x.id)===String(c.lane)):-1;
+      if(i>=0)a=laned?a.slice(i+1):a.slice(i);
+      return a.length?`<div class="kb-path">&rsaquo; ${a.map(crumbLink).join(' &rsaquo; ')}</div>`:'';})()}
     <div class="kb-meta">${[d.ty,c.pa?(c.h?c.h+'h in sprint':'no work in sprint'):(d.e?d.e+'h':'no estimate'),d.p].filter(Boolean).map(esc).join(' &middot; ')}</div>${flag}</div>`;
 }
 function kbCells(cards,laned){
@@ -1243,6 +1293,7 @@ function render(){
   if(!document.getElementById('detail')){const m=document.createElement('div');m.id='detail';document.body.appendChild(m);}
 }
 render();
+(()=>{const id=itemFromHash();if(id)openDetail(id,true);})();
 '''
 
 SHELL = '''<!DOCTYPE html>

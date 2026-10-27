@@ -1748,6 +1748,15 @@ def test_pull_ins(root, scratch):
           ok and done.get("Sprint Planned") == "S1" and not done.get("Sprint Carried"), out if not ok else str(done))
     check("split: the rest keeps the whole history", rest.get("Sprint Carried") == ["S2", "S3"], str(rest))
 
+    dash = os.path.join(work, "WBS Dashboard.html")
+    ok, out = run_raw([os.path.join(scripts, "refresh_wbs.py"), reg, dash, "Atlas"], work)
+    html = io.open(dash, encoding="utf-8").read() if ok else ""
+    check("dashboard: a card's details link its parents (breadcrumb) and list its children",
+          ok and "function ancestors(" in html and 'class="crumbs"' in html and "Children (" in html, out[-200:])
+    check("dashboard: a sprint card's path links to its parents", "a.map(crumbLink)" in html)
+    check("dashboard: #item=<ID> opens a card, with Copy link and the browser's Back",
+          "itemFromHash()" in html and "#item=" in html and "Copy link" in html and "hashchange" in html)
+
 
 def test_raid_lessons(root, scratch):
     """Lessons as a RAID type and the page across projects; Trend read up as
