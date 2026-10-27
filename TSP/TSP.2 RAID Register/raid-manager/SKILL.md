@@ -1,6 +1,6 @@
 ---
 name: raid-manager
-description: Manages a RAID register - Risks, Actions, Issues, Decisions, Ideas and Changes - stored as a JSON register, and generates an interactive HTML dashboard with analytics and a risk heat map. Use whenever the user mentions "RAID", "risk register", "issue log", "decision log", or asks to add, edit or close a risk, action, issue or decision, to log an update or progress note against one, or wants a view of project risks and how the project is tracking.
+description: Manages a RAID register - Risks, Actions, Issues, Decisions, Ideas, Changes and Lessons - stored as a JSON register, and generates an interactive HTML dashboard with analytics and a risk heat map, plus a Lessons page across projects. Use whenever the user mentions "RAID", "risk register", "issue log", "decision log", "lesson learned" or "lessons learned", or asks to add, edit or close a risk, action, issue or decision, to log an update or progress note against one, or wants a view of project risks and how the project is tracking.
 ---
 
 # RAID Manager
@@ -36,7 +36,7 @@ Examples below write `python`, which is correct on Windows; on macOS/Linux use `
 
 - **Location**: the RAID register lives under the project's planning folder, in a `RAID/` subfolder beside the other registers.
 - **AuxMat**: created alongside the register when a new RAID is initialised. Contains one subfolder per RAID item that needs supporting documents (design notes, analysis, evidence, correspondence).
-- **AuxMat subfolder naming**: `{Type initial}{ID}-{slug}` — e.g. `R5-vendor-risk-analysis`, `I3-permit-delay`, `A12-stakeholder-comms`. The slug is a short kebab-case description.
+- **AuxMat subfolder naming**: `R{ID}-{slug}` — e.g. `R5-vendor-risk-analysis`, `R3-permit-delay`, `R12-stakeholder-comms`. R is for RAID, whatever the entry's type: the number alone identifies an entry, and a folder must survive the entry's type changing. The slug is a short kebab-case description. Folders already named with a type letter (`I6-…`) keep their names: their numbers still resolve.
 - **When to create an AuxMat subfolder**: when working on a RAID item requires creating documents beyond what fits in the register's Description, Action Plan, or Action Log fields. Not every item needs one.
 - The `create_raid.py` script creates the `AuxMat/` folder automatically when generating a new register.
 
@@ -66,6 +66,7 @@ Every entry's `Description` follows one sentence shape, fixed per type. The shap
 | **Decision** | Chose `<option taken>`, over `<alternatives rejected>`, because `<reason>`. |
 | **Idea** | If `<the change>`, then `<expected benefit>`. |
 | **Change** | Change `<what>`, requested by `<who>`, because `<why>`; impact: `<on scope, schedule or cost>`. |
+| **Lesson** | We learned that `<what we learned>`, because `<what showed it>`, so next time `<what to do differently>`. |
 
 Risk and Issue deliberately share their slots. An issue is a risk that already happened, so promoting one is a change of tense rather than a rewrite.
 
@@ -108,15 +109,17 @@ Two rules that make the shapes work:
 
 ## Trend
 
-`Trend` is the DRI's read of an entry's direction since its last review, recorded with a reason, and **never computed**: guessing it from the wording of a log note is how a board ends up confidently wrong. The register stores the arrow; `update` also takes the word, case-insensitive:
+`Trend` is the DRI's read of an entry's direction since its last review, recorded with a reason, and **never computed**: guessing it from the wording of a log note is how a board ends up confidently wrong. The register stores the arrow, under the convention every report shares: **up is better**. `update` also takes the word, case-insensitive:
 
 | Arrow | Word |
 |---|---|
-| ↑ | Worsening fast |
-| ↗ | Worsening |
-| → | Stable |
-| ↘ | Improving |
-| ↓ | Improving fast |
+| ↑ | Improving fast (much better) |
+| ↗ | Improving (better) |
+| → | Stable (steady) |
+| ↘ | Worsening (worse) |
+| ↓ | Worsening fast (much worse) |
+
+The short words in brackets are accepted too.
 
 ```bash
 python <skill-path>/scripts/raid.py update "<register.json>" --id 5 --set Trend=worsening -m "Vendor slipped again."
@@ -191,13 +194,37 @@ When the user says "refresh the RAID dashboard" or similar:
 
 The dashboard is a snapshot, not a live view — regenerate it after any change. The `raid.py` verbs do not regenerate it; they warn when it has gone stale, via `registry.stale_views(path)`.
 
+### 4b. A lesson, and the cross-project Lessons page
+
+A **Lesson** is what the work taught, worth keeping beyond the sprint record's prose: a retro's finding, a review's surprise. Add it through its shape, with where it applies, whether it applies beyond this project, and the record that puts it into practice:
+
+```bash
+python <skill-path>/scripts/raid.py add "<register.json>" "Confirm a pull-in when work starts" --type Lesson \
+  --learned "<what we learned>" --because "<what showed it>" --next-time "<what to do differently>" \
+  --category Process --reusable Y --applied-by "Atlas 14"
+```
+
+- **Category** is free text; suggested: Planning, Estimation, Tooling, Process, Quality, People, Communication.
+- **Applied By** names whatever record delivers the lesson: a RAID Action (`R.12`), a WBS row (`Atlas 14`), a tool's change (`TD.1 v1.10`). Blank until something does.
+- **Status:** `Open` while what it calls for is not in place; `close` it once `Applied By` has landed, or when it is superseded, saying which.
+
+The cross-project page reads every RAID register under a root folder, found by `meta.kind`, archived projects included (a register under a folder whose name starts `Archive` is shown as archived). Reusable lessons lead, so a new project starts from what the last one learned:
+
+```bash
+python <skill-path>/scripts/raid.py lessons [--root <folder>] [--out <page.html>]   # default: Lessons Dashboard.html under the root
+```
+
+Regenerate it after adding or closing a lesson, as the board is.
+
 ### 5. Check a register
 
 ```bash
 python <skill-path>/scripts/raid.py check "<register.json>"
 ```
 
-Read-only. Reports vocabulary violations (`Type`, `Status`, `Outcome`, `Trend`), an `Outcome` on a non-Change entry, a closed Change with no `Outcome`, fields the schema does not define, malformed or unattributed log entries, Descriptions that do not follow their type's shape, closed entries with no Closed On, risks with no Probability/Severity, and stale dashboards. Run it before a review ceremony, and after any hand-edit of the JSON.
+Read-only. Reports vocabulary violations (`Type`, `Status`, `Outcome`, `Trend`, `Sharable`, `Reusable`), an `Outcome` on a non-Change entry, a closed Change with no `Outcome`, fields the schema does not define, malformed or unattributed log entries, Descriptions that do not follow their type's shape, closed entries with no Closed On, risks with no Probability/Severity, and stale dashboards. Run it before a review ceremony, and after any hand-edit of the JSON.
+
+**After changing a script, run `scripts/smoke_test.py`.** It builds its own registers, an active and an archived one, and checks the key features (the Lesson type and its shape, `migrate`, the Lessons page, the board), never touching a real register.
 
 ### 6. Create new RAID register
 
@@ -213,7 +240,7 @@ A register built before the current schema, or whose Action Log is still free te
 python <skill-path>/scripts/raid.py migrate "<register.json>" [--apply]
 ```
 
-Dry by default. It adds the fields and vocabulary values the register lacks (the `Change` type, `Outcome`, `Trend`) and **never touches a row**. For a free-text log it takes the date only from the text itself and the author only from the row's DRI — an entry carrying neither stays undated rather than being given a plausible date.
+Dry by default. It adds the fields and vocabulary values the register lacks (the `Change` and `Lesson` types, `Outcome`, `Trend`, `Sharable`, `Reusable`, `Applied By`) and **never touches a row**. It lists every entry that carries a `Trend`, since up is better and a trend set under the opposite reading would now say the reverse; it converts none. For a free-text log it takes the date only from the text itself and the author only from the row's DRI — an entry carrying neither stays undated rather than being given a plausible date.
 
 ### 7. External tracking flag
 
@@ -229,7 +256,7 @@ Set it through `raid.py`, so the reason lands in the log with it:
 python .../raid.py update "<register.json>" --id 5 --set "Tracked Externally=Y" -m "Raised as a ticket."
 ```
 
-For traceability in the other direction, put the RAID ID in the tracker item's description (e.g. `RAID: R.5`). That direction is the useful one, and it costs nothing to maintain.
+For traceability in the other direction, put the RAID ID in the tracker item's description (e.g. `RAID: <scope> — R.5`: R is for RAID whatever the type, and the scope because IDs repeat across registers). That direction is the useful one, and it costs nothing to maintain.
 
 If your tracker has an API and you want real task creation, delegate it to a separate skill that owns those conventions rather than building tracker-specific logic into this one.
 
@@ -239,9 +266,9 @@ One collection, `entries`. `registry.py` owns the `meta` envelope; `create_raid.
 
 | Field | Notes |
 |-------|-------|
-| RAID.ID | Sequential integer |
+| RAID.ID | Sequential integer, one sequence across all types; referenced as `R.<ID>` |
 | Detail | Short handle — a few words, not the full sentence |
-| Type | Risk, Action, Issue, Decision, Idea, Change |
+| Type | Risk, Action, Issue, Decision, Idea, Change, Lesson |
 | DRI | Person responsible |
 | Urgency (1-5) | General scoring input, drives Priority % |
 | Consequences (1-5) | General scoring input, drives Priority % |
@@ -266,7 +293,7 @@ Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of 
 | MoSCoW | 1.Must, 2.Should, 3.Could, 4.Won't |
 | Status | Open, Closed |
 | Outcome | Approved, Rejected, Withdrawn — Change entries only; empty means undecided |
-| Trend | ↑ ↗ → ↘ ↓ — the DRI's read since the last review; see "Trend" |
+| Trend | ↑ ↗ → ↘ ↓, up is better — the DRI's read since the last review; see "Trend" |
 | Last Review | Date |
 | Review On | Date |
 | Next Review On | Fallback review date if Review On isn't filled |
@@ -274,8 +301,11 @@ Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of 
 | Action Plan | |
 | Acceptance Criteria | |
 | Action Log | List of `{on, by, note, changed}` entries — see "The Action Log" |
-| Category | |
+| Category | Free text. For a Lesson, where it applies (see 4b) |
+| Reusable | Y/N, a Lesson only: does it apply beyond this project? The Lessons page leads with these |
+| Applied By | A Lesson only: the record that puts it into practice (`R.12`, a WBS row, a tool's change), free text |
 | Tracked Externally | Y/N flag, see operation 7 |
+| Sharable | Y/N — may the entry reach a reader outside the work? **Opt-in:** only `Y` does. A shared report (the reporting tool's `export`) keeps an entry only when it is `Y`; blank or `N` stays internal. Set it with `update --set Sharable=Y -m "<why it can be shared>"` |
 | WBS Ref | Optional. The WBS row the entry bears on, as `<project>#<id>` (e.g. `Atlas#24`) — always scope-qualified. `check` validates the shape only; `wbs.py refined --raid` resolves it. Leave it empty for an entry that is not about a deliverable |
 | Opened On | |
 | Requested By | Filled by a Change's `--requested-by` |
@@ -291,7 +321,7 @@ Only meaningful for `Type = Risk` rows — a deeper, risk-specific extension of 
 
 - **Board tab**: sortable table, filters for Type/Status/MoSCoW/Category/DRI/tracked, a "Clear all" button, and an active-filter count badge. The **Updated** column is the newest Action Log date, derived at render time — sort on it to find items that have gone quiet. Filter state persists across reloads via localStorage (keyed per project name).
 - **Closed entries are hidden from the board by default.** They stay in the register permanently and stay in the KPI counts — they are history, and history should not compete with open work for attention. A `Show closed (N)` button brings them back, and the choice persists like any other filter. Filtering explicitly for `Status = Closed` overrides the hide, so that combination shows the closed entries rather than an empty board. When a filter matches nothing, the empty state says how many closed entries are hidden.
-- **Trend column** on the board: the arrow where one is set; on an open risk or issue without one, *no update in N days* from the Action Log.
+- **Trend column** on the board: the reports' trend chip (the arrow in a tinted circle, solid when fast) where one is set, with the key beneath the table; on an open risk or issue without one, *no update in N days* from the Action Log.
 - **Changes tab**: requested Changes awaiting a decision (red once `Review On` has passed), then decided ones by outcome and decision date.
 - **Item detail**: the Action Log renders as a timeline, newest first, each entry showing its date, author, field changes and note.
 - **Analytics tab**: KPIs, by-type and by-status charts, priority distribution, MoSCoW breakdown, items-over-time timeline, and — when risk items are present — a risk heat map.

@@ -19,6 +19,8 @@ Everything else is a field edit: the register is JSON.
 import argparse
 import datetime as dt
 import getpass
+import io
+import json
 import os
 import re
 import sys
@@ -61,6 +63,11 @@ SKELETONS = {
                  ("the change", "expected benefit")),
     # A Change is a request that needs a decision, not the decision itself:
     # the answer goes in Outcome, and its date is the log entry that set it.
+    # A Lesson is what the work taught, with the evidence and what changes.
+    # What puts it into practice is named in Applied By, not in the sentence.
+    "Lesson":   (u"We learned that %s, because %s, so next time %s.",
+                 ("learned", "because", "next_time"),
+                 ("what we learned", "what showed it", "what to do differently")),
     "Change":   (u"Change %s, requested by %s, because %s; impact: %s.",
                  ("change", "requested_by", "because", "impact"),
                  ("what", "who", "why", "on scope, schedule or cost")),
@@ -76,17 +83,22 @@ SHAPES = {
     "Decision": re.compile(u"^chose .+ because ", re.I | re.S),
     "Idea":     re.compile(u"^if .+ then ", re.I | re.S),
     "Change":   re.compile(u"^change .+ requested by .+ because .+ impact: ", re.I | re.S),
+    "Lesson":   re.compile(u"^we learned that .+ so next time ", re.I | re.S),
 }
 
 # Fields bound to one of the register's vocabularies, by vocabulary name.
 VOCAB_FIELDS = {"Type": "type", "Status": "status", "Outcome": "outcome",
-                "Trend": "trend"}
+                "Trend": "trend", "Sharable": "sharable", "Reusable": "reusable"}
 
-# Trend is stored as the arrow, which is what every reader shows. The words are
-# accepted as input because an arrow is awkward to type at a prompt.
-TREND_WORDS = {"worsening fast": u"↑", "worsening": u"↗",
-               "stable": u"→", "improving": u"↘",
-               "improving fast": u"↓"}
+# Trend is stored as the arrow, which is what every reader shows, under the one
+# convention every report and the board share: up is better. The
+# words are accepted as input because an arrow is awkward to type at a prompt,
+# the chip's short words as well as the long ones.
+TREND_WORDS = {"improving fast": u"↑", "much better": u"↑",
+               "improving": u"↗", "better": u"↗",
+               "stable": u"→", "steady": u"→",
+               "worsening": u"↘", "worse": u"↘",
+               "worsening fast": u"↓", "much worse": u"↓"}
 
 
 def today_iso(value=None):
@@ -311,7 +323,10 @@ def cmd_add(args):
     row = {ID: new_id, "Detail": args.detail, "Type": args.type,
            "Status": "Open", "Description": description,
            "Opened On": on, "DRI": args.dri or by}
+    if args.type != "Lesson" and (args.reusable or args.applied_by):
+        sys.exit("--reusable and --applied-by belong to a Lesson.")
     for key, value in (("MoSCoW", args.moscow), ("Category", args.category),
+                       ("Reusable", args.reusable), ("Applied By", args.applied_by),
                        ("Action Plan", args.action_plan),
                        ("Acceptance Criteria", args.acceptance),
                        ("Requested By", args.requested_by)):
@@ -342,7 +357,7 @@ def cmd_update(args):
         name, value = name.strip(), value.strip()
         if known and name not in known:
             hint = ("\n  It is in the current schema: run `raid.py migrate --apply` first."
-                    if name in ("Outcome", "Trend") else "")
+                    if name in ("Outcome", "Trend", "Sharable") else "")
             sys.exit("%r is not a field in this register.\n  fields: %s%s"
                      % (name, ", ".join(known), hint))
         if name == LOG:
@@ -350,7 +365,7 @@ def cmd_update(args):
         if name == "Trend":
             value = TREND_WORDS.get(value.lower(), value)
         if name in VOCAB_FIELDS:
-            if value and name in ("Outcome", "Trend") and not vocabulary(data, VOCAB_FIELDS[name]):
+            if value and name in ("Outcome", "Trend", "Sharable") and not vocabulary(data, VOCAB_FIELDS[name]):
                 sys.exit("This register has no %s vocabulary yet. Run `raid.py "
                          "migrate --apply` first." % VOCAB_FIELDS[name])
             check_vocab(data, VOCAB_FIELDS[name], value)
@@ -447,6 +462,124 @@ def split_date(text):
     return None, text.strip()
 
 
+# --------------------------------------------------------------------------- #
+# The cross-project Lessons page. Every RAID register under a root folder,
+# found by meta.kind, archived projects included: a register under a folder
+# whose name starts "Archive" (any case) is shown as archived. A lesson is worth
+# most on the next project, so the page reads across projects, not one.
+
+SKIP_DIRS = ("PreviousV", "Reports", "AuxMat", ".git", "__pycache__", "node_modules")
+
+
+def raid_registers(root):
+    found = []
+    for here, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+        rel = os.path.relpath(here, root).split(os.sep)
+        where = "archived" if any(part.lower().startswith("archive") for part in rel) else "active"
+        for name in sorted(files):
+            path = os.path.join(here, name)
+            if name.endswith(".json"):
+                try:
+                    with io.open(path, encoding="utf-8") as fh:
+                        if json.load(fh).get("meta", {}).get("kind") == "raid-register":
+                            found.append((path, where))
+                except (IOError, OSError, ValueError):
+                    pass
+    return found
+
+
+def cmd_lessons(args):
+    root = os.path.abspath(args.root or os.getcwd())
+    out = args.out or os.path.join(root, "Lessons Dashboard.html")
+    regs = raid_registers(root)
+    lessons = []
+    for path, where in regs:
+        data = R.load(path)
+        scope = data.get("meta", {}).get("scope") or os.path.basename(path)
+        for row in R.rows(data, ENTRIES):
+            if R.clean(row.get("Type")) != "Lesson":
+                continue
+            lessons.append({"scope": scope, "archived": where == "archived", "ref": "R.%s" % row.get(ID),
+                            "detail": row.get("Detail") or "", "description": row.get("Description") or "",
+                            "status": R.clean(row.get("Status")) or "Open",
+                            "category": R.clean(row.get("Category")) or "Uncategorised",
+                            "reusable": R.clean(row.get("Reusable")) == "Y",
+                            "applied": R.clean(row.get("Applied By")) or "", "learned": row.get("Opened On") or "",
+                            "dri": row.get("DRI") or ""})
+    lessons.sort(key=lambda x: (not x["reusable"], x["category"].lower(), x["learned"]))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with io.open(out, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(LESSONS_PAGE.replace("__DATA__", json.dumps(
+            {"lessons": lessons, "registers": [{"scope": R.load(p).get("meta", {}).get("scope") or os.path.basename(p),
+                                                "archived": w == "archived"} for p, w in regs],
+             "generated": dt.date.today().isoformat()}, ensure_ascii=False).replace("</", "<\\/")))
+    print("Lessons page: %d lesson(s) from %d RAID register(s) (%d archived)\n  %s"
+          % (len(lessons), len(regs), sum(1 for _p, w in regs if w == "archived"), out))
+    return 0
+
+
+LESSONS_PAGE = u"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lessons Learned</title>
+<style>
+:root { --page:#f6f6f4; --surface:#fcfcfb; --border:rgba(11,11,11,0.10); --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --good:#0ca30c; --goodbg:#e8f5e8; --s1:#2a78d6; --donebg:#e3edfa; --nonebg:#efeee9; }
+@media (prefers-color-scheme: dark) { :root { --page:#0d0d0d; --surface:#1a1a19; --border:rgba(255,255,255,0.10);
+  --ink:#fff; --ink2:#c3c2b7; --goodbg:#16301a; --donebg:#17263a; --nonebg:#262624; } }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--page); color:var(--ink); font-size:13px; line-height:1.5; padding:20px 16px; }
+.page { max-width:1100px; margin:0 auto; }
+h1 { font-size:20px; } .meta { color:var(--ink2); font-size:12px; margin:2px 0 14px; }
+.filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+select { font:inherit; padding:4px 8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink); }
+h2 { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--ink2); margin:16px 0 8px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+.head { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-bottom:4px; }
+.ref { font-weight:700; color:var(--ink2); } .title { font-weight:650; }
+.chip { font-size:11px; border-radius:10px; padding:0 8px; background:var(--nonebg); color:var(--ink2); white-space:nowrap; }
+.chip.reuse { background:var(--goodbg); color:var(--good); font-weight:600; } .chip.closed { background:var(--donebg); color:var(--s1); }
+.small { font-size:11.5px; color:var(--ink2); margin-top:4px; } .muted { color:var(--muted); }
+</style></head><body><div class="page">
+<h1>Lessons learned</h1><div class="meta" id="meta"></div>
+<div class="filters">
+  <select id="fScope"><option value="">All projects</option></select>
+  <select id="fCat"><option value="">All categories</option></select>
+  <select id="fReuse"><option value="">Reusable or not</option><option value="Y">Reusable</option><option value="N">This project only</option></select>
+  <select id="fStatus"><option value="">Open or closed</option><option value="Open">Open: not yet applied</option><option value="Closed">Closed: applied</option></select>
+</div>
+<div id="list"></div>
+</div>
+<script>
+const D = __DATA__;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const regs = D.registers.map(r => esc(r.scope) + (r.archived ? ' (archived)' : '')).join(', ');
+document.getElementById('meta').innerHTML = D.lessons.length + ' lesson(s) from ' + D.registers.length +
+  ' RAID register(s): ' + (regs || 'none') + ' · generated ' + D.generated + ' by raid-manager, never edited by hand';
+const fill = (id, vals) => { const s = document.getElementById(id); [...new Set(vals)].sort().forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; s.appendChild(o); }); };
+fill('fScope', D.lessons.map(l => l.scope)); fill('fCat', D.lessons.map(l => l.category));
+function render() {
+  const f = id => document.getElementById(id).value;
+  const shown = D.lessons.filter(l => (!f('fScope') || l.scope === f('fScope')) && (!f('fCat') || l.category === f('fCat'))
+    && (!f('fReuse') || (l.reusable ? 'Y' : 'N') === f('fReuse')) && (!f('fStatus') || l.status === f('fStatus')));
+  if (!shown.length) { document.getElementById('list').innerHTML = '<p class="muted">' + (D.lessons.length ? 'No lesson matches these filters.' : 'No lesson recorded yet. Add one with raid.py add --type Lesson.') + '</p>'; return; }
+  let html = '', group = null;
+  shown.forEach(l => {
+    const g = (l.reusable ? 'Reusable' : 'This project only') + ' · ' + l.category;
+    if (g !== group) { html += '<h2>' + esc(g) + '</h2>'; group = g; }
+    html += '<div class="card"><div class="head"><span class="ref">' + esc(l.scope) + ' ' + esc(l.ref) + '</span><span class="title">' + esc(l.detail) + '</span>' +
+      (l.reusable ? '<span class="chip reuse">reusable</span>' : '') + '<span class="chip' + (l.status === 'Closed' ? ' closed' : '') + '">' + (l.status === 'Closed' ? 'applied' : 'not yet applied') + '</span>' +
+      (l.archived ? '<span class="chip">archived project</span>' : '') + '</div><div>' + esc(l.description) + '</div>' +
+      '<div class="small">Applied by: ' + (l.applied ? esc(l.applied) : '<span class="muted">nothing yet</span>') + ' · learned ' + esc(l.learned) + (l.dri ? ' · ' + esc(l.dri) : '') + '</div></div>';
+  });
+  document.getElementById('list').innerHTML = html;
+}
+['fScope','fCat','fReuse','fStatus'].forEach(id => document.getElementById(id).addEventListener('change', render));
+render();
+</script></body></html>
+"""
+
+
 def schema_gaps(data):
     """What the register's schema lacks against create_raid's: missing fields,
     and missing values in each vocabulary. Rows are never touched - a new type
@@ -524,6 +657,13 @@ def cmd_migrate(args):
                  entry.get("by") or "(no DRI)", entry["note"][:100]))
     if plan:
         print("\n%d log entr%s to convert." % (len(plan), "y" if len(plan) == 1 else "ies"))
+    trended = [r for r in R.rows(data, ENTRIES) if R.clean(r.get("Trend"))]
+    if trended:
+        print("\n%d entr%s a Trend. Up is better: \u2191 improving fast to \u2193 worsening fast."
+              " A Trend set under the opposite reading now says the reverse; check each, nothing"
+              " is converted:" % (len(trended), "y carries" if len(trended) == 1 else "ies carry"))
+        for r in trended:
+            print("   R.%s  %s  %s" % (R.clean(r.get(ID)), R.clean(r.get("Trend")), R.clean(r.get("Detail"))[:60]))
     if not args.apply:
         print("Dry run. Re-run with --apply to write.")
         return 0
@@ -538,6 +678,12 @@ def cmd_migrate(args):
 
 
 def main():
+    # A console that cannot print a character (Windows' code page, a Trend arrow
+    # in the change summary) gets a substitute, never a crash before the save.
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except AttributeError:
+        pass
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     subs = p.add_subparsers(dest="command")
@@ -567,7 +713,11 @@ def main():
     s.add_argument("--description", help="freehand, bypassing the type's shape")
     s.add_argument("--dri")
     s.add_argument("--moscow")
-    s.add_argument("--category")
+    s.add_argument("--category", help="for a Lesson: Planning, Estimation, Tooling, Process, "
+                                       "Quality, People, Communication, or your own")
+    s.add_argument("--reusable", choices=["Y", "N"], help="a Lesson: does it apply beyond this project")
+    s.add_argument("--applied-by", help="a Lesson: the record that puts it into practice "
+                                        "(R.12, a WBS row, a tool's change)")
     s.add_argument("--action-plan")
     s.add_argument("--acceptance", help="Acceptance Criteria")
     s.set_defaults(func=cmd_add)
@@ -602,6 +752,11 @@ def main():
     s = subs.add_parser("check", help="read-only health report")
     shared(s, dated=False)
     s.set_defaults(func=cmd_check)
+
+    s = subs.add_parser("lessons", help="the cross-project Lessons page, from every RAID register")
+    s.add_argument("--root", help="the folder whose RAID registers are read (default: the current one)")
+    s.add_argument("--out", help="the page (default: Lessons Dashboard.html under --root)")
+    s.set_defaults(func=cmd_lessons)
 
     s = subs.add_parser("migrate", help="bring the schema up to date; free-text "
                                         "Action Logs -> dated entries")

@@ -25,6 +25,7 @@ FIELDS = {
     "Next Review On": "nextReviewOn", "Description": "description",
     "Action Plan": "actionPlan", "Acceptance Criteria": "acceptanceCriteria",
     "Action Log": "actionLog", "Category": "category",
+    "Reusable": "reusable", "Applied By": "appliedBy",
     "Tracked Externally": "trackedExternally",
     "Opened On": "openedOn", "Requested By": "requestedBy", "Involve": "involve",
     "Has AuxMat": "hasAuxMat", "Estimated Effort": "estimatedEffort",
@@ -180,7 +181,15 @@ tr:hover td {{ background: #f8fafc; }}
 .badge-decision {{ background: #e0e7ff; color: #3730a3; }}
 .badge-idea {{ background: #f0fdf4; color: #166534; }}
 .badge-change {{ background: #fce7f3; color: #9d174d; }}
-.trend {{ font-size: 15px; font-weight: 700; }}
+.badge-lesson {{ background: #ecfeff; color: #155e75; }}
+.trend {{ display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+  border-radius: 50%; vertical-align: middle; flex: none; }}
+.trend svg {{ width: 13px; height: 13px; }}
+.tr-up {{ background: #e8f5e8; color: #0a6e0a; }} .tr-down {{ background: #f9e6e6; color: #a82828; }}
+.tr-flat {{ background: #efeee9; color: #52514e; }}
+.tr-up.tr-fast {{ background: #0ca30c; color: #fff; }} .tr-down.tr-fast {{ background: #d03b3b; color: #fff; }}
+.trend-key {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 11px; color: #6b7280; margin-top: 8px; }}
+.trend-key .k {{ display: inline-flex; align-items: center; gap: 4px; }}
 .trend-stale {{ font-size: 11px; color: #9ca3af; font-style: italic; white-space: nowrap; }}
 .outcome-approved {{ color: #16a34a; font-weight: 600; }}
 .outcome-rejected {{ color: #6b7280; font-weight: 600; }}
@@ -245,6 +254,7 @@ tr:hover td {{ background: #f8fafc; }}
       </tr></thead>
       <tbody id="tableBody"></tbody>
     </table>
+    <div class="trend-key" id="trendKey"></div>
   </div>
 </div>
 <div class="panel" id="panel-changes"><div id="changesView"></div></div>
@@ -384,12 +394,26 @@ document.querySelector('thead').addEventListener('click', e => {{
 }});
 
 // Trend is the DRI's judgement, never guessed. An open risk or issue without
-// one says how long it has gone without an update instead.
-const TREND_COLOR = {{'↑':'#dc2626','↗':'#d97706','→':'#6b7280','↘':'#65a30d','↓':'#16a34a'}};
-const TREND_NAME = {{'↑':'Worsening fast','↗':'Worsening','→':'Stable','↘':'Improving','↓':'Improving fast'}};
+// one says how long it has gone without an update instead. Up is better, and
+// the chip is the reports' own (the reporting tool's trend chip).
+// The chip is the arrow alone (design A): a tinted circle, diagonal for a step,
+// straight and filled for fast; the word is the tooltip and the key's.
+const TREND_CHIP = {{'↑':[0,'tr-up tr-fast','much better'],'↗':[45,'tr-up','better'],'→':[90,'tr-flat','steady'],
+                    '↘':[135,'tr-down','worse'],'↓':[180,'tr-down tr-fast','much worse']}};
+const TREND_NAME = {{'↑':'Improving fast','↗':'Improving','→':'Stable','↘':'Worsening','↓':'Worsening fast'}};
+function trendChip(t) {{
+  const c = TREND_CHIP[t];
+  if (!c) return t;
+  const word = c[2].charAt(0).toUpperCase() + c[2].slice(1);
+  return '<span class="trend '+c[1]+'" role="img" title="'+word+'" aria-label="'+word+'"><svg viewBox="0 0 16 16" style="transform:rotate('+c[0]+'deg)" fill="none" stroke="currentColor" stroke-width="'+(c[1].indexOf('fast') >= 0 ? 2.6 : 2)+'" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5V2.5M3.5 7 8 2.5 12.5 7"/></svg></span>';
+}}
+document.addEventListener('DOMContentLoaded', () => {{
+  const key = document.getElementById('trendKey');
+  if (key) key.innerHTML = '<span>Trend since the last review:</span>' + ['↑','↗','→','↘','↓'].map(t => '<span class="k">'+trendChip(t)+TREND_CHIP[t][2]+'</span>').join('');
+}});
 function daysSince(iso) {{ return iso ? Math.floor((new Date() - new Date(iso)) / 86400000) : null; }}
 function trendCell(e) {{
-  if (e.trend) return '<span class="trend" style="color:'+(TREND_COLOR[e.trend]||'#6b7280')+'" title="'+(TREND_NAME[e.trend]||'')+'">'+e.trend+'</span>';
+  if (e.trend) return trendChip(e.trend);
   if ((e.type === 'Risk' || e.type === 'Issue') && !isClosed(e)) {{
     const d = daysSince(e.updated);
     return '<span class="trend-stale">'+(d === null ? 'never updated' : 'no update in '+d+'d')+'</span>';
@@ -438,7 +462,7 @@ function logHtml(log) {{
 function showDetail(id) {{
   const e = DATA.entries.find(x => x.id === id); if (!e) return;
   const riskFields = e.type === 'Risk' ? [['Probability',e.probability],['Severity',e.severity],['Response Strategy',e.responseStrategy],['Mitigation Target',e.mitigationTarget!=null?e.mitigationTarget+'%':null],['Target Residual Risk',e.targetResidualRisk],['Residual Risk Score',e.residualRisk]] : [];
-  const fields = [['Type',e.type],['DRI',e.dri],['Priority',e.priority+'%'],['Urgency',e.urgency],['Consequences',e.consequences],['Feasibility',e.feasibility],...riskFields,['MoSCoW',e.moscow],['Status',e.status],['Outcome',e.outcome],['Decided On',e.decidedOn],['Trend',e.trend?e.trend+' '+(TREND_NAME[e.trend]||''):null],['Tracked externally',e.trackedExternally==='Y'?'Yes':'No'],['Description',e.description],['Action Plan',e.actionPlan],['Acceptance Criteria',e.acceptanceCriteria],['Opened',e.openedOn],['Last Review',e.lastReview],['Review On',e.reviewOn],['Next Review On',e.nextReviewOn],['Closed On',e.closedOn],['Closed By',e.closedBy],['Requested By',e.requestedBy],['Estimated Effort',e.estimatedEffort],['ETC',e.etc],['ETC Renegotiated',e.etcRenegotiated],['Has AuxMat',e.hasAuxMat==='Y'?'Yes':'No']].filter(([,v])=>v!=null);
+  const fields = [['Type',e.type],['DRI',e.dri],['Priority',e.priority+'%'],['Urgency',e.urgency],['Consequences',e.consequences],['Feasibility',e.feasibility],...riskFields,['MoSCoW',e.moscow],['Status',e.status],['Outcome',e.outcome],['Reusable',e.reusable==='Y'?'Yes, beyond this project':(e.reusable==='N'?'This project only':null)],['Applied By',e.appliedBy],['Decided On',e.decidedOn],['Trend',e.trend?trendChip(e.trend):null],['Tracked externally',e.trackedExternally==='Y'?'Yes':'No'],['Description',e.description],['Action Plan',e.actionPlan],['Acceptance Criteria',e.acceptanceCriteria],['Opened',e.openedOn],['Last Review',e.lastReview],['Review On',e.reviewOn],['Next Review On',e.nextReviewOn],['Closed On',e.closedOn],['Closed By',e.closedBy],['Requested By',e.requestedBy],['Estimated Effort',e.estimatedEffort],['ETC',e.etc],['ETC Renegotiated',e.etcRenegotiated],['Has AuxMat',e.hasAuxMat==='Y'?'Yes':'No']].filter(([,v])=>v!=null);
   document.getElementById('modalContent').innerHTML = '<button class="close-btn" onclick="closeModal()">x</button><h2>R.'+e.id+' — '+e.detail+'</h2>'+fields.map(([l,v])=>'<div class="field"><div class="field-label">'+l+'</div><div class="field-value">'+String(v).replace(/\\n/g,'<br>')+'</div></div>').join('')+logHtml(e.actionLog)+'<button class="edit-btn" onclick="requestEdit('+e.id+')">Request Edit via Chat</button>';
   document.getElementById('modalOverlay').classList.add('open');
 }}

@@ -19,18 +19,26 @@ FIELDS = ["RAID.ID", "Detail", "Type", "DRI", "Urgency (1-5)",
           "Residual Risk Score", "MoSCoW", "Status", "Outcome", "Trend",
           "Last Review", "Review On",
           "Next Review On", "Description", "Action Plan", "Acceptance Criteria",
-          "Action Log", "Category", "Tracked Externally", "WBS Ref", "Opened On",
+          "Action Log", "Category", "Reusable", "Applied By", "Tracked Externally", "Sharable",
+          "WBS Ref", "Opened On",
           "Requested By", "Involve", "Has AuxMat", "Estimated Effort", "ETC",
           "ETC Renegotiated", "Closed On", "Closed By"]
 
-TYPES = ["Risk", "Action", "Issue", "Decision", "Idea", "Change"]
+TYPES = ["Risk", "Action", "Issue", "Decision", "Idea", "Change", "Lesson"]
 STATUSES = ["Open", "Closed"]
 # Outcome answers a Change; Trend is the DRI's read of an entry's direction
-# since its last review, stored as the arrow every reader shows.
+# since its last review, stored as the arrow every reader shows: up is better.
 OUTCOMES = ["Approved", "Rejected", "Withdrawn"]
 TRENDS = [u"↑", u"↗", u"→", u"↘", u"↓"]
+# Sharable says whether an entry may reach a reader outside the work. Opt-in:
+# only Y does, so an entry nobody has thought about stays internal.
+SHARABLE = ["Y", "N"]
+# A Lesson says whether it applies beyond its project (Reusable), and names the
+# record that puts it into practice (Applied By): a RAID Action, a WBS row or a
+# tool's change, whatever delivers it - free text, not one register's ID.
+REUSABLE = ["Y", "N"]
 VOCABULARIES = {"type": TYPES, "status": STATUSES, "outcome": OUTCOMES,
-                "trend": TRENDS}
+                "trend": TRENDS, "sharable": SHARABLE, "reusable": REUSABLE}
 
 # Priority and Target Residual Risk are not fields: they are computed from the
 # scores when the dashboard is rendered, so a stored copy cannot go stale.
