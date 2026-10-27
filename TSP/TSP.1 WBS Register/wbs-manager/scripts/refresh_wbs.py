@@ -477,6 +477,14 @@ tr:hover td{background:#f0f4ff}
 .btn{padding:4px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;background:#fff;color:#374151;cursor:pointer;user-select:none}
 .btn:hover{background:#f0f4ff;border-color:#4472C4}
 .twisty{display:inline-block;width:14px;cursor:pointer;color:#6b7280;user-select:none;font-size:10px}
+/* Breakdown: a level-1 row is a section band; below it, a guide line per level
+   shows which rows are siblings, and a wrapped title stays under its own level. */
+.tree-l1>td{background:#dfe7f7;border-top:2px solid #4472C4;border-bottom-color:#c9d5ee}
+.tcell{position:relative}
+.tcell .ti{display:flex;gap:4px;align-items:flex-start}
+.tcell .ti>.twisty,.tcell .ti>.leafdot{flex:none;width:14px;text-align:center}
+.tcell .tt{min-width:0}
+.guide{position:absolute;top:0;bottom:-1px;border-left:1px solid #c9d3e3}
 .twisty:hover{color:#4472C4}
 .leafdot{display:inline-block;width:14px;color:#d1d5db;user-select:none}
 .kdtag{background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;margin-left:6px}
@@ -848,11 +856,12 @@ function renderTree(){
   walk((d,depth)=>{
     shown++;
     const kd=d.kd==='Y'?'<span class="kdtag">KEY</span>':'';
-    const strong=(depth===0||d.kd==='Y')?'font-weight:700':'';
+    const strong=(depth===0||d.kd==='Y')?'font-weight:700':hasKids(d)?'font-weight:600':'';
+    const guides=Array.from({length:depth},(_,i)=>`<span class="guide" style="left:${8+i*20+7}px"></span>`).join('');
     const sub=collapsed.has(String(d.id))?descendants(d.id):[];
     const rolled=sub.length?` <span style="color:#6b7280">(${sub.length} hidden)</span>`:'';
-    h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c||'-'}</td>
-      <td style="padding-left:${8+depth*18}px;${strong}">${twisty(d)} ${d.t||'<em class="warn">(no title)</em>'}${kd}${rolled}</td>
+    h+=`<tr${depth===0?' class="tree-l1"':''}><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c||'-'}</td>
+      <td class="tcell" style="padding-left:${8+depth*20}px;${strong}">${guides}<div class="ti">${twisty(d)}<span class="tt">${d.t||'<em class="warn">(no title)</em>'}${kd}${rolled}</span></div></td>
       <td>${d.ty||'<span class="warn">—</span>'}</td><td>${d.cl==='Product'?'-':(d.cl||'-')}</td><td>${d.dl||'-'}</td><td>${d.na||'-'}</td>
       <td>${badge(d.s)}</td><td>${effortCell(d)}</td><td style="min-width:96px">${hasKids(d)?progressCell(d):''}</td><td>${d.o||'-'}</td></tr>`;
   });
