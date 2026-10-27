@@ -546,8 +546,9 @@ tr:hover td{background:#f0f4ff}
 .kb-card.cx{opacity:.55}.kb-card.cx .kb-title{text-decoration:line-through}
 .kb-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
 .kb-title{font-weight:600;margin:3px 0 2px;line-height:1.35}
-.kb-path{font-size:11px;color:#6b7280;line-height:1.5}
-.kb-path .idbtn{font-size:11px}
+/* A card names its direct parent only, on one line; the full chain is in the details. */
+.kb-path{font-size:11px;color:#6b7280;line-height:1.5;display:flex;gap:3px;min-width:0;overflow:hidden}
+.kb-path .idbtn{font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .kb-meta{font-size:11px;color:#6b7280;margin-top:4px}
 .kb-tag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;background:#ede9fe;color:#5b21b6;white-space:nowrap}
 .kb-tag.pull{background:#ffedd5;color:#9a3412}
@@ -999,9 +1000,11 @@ function kbCard(c,laned){
   return `<div class="kb-card${d.s==='Cancelled'?' cx':''}" style="border-left-color:${SCOL[d.s]||'#e5e7eb'}">
     <div class="kb-top"><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button>${tag}</div>
     <div class="kb-title">${esc(d.t)||'<em class="warn">(no title)</em>'}</div>
-    ${(()=>{let a=ancestors(d.id);const i=c.lane!=null?a.findIndex(x=>String(x.id)===String(c.lane)):-1;
-      if(i>=0)a=laned?a.slice(i+1):a.slice(i);
-      return a.length?`<div class="kb-path">&rsaquo; ${a.map(crumbLink).join(' &rsaquo; ')}</div>`:'';})()}
+    ${(()=>{const a=ancestors(d.id),p=a[a.length-1];
+      // In a lane its head is already named above the card, so a parent that is the head is not repeated.
+      if(!p||(laned&&String(p.id)===String(c.lane)))return '';
+      const chain=a.map(x=>x.t||x.id).join(' > ');
+      return `<div class="kb-path" title="${esc(chain)}"><span>&rsaquo;</span><button class="idbtn" onclick="openDetail(${p.id})">${esc(p.t)||esc(p.id)}</button></div>`;})()}
     <div class="kb-meta">${[d.ty,c.pa?(c.h?c.h+'h in sprint':'no work in sprint'):(d.e?d.e+'h':'no estimate'),d.p].filter(Boolean).map(esc).join(' &middot; ')}</div>${flag}</div>`;
 }
 function kbCells(cards,laned){

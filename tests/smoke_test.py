@@ -1753,7 +1753,8 @@ def test_pull_ins(root, scratch):
     html = io.open(dash, encoding="utf-8").read() if ok else ""
     check("dashboard: a card's details link its parents (breadcrumb) and list its children",
           ok and "function ancestors(" in html and 'class="crumbs"' in html and "Children (" in html, out[-200:])
-    check("dashboard: a sprint card's path links to its parents", "a.map(crumbLink)" in html)
+    check("dashboard: a sprint card links its direct parent only, the full chain in its tooltip",
+          "p=a[a.length-1]" in html and 'class="kb-path" title=' in html and "a.map(crumbLink)" not in html)
     check("dashboard: #item=<ID> opens a card, with Copy link and the browser's Back",
           "itemFromHash()" in html and "#item=" in html and "Copy link" in html and "hashchange" in html)
 
