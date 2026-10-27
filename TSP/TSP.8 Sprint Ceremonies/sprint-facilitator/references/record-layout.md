@@ -38,7 +38,7 @@ The goals are data a report counts, so three tables keep a fixed shape:
 | Block | Table | Columns |
 |---|---|---|
 | Planning | *Iteration goals* | `ID` (`G1`, `G2`…, unique within the sprint) · `Goal` · `Done when` · `Bet` (the longer-cycle bet or objective it serves, or blank) · `Carried from` (`<sprint ID> <goal ID>`, only for a goal continuing an earlier one) |
-| Planning | *Committed items* | `Item` · `Effort` (`Xh`) · `Area` · `Goal` (`G1`, `G1, G3`, or blank) · `Notes` |
+| Planning | *Committed items* | `Item` · `Effort` (`Xh`) · `Area` · `Goal` (`G1`, `G1, G3`, or blank) · `Notes`. A pull-in's row is added the day it is pulled in, its `Notes` saying `**pulled in <DD-Mon>**` and `effect:` (`SKILL.md`, *A pull-in states its effect on committed work*); `Item` names the row as `<scope> <ID> <title>`, which `wbs.py pullins` reads |
 | Review | *Iteration goals* | `ID` · `Goal` · `Achieved` (`Yes` / `Partial` / `No`, nothing else) · `Why` |
 
 The Review also opens with *Highlights*: one paragraph. In *Committed items*, a struck-through row was dropped and an all-bold row is a subtotal heading; `goals` skips both when it sums hours. A record whose goals table has no `ID` column reads as `unstructured`, never guessed at.

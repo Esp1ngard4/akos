@@ -11,7 +11,7 @@ It is an outflow of governance, not a publisher and not a CRM. It hands over the
 | | |
 |---|---|
 | The design | Comes from a personal setting, where it ran a house project's contractors, architect and family alongside projects with the owner as their only stakeholder |
-| As shipped here | **Not yet used on real work.** Exercised by the smoke test on a scratch project, and by the example register. The ceremonies describe their use (the close-out sends what is due, the weekly review names what is overdue) but the ceremony skills do not run it yet, and the reporting tool does not yet read audiences from it |
+| As shipped here | **Not yet used on real work.** Exercised by the smoke test on a scratch project, and by the example register. The close-out sends what is due, the weekly review names what is overdue, and the reporting tool reads audiences from it; all three exercised by the smoke test only |
 
 ## Components
 
@@ -83,7 +83,7 @@ What is **not** tested is whether the analysis is right: whether a stakeholder's
 
 ## Relationship to other tools
 
-- **TSP.10 Reporting**: the audience layer, who receives which report and at what share level, read through `audiences_for`. Not wired in yet; see *Open items*.
+- **TSP.10 Reporting**: the audience layer, who receives which report and at what share level. A status report records its audiences, `export --comm C.n` takes the share level from a communication, and the charter shows the stakeholders, by role and group in a shared copy.
 - **TSP.8 Sprint Ceremonies**: the close-out sends the communications due per sprint and records them.
 - **TSP.11 Weekly Review**: names overdue communications and gaps with no action, read only.
 - **TSP.2 RAID Register**: an engagement action may be a RAID Action; RAID's `Sharable` decides what an external copy holds.
@@ -113,10 +113,10 @@ Nothing is sent by this tool, and no external service is read: addresses come fr
 | Item | Detail |
 |---|---|
 | Unused on real work | See *Status*. A project run with a sponsor or client through a few sprints is what moves the tool to `Implemented` |
-| The ceremonies and reporting do not call it yet | The close-out's sending, the weekly review's check and the reporting tool's audiences are described here and in the skill; the ceremony and reporting skills take them up next |
 
 ## Version history
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-27 | The sprint close-out sends the communications due (TD.8 v1.4), the weekly review names the overdue ones and the gaps with no action (TD.11 v1.2), and the reporting tool reads audiences, shares at a communication's share level and shows stakeholders on the charter (TD.10 v1.3). |
 | v1.0 | 2026-10-27 | Published as TSP.13. One skill with its scripts, dashboard template and a made-up example register. Registers found by `meta.kind` under a root you name; the sprint calendar from the project's own agile conventions or WBS; contacts per project, with the tool checking that git leaves them out; content pointers checked against the nearest `content-system/`. |

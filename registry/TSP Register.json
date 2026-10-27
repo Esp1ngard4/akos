@@ -114,6 +114,48 @@
       "Description": "TSP.13 published: the stakeholder register, found by meta.kind under a root, the sprint calendar from the project's own conventions or WBS, contacts checked against git.",
       "ID": 19,
       "Tool": "Stakeholder Register"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.1 v1.10: work the sprint never committed to asks first (--pulled-in with its effect, or --outside-sprint); a parent counts only when committed itself; pullins finds pull-ins the sprint record lacks; a split keeps later commitments off the delivered part; one task may serve several rows.",
+      "ID": 20,
+      "Tool": "WBS Register"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.2 v1.6: Lesson type and the cross-project Lessons page; Trend reads up as better, with migrate listing trends already set; Sharable, opt-in, for what may leave the project; R.<ID> references; the console fix.",
+      "ID": 21,
+      "Tool": "RAID Register"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.10 v1.3: export, a filtered copy for a reader outside the work, at a communication's share level; report.py charter; trend chips one way everywhere; info icons; the key deliverables map on a phone; On Time counts only a later rebaseline.",
+      "ID": 22,
+      "Tool": "Reporting"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.8 v1.4: a pull-in states its effect the day it is pulled in; the close-out reads the effects first and sends the stakeholder communications due; planning commits a parent a goal means to close.",
+      "ID": 23,
+      "Tool": "Sprint Ceremonies"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.9 v1.3: the evening runs wbs.py pullins and says in one line when a pull-in is missing from the sprint record.",
+      "ID": 24,
+      "Tool": "Daily Loop"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.11 v1.2: the sprint check reads the stakeholder registers, overdue communications and gaps with no action, three lines at most.",
+      "ID": 25,
+      "Tool": "Weekly Review"
+    },
+    {
+      "Changed On": "2026-10-27",
+      "Description": "TD.13 v1.1: the close-out, the weekly review and reporting now use the register.",
+      "ID": 26,
+      "Tool": "Stakeholder Register"
     }
   ],
   "control_activities": [],
@@ -164,8 +206,8 @@
         ]
       }
     },
-    "updated": "2026-10-27T08:10:54",
-    "values_hash": "sha256:df06cbc52e6d4e60a90e5b5218e3b558ece11641761125db21b2c96f27828bf4",
+    "updated": "2026-10-27T10:50:11",
+    "values_hash": "sha256:8dc9bd902e9d4c63d0b1454e7792f71bccbb70e4bd3668b27712aa7a59bd7bee",
     "version": 1
   },
   "tools": [
@@ -343,7 +385,7 @@
       "Last Reviewed": "2026-10-27",
       "Links": "TSP/TSP.13 Stakeholder Register/TD.13 - Stakeholder Register.md",
       "Name": "Stakeholder Register",
-      "Notes": "Not yet used on real work: exercised by the smoke test on a scratch git project and by the made-up example register. The close-out's sending, the weekly review's check and the reporting tool's audiences are described but not yet run by those skills - see TD.13, Open items. Standard library; wbs-manager or an agile conventions file optional, for the sprint calendar.",
+      "Notes": "Not yet used on real work: exercised by the smoke test on a scratch git project and by the made-up example register. The sprint close-out, the weekly review and the reporting tool use it (TD.8 v1.4, TD.11 v1.2, TD.10 v1.3). Standard library; wbs-manager or an agile conventions file optional, for the sprint calendar.",
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "stakeholder-manager",

@@ -108,11 +108,27 @@ def check(label, ok, detail=""):
     return ok
 
 
-def run(cmd, cwd):
+def run_raw(cmd, cwd):
     """Run a script with the current interpreter. Returns (ok, combined output)."""
     proc = subprocess.run([sys.executable] + cmd, cwd=cwd,
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return proc.returncode == 0, proc.stdout.decode("utf-8", "replace").strip()
+
+
+GATE = "so this is a pull-in or work outside the sprint"
+
+
+def run(cmd, cwd):
+    """run_raw, answering the WBS pull-in gate as a user would when it asks.
+
+    The gate asks only while a sprint in a register's calendar runs today, so
+    whether a test's `set --status Implementing` is asked depends on the date
+    the test runs. Tests not about the gate answer it here and stay date-proof;
+    test_pull_ins drives it with run_raw."""
+    ok, out = run_raw(cmd, cwd)
+    if not ok and GATE in out:
+        ok, out = run_raw(cmd + ["--outside-sprint", "smoke test: not about the sprint"], cwd)
+    return ok, out
 
 
 def export_head(dest):
@@ -766,6 +782,8 @@ def test_sprint_ceremonies(root, scratch):
                                "scripts", "wbs.py"),
         "tsp.py": os.path.join(root, "TSP", "TSP.3 TSP Register", "tsp-manager",
                                "scripts", "tsp.py"),
+        "stk.py": os.path.join(root, "TSP", "TSP.13 Stakeholder Register", "stakeholder-manager",
+                               "scripts", "stk.py"),
     }
     prose = "\n".join(texts.values())
     unknown = []
@@ -775,8 +793,14 @@ def test_sprint_ceremonies(root, scratch):
         for cmd in set(re.findall(r"%s\s+([a-z][a-z-]+)" % re.escape(script), prose)):
             if cmd not in offered:
                 unknown.append("%s %s" % (script, cmd))
-    check("every wbs.py / tsp.py command the skills name exists", not unknown,
+    check("every wbs.py / tsp.py / stk.py command the skills name exists", not unknown,
           ", ".join(sorted(unknown)))
+    facilitator = texts.get("sprint-facilitator", "")
+    check("a pull-in states its effect, and the close-out reads the effects first",
+          "## A pull-in states its effect on committed work" in facilitator
+          and "Read the pull-ins' `effect:` lines first" in facilitator)
+    check("planning commits a parent a goal means to close", "A goal that closes a parent commits the parent" in facilitator)
+    check("the close-out sends the communications due", "stk.py due --all" in facilitator and "stk.py done" in facilitator)
 
     # --- the record, through one sprint and into the next ---------------------
     sr = os.path.join(tool, "sprint-facilitator", "scripts", "sprint_record.py")
@@ -1143,7 +1167,7 @@ def test_reporting(root, scratch):
           (ms.get("M1") or {}).get("score") == 0.3 and "past due" in (ms.get("M2") or {}).get("flags", [])
           and (rec.get("signals") or {}).get("outcome", {}).get("proposed") == "red", str(ms)[:300])
     page = io.open(os.path.join(project, "Reports", "Status", "2026-10-18 Status.html"), encoding="utf-8").read() if ok else ""
-    check("the view opens with the Outcome section", "<h2>Outcome</h2>" in page and "On Outcome" in page)
+    check("the view opens with the Outcome section, its explanation behind an info icon", "<h2>Outcome<span class=\"info\"" in page and "On Outcome" in page)
     io.open(brief, "w", encoding="utf-8").write(filled.split("### Measures")[0])
     ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
                    "--as-of", "2026-10-19"], work)
@@ -1151,6 +1175,64 @@ def test_reporting(root, scratch):
                             encoding="utf-8")) if ok else {}
     check("a lean brief, with no Measures table, proposes no On Outcome",
           ok and "outcome" not in rec.get("signals", {}) and not rec["outcome"]["present"], out[:300])
+    os.remove(brief)
+
+    # --- audiences, the external copy and the charter ---------------------------
+    io.open(brief, "w", encoding="utf-8").write(filled + u"\n## Scope\n\nThe signup flow, nothing else.\n")
+    stk = os.path.join(root, "TSP", "TSP.13 Stakeholder Register", "stakeholder-manager", "scripts")
+    for label, cmd in [
+            ("a stakeholder register", [os.path.join(stk, "create_stk.py"), project, "--scope", "Atlas"]),
+            ("", [os.path.join(stk, "stk.py"), "add-group", project, "Steering group"]),
+            ("", [os.path.join(stk, "stk.py"), "add", project, "Sam Owner", "--role", "Project manager",
+                  "--groups", "G.1"]),
+            ("", [os.path.join(stk, "stk.py"), "add", project, "Kim Client", "--role", "Client lead",
+                  "--groups", "G.1", "--share", "external"]),
+            ("", [os.path.join(stk, "stk.py"), "add-comm", project, "Status report", "--report", "status-report",
+                  "--mode", "push", "--audience", "G.1", "--cadence", "per sprint", "--channel", "email"])]:
+        ok, out = run(cmd, work)
+        if not ok or label:
+            if not check(label or "stakeholder setup", ok, out[:300]):
+                return
+    ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-20"], work)
+    status = os.path.join(project, "Reports", "Status", "2026-10-20 Status.json")
+    rec = json.load(io.open(status, encoding="utf-8")) if ok else {}
+    comms = (rec.get("audiences") or {}).get("comms") or []
+    check("a status report records who receives it, from the stakeholder register",
+          len(comms) == 1 and comms[0]["share_level"] == "external"
+          and sorted(comms[0]["recipients"]) == ["Kim Client", "Sam Owner"], str(rec.get("audiences"))[:300])
+    page = io.open(status[:-5] + ".html", encoding="utf-8").read() if ok else ""
+    check("the owner's view says who receives it", "Who receives this" in page and "Kim Client" in page)
+    ok, out = run([report, "export", status, "--comm", "C.1"], work)
+    check("an unconfirmed report is not shared", not ok, out[:300])
+    run([report, "confirm", status, "--signal", "all"], work)
+    run([report, "confirm", status, "--summary", "Signup is on its way."], work)
+    shared = status[:-5] + " (external).html"
+    ok, out = run([report, "export", status, "--comm", "C.1"], work)
+    html = io.open(shared, encoding="utf-8").read() if os.path.exists(shared) else ""
+    check("export --comm writes the external copy, holding back a risk not marked Sharable",
+          ok and html and "Design late" not in html and "Kim Client" not in html, out[:300])
+    run([raid, "update", raid_reg, "--id", "1", "--set", "Sharable=Y", "-m", "the client knows", "--by", "Smoke"], work)
+    ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
+                   "--as-of", "2026-10-20", "--force"], work)
+    run([report, "confirm", status, "--signal", "all"], work)
+    run([report, "confirm", status, "--summary", "Signup is on its way."], work)
+    ok, out = run([report, "export", status, "--comm", "C.1"], work)
+    html = io.open(shared, encoding="utf-8").read() if os.path.exists(shared) else ""
+    check("a risk marked Sharable reaches the external copy", ok and "Design late" in html, out[:300])
+
+    ok, out = run([report, "charter", project, "--as-of", "2026-10-20"], work)
+    charter = os.path.join(project, "Reports", "Charter", "2026-10-20 Charter.json")
+    page = io.open(charter[:-5] + ".html", encoding="utf-8").read() if os.path.exists(charter) else ""
+    check("charter: one page from the brief and the registers, each section naming its source",
+          ok and "ship the website" in page and "The signup flow" in page and "From the WBS" in page
+          and "From the Stakeholder Register" in page and "Design late" in page, out[:300])
+    check("charter: the owner's copy names the stakeholders", "Kim Client" in page)
+    ok, out = run([report, "export", charter], work)
+    shared = charter[:-5] + " (external).html"
+    html = io.open(shared, encoding="utf-8").read() if os.path.exists(shared) else ""
+    check("charter: the shared copy shows roles and groups, never names",
+          ok and "Client lead" in html and "Kim Client" not in html, out[:300])
     os.remove(brief)
 
     # --- installed together with what it needs, it finds its siblings ----------
@@ -1219,6 +1301,10 @@ def test_daily_loop(root, scratch):
           "### Morning" in evening and "**Frogs:**" in morning)
     check("the morning reads whether the evening closed the record",
           "status: closed" in morning)
+    wbs_src = io.open(os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts", "wbs.py"),
+                      encoding="utf-8").read()
+    check("the evening runs the pull-in check, a command wbs.py offers",
+          "wbs.py pullins" in evening and 'add_parser("pullins"' in wbs_src)
 
     sr = os.path.join(root, "TSP", "TSP.8 Sprint Ceremonies", "sprint-facilitator",
                       "scripts", "sprint_record.py")
@@ -1272,7 +1358,8 @@ def test_weekly_review(root, scratch):
           "sprint:" in template and "planning_day:" in template)
 
     for script, rel in (("sprint_record.py", ("TSP.8 Sprint Ceremonies", "sprint-facilitator", "scripts", "sprint_record.py")),
-                        ("report.py", ("TSP.10 Reporting", "reporting", "scripts", "report.py"))):
+                        ("report.py", ("TSP.10 Reporting", "reporting", "scripts", "report.py")),
+                        ("stk.py", ("TSP.13 Stakeholder Register", "stakeholder-manager", "scripts", "stk.py"))):
         src = io.open(os.path.join(root, "TSP", *rel), encoding="utf-8").read()
         named = re.findall(r"%s\s+([a-z]+)" % re.escape(script), text)
         offered = set(re.findall(r'add_parser\(\s*"([a-z]+)"', src))
@@ -1283,6 +1370,8 @@ def test_weekly_review(root, scratch):
     evening = daily.split("\n## Evening\n", 1)[-1]
     check("the daily loop's evening checks for a weekly record",
           "kind: weekly-record" in evening and WEEKLY_SKILL in evening)
+    check("the sprint check reads the stakeholder registers, overdue and gaps",
+          "stk.py due --all --overdue" in text and "stk.py gaps --all" in text)
 
     project = os.path.join(scratch, "weekly-project")
     os.makedirs(project, exist_ok=True)
@@ -1538,6 +1627,214 @@ def test_sync_commands(root, scratch):
           ok and "Check the old tool" not in out, out[:300])
 
 
+def test_pull_ins(root, scratch):
+    """Work the sprint never committed to asks first, and the daily check finds
+    the pull-ins the record does not name.
+
+    The calendar is built around today, so the gate is always live here. A row
+    nobody committed to is refused until it is answered; a pull-in sets Sprint
+    Added and prints its record line; a parent counts only when committed
+    itself; `pullins` lists what the record lacks until the record names it.
+    A split into an earlier sprint keeps later commitments off the delivered part.
+    """
+    import json
+    from datetime import date, timedelta
+    print("\nPull-ins")
+    work = os.path.join(scratch, "pullins")
+    plan = os.path.join(work, "planning")
+    os.makedirs(plan, exist_ok=True)
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs = os.path.join(scripts, "wbs.py")
+    reg = os.path.join(plan, "WBS Atlas.json")
+    ok, out = run_raw([os.path.join(scripts, "create_wbs.py"), reg, "Atlas"], work)
+    if not check("pull-ins: create", ok, out):
+        return
+    t = date.today()
+    iso = lambda d: d.isoformat()
+    data = json.load(io.open(reg, encoding="utf-8"))
+    data["sprints"] = [
+        {"Sprint": "S1", "Starts": iso(t - timedelta(days=28)), "Ends": iso(t - timedelta(days=15))},
+        {"Sprint": "S2", "Starts": iso(t - timedelta(days=14)), "Ends": iso(t + timedelta(days=5))},
+        {"Sprint": "S3", "Starts": iso(t + timedelta(days=6)), "Ends": iso(t + timedelta(days=19))}]
+    story = lambda i, title, **kw: dict({"ID": i, "Title": title, "Type": "Story", "Class": "Product",
+                                         "Nature": "Build", "Status": "Not Started",
+                                         "Estimated Effort (h)": 1}, **kw)
+    data["items"] = [
+        dict(story(1, "Committed parent", **{"Sprint Planned": "S2"}), Type="Feature"),
+        story(2, "Child of the committed parent", Parent=1),
+        story(4, "Committed row", **{"Sprint Planned": "S2"}),
+        story(6, "Uncommitted row to pull in"),
+        story(8, "Uncommitted row worked outside"),
+        story(10, "Uncommitted row, other edits"),
+        story(11, "Uncommitted row, refused"),
+        dict(story(12, "Uncommitted parent of a committed child"), Type="Feature"),
+        story(13, "Committed child", Parent=12, **{"Sprint Planned": "S2"}),
+        story(30, "Split me", Status="Implementing",
+              **{"Sprint Planned": "S1", "Sprint Carried": ["S2", "S3"], "Estimated Effort (h)": 4}),
+    ]
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data, indent=2))
+    record = os.path.join(plan, "S2.md")
+    io.open(record, "w", encoding="utf-8").write(
+        "# Sprint S2\n\n## Planning\n\n### Committed items\n\n| Item | Effort | Area | Goal | Notes |\n"
+        "|---|---|---|---|---|\n| Atlas 1 Committed parent | 1h | |  | |\n| Atlas 4 Committed row | 1h | |  | |\n"
+        "| Atlas 13 Committed child | 1h | |  | |\n")
+    row = lambda rid: [r for r in json.load(io.open(reg, encoding="utf-8"))["items"] if r["ID"] == rid][0]
+
+    ok, out = run_raw([wbs, "set", reg, "--id", "11", "--status", "Implementing"], work)
+    check("pull-ins: starting an uncommitted row is refused, both answers shown",
+          not ok and "--pulled-in" in out and "--outside-sprint" in out
+          and row(11).get("Status") == "Not Started", out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "6", "--status", "Implementing",
+                       "--pulled-in", "displaces nothing"], work)
+    r6 = row(6)
+    check("pull-ins: --pulled-in sets Sprint Added and notes the effect",
+          ok and r6.get("Sprint Added") == "S2" and "effect: displaces nothing" in (r6.get("Comments") or ""), out)
+    check("pull-ins: a pull-in prints its record line, Area left blank",
+          "| Atlas 6 Uncommitted row to pull in | 1h |  |" in out and "**pulled in" in out, out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "8", "--status", "Implementing",
+                       "--outside-sprint", "a correction of past work"], work)
+    r8 = row(8)
+    check("pull-ins: --outside-sprint notes why and marks nothing",
+          ok and not r8.get("Sprint Added") and "outside the sprint" in (r8.get("Comments") or ""), out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "4", "--status", "Implementing"], work)
+    check("pull-ins: a committed row starts with no question", ok, out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "2", "--status", "Implementing"], work)
+    check("pull-ins: a child of a committed parent starts with no question", ok, out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "12", "--status", "Implementing"], work)
+    check("pull-ins: a committed child does not commit its parent", not ok and "--pulled-in" in out, out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "10", "--priority", "Must"], work)
+    check("pull-ins: other edits to an uncommitted row are not asked", ok, out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "4", "--status", "Done", "--closure",
+                       "What happened: smoke. AC: none.", "--pulled-in", "displaces nothing"], work)
+    check("pull-ins: an answer on a committed row is refused as not needed",
+          not ok and "no answer is needed" in out, out)
+    ok, out = run_raw([wbs, "add", reg, "New work, straight in", "--status", "Implementing"], work)
+    check("pull-ins: adding a row straight into Implementing asks too", not ok and "--pulled-in" in out, out)
+
+    ok, out = run_raw([wbs, "pullins", "--root", work], work)
+    check("pullins: a pulled-in row the record does not name is listed, with its line",
+          ok and "1 row(s) pulled into S2" in out and "| Atlas 6 " in out, out)
+    with io.open(record, "a", encoding="utf-8") as fh:
+        fh.write("| Atlas 6 Uncommitted row to pull in | 1h | |  | **pulled in**; effect: displaces nothing |\n")
+    ok, out = run_raw([wbs, "pullins", "--root", work], work)
+    check("pullins: once the record names it, nothing is missing",
+          ok and "No pull-in into S2 is missing" in out, out)
+    refs = os.path.join(work, "refs.md")
+    io.open(refs, "w", encoding="utf-8").write(
+        "### Committed items\n\n| Item | Effort |\n|---|---|\n| Atlas 145, 166 Reporting | 4h |\n"
+        "| Atlas Web pilot (18, 3, 4) | 7h |\n| Atlas 20-22 Search | 3h |\n| ~~Atlas 99 Struck~~ | 1h |\n")
+    code = ("import sys; sys.path.insert(0, %r); import wbs as W; "
+            "print(sorted(W.record_refs(%r, ['Atlas'])))" % (scripts, refs))
+    ok, out = run_raw(["-c", code], work)
+    check("pullins: an item naming several rows, a range or a bracketed list names each",
+          ok and all("('Atlas', %d)" % n in out for n in (145, 166, 18, 3, 4, 20, 21, 22))
+          and "99" not in out, out)
+
+    ok, out = run_raw([wbs, "split", reg, "--id", "30", "--sprint", "S1", "--delivered", "2", "--closure",
+                       "What happened: smoke. AC: none. Follow-up: the rest piece."], work)
+    pieces = [x for x in json.load(io.open(reg, encoding="utf-8"))["items"] if x.get("Parent") == 30]
+    done = next((x for x in pieces if x.get("Status") == "Done"), {})
+    rest = next((x for x in pieces if x.get("Status") != "Done"), {})
+    check("split: the delivered part keeps only the commitments up to its sprint",
+          ok and done.get("Sprint Planned") == "S1" and not done.get("Sprint Carried"), out if not ok else str(done))
+    check("split: the rest keeps the whole history", rest.get("Sprint Carried") == ["S2", "S3"], str(rest))
+
+
+def test_raid_lessons(root, scratch):
+    """Lessons as a RAID type and the page across projects; Trend read up as
+    better; Sharable, what may leave the project.
+
+    The page must read every register under a root, archived ones included, and
+    lead with the reusable lessons. `migrate` must add what an older register
+    lacks without touching a row, and list the trends already set, since their
+    reading has turned round.
+    """
+    import json
+    print("\nRAID lessons, trend and sharable")
+    scripts = os.path.join(root, "TSP", "TSP.2 RAID Register", "raid-manager", "scripts")
+    raid = os.path.join(scripts, "raid.py")
+    work = os.path.join(scratch, "lessons")
+    active = os.path.join(work, "Atlas", "planning", "RAID")
+    archived = os.path.join(work, "Archive", "Old project", "planning")
+    os.makedirs(active, exist_ok=True)
+    os.makedirs(archived, exist_ok=True)
+    reg = os.path.join(active, "RAID Atlas.json")
+    old = os.path.join(archived, "RAID Old.json")
+    load = lambda path: json.load(io.open(path, encoding="utf-8"))
+    for path, scope in ((reg, "Atlas"), (old, "Old project")):
+        ok, out = run_raw([os.path.join(scripts, "create_raid.py"), path, scope], work)
+        if not check("raid: create %s" % scope, ok, out):
+            return
+    # The archived register predates Lessons and Sharable: strip what this version added.
+    data = load(old)
+    fields = data["meta"]["settings"]["fields"]
+    key = "entries" if isinstance(fields, dict) else None
+    if key:
+        fields[key] = [f for f in fields[key] if f not in ("Reusable", "Applied By", "Sharable")]
+    vocab = data["meta"]["settings"]["vocabularies"]
+    vocab.pop("reusable", None)
+    vocab.pop("sharable", None)
+    vocab["type"].remove("Lesson")
+    data["entries"] = [{"RAID.ID": 1, "Detail": "An old risk", "Type": "Risk", "Status": "Open", "Trend": u"\u2191",
+                        "Description": "Because of x, there is a risk that y, which may result in z."}]
+    io.open(old, "w", encoding="utf-8").write(json.dumps(data))
+
+    ok, out = run_raw([raid, "add", reg, "Confirm a pull-in when work starts", "--type", "Lesson",
+                       "--learned", "pull-ins go unrecorded when starting work asks nothing",
+                       "--because", "most pull-ins reached the record only at the close-out",
+                       "--next-time", "the tool asks pulled in or outside the sprint when work starts",
+                       "--category", "Process", "--reusable", "Y", "--applied-by", "Atlas 14", "--by", "Smoke"], work)
+    row = next((e for e in load(reg)["entries"] if e.get("Type") == "Lesson"), {})
+    check("raid: a Lesson is added through its shape, with Reusable and Applied By",
+          ok and row.get("Description", "").startswith("We learned that pull-ins")
+          and row.get("Reusable") == "Y" and row.get("Applied By") == "Atlas 14", out)
+    ok, out = run_raw([raid, "add", reg, "Half a lesson", "--type", "Lesson", "--learned", "something",
+                       "--by", "Smoke"], work)
+    check("raid: a Lesson missing a slot is refused, naming it", not ok and "--next-time" in out, out)
+    ok, out = run_raw([raid, "add", reg, "A risk", "--type", "Risk", "--description",
+                       "Because of a, there is a risk that b, which may result in c.",
+                       "--reusable", "Y", "--by", "Smoke"], work)
+    check("raid: --reusable belongs to a Lesson only", not ok and "belong to a Lesson" in out, out)
+    run_raw([raid, "add", reg, "Freehand lesson", "--type", "Lesson", "--description", "Phones matter.",
+             "--category", "Tooling", "--reusable", "N", "--by", "Smoke"], work)
+
+    ok, out = run_raw([raid, "update", reg, "--id", "1", "--set", "Trend=better", "-m", "smoke", "--by", "Smoke"], work)
+    check("raid: Trend takes the chip's short word, stored as the up arrow",
+          ok and load(reg)["entries"][0].get("Trend") == u"\u2197", out)
+    ok, out = run_raw([raid, "update", reg, "--id", "1", "--set", "Sharable=Y", "-m", "can be shared",
+                       "--by", "Smoke"], work)
+    check("raid: Sharable takes Y", ok and load(reg)["entries"][0].get("Sharable") == "Y", out)
+    ok, out = run_raw([raid, "update", reg, "--id", "1", "--set", "Sharable=Maybe", "-m", "smoke",
+                       "--by", "Smoke"], work)
+    check("raid: Sharable holds to its vocabulary", not ok, out)
+
+    before = load(old)["entries"]
+    ok, out = run_raw([raid, "migrate", old, "--apply"], work)
+    after = load(old)
+    check("raid: migrate adds Lesson, Reusable, Applied By and Sharable, touching no row",
+          ok and "Lesson" in after["meta"]["settings"]["vocabularies"]["type"]
+          and "sharable" in after["meta"]["settings"]["vocabularies"] and after["entries"] == before, out)
+    check("raid: migrate lists the trends already set, converting none",
+          "1 entry carries a Trend" in out and "R.1" in out, out)
+    run_raw([raid, "add", old, "An archived lesson", "--type", "Lesson", "--learned", "a", "--because", "b",
+             "--next-time", "c", "--category", "Planning", "--reusable", "Y", "--by", "Smoke"], work)
+
+    page = os.path.join(work, "Lessons.html")
+    ok, out = run_raw([raid, "lessons", "--root", work, "--out", page], work)
+    html = io.open(page, encoding="utf-8").read() if os.path.exists(page) else ""
+    check("raid: lessons reads every register under the root, archived ones included",
+          ok and "3 lesson(s) from 2 RAID register(s) (1 archived)" in out, out)
+    check("raid: the page leads with reusable lessons, with what applied them",
+          html.find("Confirm a pull-in") < html.find("Freehand lesson") and "An archived lesson" in html
+          and "Atlas 14" in html, html[:300])
+
+    board = os.path.join(active, "RAID Dashboard.html")
+    ok, out = run_raw([os.path.join(scripts, "refresh_raid.py"), reg, board, "Atlas"], work)
+    bhtml = io.open(board, encoding="utf-8").read() if os.path.exists(board) else ""
+    check("raid: the board gives a Lesson its badge and fields",
+          ok and ".badge-lesson" in bhtml and "'Applied By'" in bhtml, out)
+
+
 def test_effort_and_splits(root, scratch):
     """Effort that rolls up, requirements that say whether they were verified,
     and partly done work split so its hours count where they were done.
@@ -1677,6 +1974,8 @@ def main():
         test_tsp_fields(root, scratch)
         test_sync_commands(root, scratch)
         test_effort_and_splits(root, scratch)
+        test_pull_ins(root, scratch)
+        test_raid_lessons(root, scratch)
         test_concurrent_save(root, scratch)
         test_execution_layout(root, scratch)
         test_content_system(root, scratch)

@@ -76,10 +76,6 @@ The reminder can name them: "email, chat, the paper notebook". Keep it a reminde
 
 If goals are kept outside the registers, step 5 reminds the user to update it. Keep it a reminder.
 
-### A stakeholder register
-
-Not shipped in AKOS yet. Where one exists, the sprint check adds a line for communications that are overdue and stakeholders whose engagement has no action to close the gap, three at most.
-
 ## How it is tested
 
 `tests/smoke_test.py` installs the skill into an empty project and checks its layout: the record template holds every section and `kind: weekly-record`; each `sprint_record.py` and `report.py` command the skill names exists in TSP.8 and TSP.10; and the daily loop's evening names the weekly check.
@@ -93,6 +89,7 @@ Not shipped in AKOS yet. Where one exists, the sprint check adds a line for comm
 - **TSP.1 WBS Register** and **TSP.2 RAID Register**: the work beyond the sprint, the committed work, and the risks.
 - **TSP.12 Action Tracker**: the actions owed by others, read in *Waiting on someone*; a chase goes through its skill.
 - **TSP.10 Reporting**: the sprint update, refreshed for the sprint check.
+- **TSP.13 Stakeholder Register**: the communications overdue and the engagement gaps with no action, read in the sprint check, three lines at most.
 - **TSP.7 Notebook Manager**: takes the closing offer.
 - **TSP.3 TSP Register**: row 11.
 
@@ -107,11 +104,11 @@ Not shipped in AKOS yet. Where one exists, the sprint check adds a line for comm
 | Item | Detail |
 |---|---|
 | Register-only mode unexercised on real work | See *Status*. A real month of weekly reviews run this way is what moves the tool to `Implemented` |
-| No stakeholder check | Arrives with a stakeholder register in AKOS; see *A stakeholder register* |
 
 ## Version history
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-10-27 | **The sprint check reads the stakeholder registers** (TSP.13): communications overdue and stakeholders below the engagement wanted with no action, three lines at most, silent when there are none. Read only; sending stays with the close-out. It replaces the *A stakeholder register* adaptation, now that one ships. |
 | v1.1 | 2026-10-26 | *Waiting on someone* also reads the action trackers (TSP.12): rows owed by someone other than the tracker's owner that are past their due date, or `TBD` with no checkpoint or a passed one, three at most, the missing checkpoints first. A chase is the row's Latest update, through `action-tracker-manager`. |
 | v1.0 | 2026-10-26 | Published as TSP.11. The weekly review as one skill with its own record, run on the day records, the sprint records and the registers alone: beyond the sprint read from the registers, the sprint check mid-sprint only, findings routed rather than acted on. A task tracker, a calendar, inboxes and a goal tracker are described as adaptations rather than shipped. |

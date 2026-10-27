@@ -64,6 +64,17 @@ When something worth acting on surfaces, at any ceremony or on an ordinary day b
 
 The row records **what** was noticed and **where it was sent**. It never holds the item itself. A row whose `Routed to` is empty is an admission, not an entry. A finding said out loud and left in prose is lost when the sprint closes; a routed row is not.
 
+## A pull-in states its effect on committed work
+
+Work taken into the sprint after planning gets a row in the record's *Committed items* **the day it is pulled in**, at a ceremony or between them, and its WBS row gets `Sprint Added`. The row's `Notes` say `**pulled in <DD-Mon>**`, then `effect:` and one of two answers:
+
+- `displaces nothing`: the sprint has room, or the stretch was declared for it;
+- the committed item it delays, by name (`delays Atlas 34`), or, when it only might, the one that slips first if the sprint runs short (`Atlas 3 slips first if needed`).
+
+Ask the user which, in one question; the answer is theirs. Pulling in is fine: the rule exists so the trade-off is made out loud rather than found at the close-out, which reads it at step 4.
+
+The WBS tool asks at the moment work starts: `wbs.py set --status Implementing` on a row the sprint never committed to is refused until it is given `--pulled-in "<effect>"` or `--outside-sprint "<reason>"`, and a pull-in prints its line for *Committed items*, `Area` left for the user. Add that line the same day. `wbs.py pullins` lists any pulled-in row the record does not name yet; a daily routine runs it (`daily-loop-facilitator`, the evening).
+
 ## Ready means three things are stated
 
 A candidate is **ready** when it states:
@@ -111,7 +122,7 @@ On the sprint's last day, before the retro. **It inspects the result**: what the
    Totals first, with the per-register split underneath. Where a figure cannot be produced, say why. A gap in what the sprint recorded is a close-out topic, and usually a more useful one than a number.
 2. **Answer the iteration goals.** `review` pre-fills them by ID from the planning block. Mark each `Yes`, `Partial` or `No` and nothing else; the nuance goes in `Why`, with RAID IDs where a risk or issue was the cause. Write the *Highlights*: one or two sentences for someone who reads nothing else. A partly met goal is still answered here: it belonged to this sprint, and whatever continues becomes a new commitment at planning, *Carried from* this one.
 3. **Account for what was committed with known gaps**, using the planning block's notes. Committing unready work is legitimate, but what became of it is the evidence for whether that keeps working.
-4. **Decide the carryover.** Each committed row that did not finish is one of three things: genuine spillover, quietly abandoned, or finished and never closed. Close the third kind now with a closure note. For spillover, settle in a sentence why it did not finish; planning writes that sentence onto the row when it carries it. **Then ask of each unfinished leaf: was any of it delivered?** Nothing: it is carried whole at planning. Something: split it now (`wbs.py split --id <n> --delivered <h> --sprint <closing sprint> --closure "..."`, `wbs-manager` operation 4b), so what was delivered closes in this sprint with its hours and the rest stays open, and point the open task in the tracker at the rest. A parent is not split: its children are closed or carried. `check` flags a row carried into two or more sprints: re-scope it, break it down, or drop it out loud.
+4. **Decide the carryover.** **Read the pull-ins' `effect:` lines first.** A committed item a pull-in said it would delay, or would slip first, did not slip on its own: its why names that pull-in. A pull-in with no `effect:`, or one only written into the record at this close-out, is recorded as `effect not stated`: a gap in how the sprint was run, and the retro's to look at. Each committed row that did not finish is one of three things: genuine spillover, quietly abandoned, or finished and never closed. Close the third kind now with a closure note. For spillover, settle in a sentence why it did not finish; planning writes that sentence onto the row when it carries it. **Then ask of each unfinished leaf: was any of it delivered?** Nothing: it is carried whole at planning. Something: split it now (`wbs.py split --id <n> --delivered <h> --sprint <closing sprint> --closure "..."`, `wbs-manager` operation 4b), so what was delivered closes in this sprint with its hours and the rest stays open, and point the open task in the tracker at the rest. A parent is not split: its children are closed or carried. `check` flags a row carried into two or more sprints: re-scope it, break it down, or drop it out loud.
 5. **Re-run the metrics, then write the record.** The session changes what it measures, so record the closing figures:
 
    ```bash
@@ -120,6 +131,13 @@ On the sprint's last day, before the retro. **It inspects the result**: what the
 
    Fill the metrics, *Effort by register* from the per-register split (skip it if there is only one register), the goals, the known gaps and the carryover. Then run `sprint_record.py goals <records>`: it reads the goals back and names anything that breaks the layout.
 6. **Then the readiness half**: `sprint-planning-precheck`, in the same session. You cannot judge readiness to commit without first knowing what closed.
+7. **The communications due**, where a project keeps a stakeholder register (`stakeholder-manager`; a project without one has only its owner, whom the close-out already reached):
+
+   ```bash
+   python <skills>/stakeholder-manager/scripts/stk.py due --all --root "<the folder holding the projects>"
+   ```
+
+   For each one listed: `stk.py audience <register> --id C.n` gives who it goes to, their addresses and the share level. A report going to an `external` audience goes through `reporting`'s `report.py export --comm C.n`, which takes the share level from the register. The user sends it; on their word, `stk.py done <register> --id C.n`. A skipped one is said, not recorded. The `stakeholder-manager` skill holds the rules; never repeat a contact's details in the record.
 
 ## Running the sprint retrospective
 
@@ -149,7 +167,7 @@ On the next sprint's first day. The close-out and the retro ran the day before.
    - 2c. **A `Planned End` already passed on a candidate is a decision, not clean-up**: re-plan it with a `--reason`, or cancel the row with a closure note.
 3. **Confirm each committed row is ready**, top priority first. A row committed with a gap is still committed; note the gap so the close-out can say what became of it.
 4. **Record the commitment on each row.** For a new commitment: `--sprint-planned <sprint ID> --horizon ""`. For a row carried from an earlier sprint and not Done: `--sprint-carried <sprint ID> --reason "<why it did not finish>"`, so the earlier sprint keeps its carryover. A split's rest is carried the same way; carry its parent too only when the deliverable is promised again this sprint, since a committed parent counts as an item with its children's hours. **A commitment means `Not Started`:** `wbs.py` moves a committed `Portfolio Backlog` or `Funnel` row there itself and says so. **Set the baseline if the row has none**: commitment is the moment it becomes real, it is written once, and `rebaseline` moves it afterwards. Set `Planned End` at the precision the commitment actually has.
-5. **Decide two or three iteration goals**, starting from any `draft:` goals the record carries in as `G1`, `G2`…. Each keeps its ID, gets a one-line *Done when* (the test the close-out will judge it against), a *Bet* when it serves a bet or objective from a longer planning cycle (blank otherwise, which is legitimate), and *Carried from* `<sprint ID> <goal ID>` when it continues an earlier goal, reworded or widened included. Mark each committed item's `Goal` with the IDs it serves, and its `Area`. The goals are data a report counts, so keep the ID, the test and the carry out of the goal sentence. Record confidence as a fist of five, per participant.
+5. **Decide two or three iteration goals**, starting from any `draft:` goals the record carries in as `G1`, `G2`…. Each keeps its ID, gets a one-line *Done when* (the test the close-out will judge it against), a *Bet* when it serves a bet or objective from a longer planning cycle (blank otherwise, which is legitimate), and *Carried from* `<sprint ID> <goal ID>` when it continues an earlier goal, reworded or widened included. Mark each committed item's `Goal` with the IDs it serves, and its `Area`. **A goal that closes a parent commits the parent:** when a *Done when* names a WBS parent or key deliverable to close this sprint, commit that row too (step 4), on its own line at `0h`, since its hours are its children's. A parent counts as committed only when it is itself, so otherwise its close is asked as a pull-in. The goals are data a report counts, so keep the ID, the test and the carry out of the goal sentence. Record confidence as a fist of five, per participant.
 6. **Write the record**:
 
    ```bash

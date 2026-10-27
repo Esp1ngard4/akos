@@ -11,7 +11,7 @@ Once a week, the review keeps the whole system trustworthy. The sprint ceremonie
 
 ## Requirements
 
-Nothing to install. Reads the day records (`daily-loop-facilitator`), the sprint records and `sprint-facilitator`'s `sprint_record.py`, the WBS and RAID registers, the action trackers (`action-tracker-manager`), and `reporting`'s `report.py` for the sprint update, each when present. Uses `notebook-capture` for the closing offer. Without any of them, that step is skipped and the record says so.
+Nothing to install. Reads the day records (`daily-loop-facilitator`), the sprint records and `sprint-facilitator`'s `sprint_record.py`, the WBS and RAID registers, the action trackers (`action-tracker-manager`), the stakeholder registers (`stakeholder-manager`), and `reporting`'s `report.py` for the sprint update, each when present. Uses `notebook-capture` for the closing offer. Without any of them, that step is skipped and the record says so.
 
 ## Relationship to other skills: facilitate, don't duplicate
 
@@ -114,6 +114,14 @@ Skip on a planning day.
   For each: on track, at risk, or off, with one line of why. Ask the user; the evidence is the day records and the committed rows, not a formula.
 - **Committed work against days left:** the rows committed to the sprint and not `Done`, summing their `Estimated Effort (h)` (a parent's hours are its children's; count leaves), against the days left to the sprint's end. One line: hours open, days left.
 - **Risks and issues:** every RAID register (found by `meta.kind` `raid-register`). Open `Risk` and `Issue` entries: first any whose `WBS Ref` (`<scope>#<ID>`) points at a row in this sprint, then the rest by `Urgency (1-5)`, three at most. One line each: does it threaten the sprint now?
+- **Stakeholders**, where a project keeps a register (`stakeholder-manager`), read only:
+
+  ```bash
+  python <skills>/stakeholder-manager/scripts/stk.py due --all --overdue --root "<the folder holding the projects>"
+  python <skills>/stakeholder-manager/scripts/stk.py gaps --all --root "<the folder holding the projects>"
+  ```
+
+  Communications overdue, and stakeholders below the engagement wanted with no action to close the gap: three lines at most, overdue first. Silent when both are empty. Sending one is the close-out's (`sprint-facilitator`), or the user's now; a gap's action goes through `stakeholder-manager`.
 - **Who needs to know, what needs deciding:** ask once.
 
 A finding the user wants kept goes to the sprint record's `## Noticed` table: one row, *what* and *where it was routed*, never the content itself. Write it only after a yes.
