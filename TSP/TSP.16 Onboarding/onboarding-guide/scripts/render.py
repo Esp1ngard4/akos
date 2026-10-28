@@ -436,15 +436,16 @@ def render_team(rec, exec_name=None):
 
     b = rec.get("brief")
     if b:
-        cards = [('check', "Done when: %s" % (b["done_when"][0] if b.get("done_when") else "not written yet"),
-                  "; ".join(b.get("done_when", [])[1:4]) or b.get("outcome") or "", "Brief · Outcome and done-when")]
+        ul = lambda xs: '<ul class="points">%s</ul>' % "".join("<li>%s</li>" % e(x.rstrip(".")) for x in xs)
+        done = b.get("done_when") or []
+        cards = [("check", "Done when", ul(done[:5]) if done else "<p>Not written yet: ask the product manager.</p>", "Brief · Outcome and done-when")]
         if b.get("measures"):
-            cards.append(("chart", "Measured by %s" % ", ".join(b["measures"][:2]), "The status report scores these each sprint.", "Brief · Measures"))
+            cards.append(("chart", "How we'll know", ul(b["measures"][:4]) + "<p>The status report scores these each sprint.</p>", "Brief · Measures"))
         if b.get("stop_if"):
-            cards.append(("shield", "We stop if %s" % b["stop_if"].rstrip("."), "The one condition that would make finishing not worth it.", "Brief · Stop if"))
+            cards.append(("shield", "We stop if", "<p>%s</p><p>The one condition that would make finishing not worth it.</p>" % e(b["stop_if"][:1].upper() + b["stop_if"][1:]), "Brief · Stop if"))
         body = '<div class="grid">%s</div>' % "".join(
-            '<div class="card" data-search="%s"><div class="cardhead"><div class="ico">%s</div><h3>%s</h3></div><p>%s</p><p class="src">%s</p></div>'
-            % (e(t), icon(i), e(t), e(p), e(s)) for i, t, p, s in cards)
+            '<div class="card" data-search="%s %s"><div class="cardhead"><div class="ico">%s</div><h3>%s</h3></div>%s<p class="src">%s</p></div>'
+            % (e(t), e(s), icon(i), e(t), h, e(s)) for i, t, h, s in cards)
         heading, lede = b.get("outcome") or "Why this project exists", "Everything the team does traces back to this outcome. If a task doesn't move it, ask why it's in the sprint."
     else:
         body = ('<div class="card" data-search="brief why"><div class="cardhead"><div class="ico">%s</div><h3>No brief yet</h3></div>'

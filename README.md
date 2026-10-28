@@ -1,208 +1,124 @@
-# AKOS — Agentic Knowledge Operating System
+# AKOS — AI as a member of the team
 
-A method for structuring the tools and systems you depend on, so that agents can
-safely operate them.
+*Agentic Knowledge Operating System*
 
-Not "how to write agent skills." Skills are the easy part. The hard part is the
-estate underneath: knowing what you actually have, which copy is authoritative, why
-a rule exists, whether a tool is still used, and where something came from if you
-have to reinstall it. Those questions don't matter on day one. They matter at tool
-number thirty, when you no longer remember building the first ten.
+AI agents are getting good. Most teams still use them on the side: one person, one chat
+window, outside the way the team works. So the work where an agent would add the most never
+reaches one.
 
-AKOS is the set of conventions that answer them, plus working tools that
-demonstrate the conventions on something real.
+That is not a model problem; it is a tools problem. A team's tools were built for people to
+click through: trackers only a person updates, spreadsheets with logic nobody wrote down,
+procedures that live in someone's head. An agent cannot safely work in them.
 
-## The idea in one paragraph
+AKOS redesigns those tools so that it can. Each has one source of truth, a documented
+structure, rules it keeps, and a skill an agent uses to operate it. With that in place, an
+agent is another member of the team: it has a job, it works in the open, and a person decides.
 
-**The unit is the tool, not the skill.** A tool is anything you depend on and would
-have to rebuild — a spreadsheet with logic in it, a script, a documented procedure,
-a configured third-party app. A skill is one thing a tool can *have*: the interface
-that lets an agent operate it. In the estate this came from, 91 tools are registered
-and **8 have a skill**. Organise around skills and you have a method that describes
-eight things. Organise around tools and the skills fall out as an attribute — a
-column on a row.
+## What the agent does on the team
 
-"Agentic" then means something precise: a tool becomes agent-operable when it has an
-explicit source of truth, a documented schema, stated guardrails, and a registry
-entry. Three of those four are worth having with no agent involved at all. **The
-work of making a tool agent-ready is mostly the work of making it well-governed.**
+**Keeps the records.** The backlog, the risks and decisions, the sprint records, the team's
+own updates brought in each week. The agent proposes every change; a person confirms it. The
+records stay current without anyone chasing them.
 
-## The method
+**Reports.** The status report, the sprint update, the week ahead: drafted from the same
+records in minutes, every figure traceable to its source. The agent drafts; a person rates.
 
-Seven short pieces. Each came from an actual failure, and each says which — a rule
-whose reason you can't remember is a rule you will eventually undo.
+**Supports the work itself.** For each piece of work the team commits to, the agent
+researches, writes the spec and the plan in the work's own folder, and, once a person
+approves the plan, carries out the steps it can. People do the rest, and review.
 
-| | |
-|---|---|
-| [0. The unit is the tool](method/00-the-unit-is-the-tool.md) | The assumption everything rests on, and what makes a tool agent-operable |
-| [1. Registering your tools](method/01-registering-your-tools.md) | **The spine.** An inventory that reconciles against reality |
-| [2. Governance docs](method/02-governance-docs.md) | Every tool needs a second document. What goes in which, and the test for borderline cases |
-| [3. Source of truth](method/03-source-of-truth.md) | Anything in two places will drift. How to make that impossible rather than discouraged |
-| [4. Owned vs. used](method/04-owned-vs-used.md) | You built some, you installed others. Opposite treatment, and getting it wrong loses one |
-| [5. Versioning discipline](method/05-versioning-discipline.md) | Keeping history without the history swallowing the document |
-| [6. Sharing with a team](method/06-sharing-with-a-team.md) | Everything above assumes one person. What changes when it's a team, and which rule breaks |
+**Brings people in.** The project generates its own guide, and the agent walks a new joiner
+through their first week.
 
-Start at [0](method/00-the-unit-is-the-tool.md) if you want the reasoning, or
-[1](method/01-registering-your-tools.md) if you'd rather see the mechanism first.
+## What stays with people
 
-## The tools
+Deciding what to build, approving every plan before work starts, confirming every change
+before it is recorded, rating every report, and owning the outcome.
 
-What this repository publishes is listed in **[the registry](registry/REGISTRY.md)** —
-which is itself generated from a TSP register, built with the tool it catalogues.
+## See it
 
-Each entry under [`TSP/`](TSP) is a **tool**, not a skill: a folder containing a
-definition document and the skill that operates it. That distinction is the method's
-own rule — a skill with no definition document is an interface onto something nobody
-has described.
+Atlas is a made-up project run on AKOS. Its guides were generated by the tools in this
+repository, from Atlas's own files:
 
-| | Tool | Skill |
-|---|---|---|
-| TSP.1 | [WBS Register](TSP/TSP.1%20WBS%20Register/) — work breakdown / backlog | `wbs-manager` |
-| TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) — risks, actions, issues, decisions, ideas, changes | `raid-manager` |
-| TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) — the inventory of tools itself | `tsp-manager`, `td-author` |
-| TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) — vendoring, drift detection, three-way updates | *(none — see below)* |
-| TSP.5 | [Artifact Register](TSP/TSP.5%20Artifact%20Register/) — what you have, where it lives, who governs it | `artifact-register` |
-| TSP.6 | [Content System](TSP/TSP.6%20Content%20System/) — ideas, strategy, plans and posts, written to contract | five `content-*` skills |
-| TSP.7 | [Notebook Manager](TSP/TSP.7%20Notebook%20Manager/) — plain-Markdown notebooks and a diary | `notebook-capture` |
-| TSP.8 | [Sprint Ceremonies](TSP/TSP.8%20Sprint%20Ceremonies/) — grooming, close-out, retrospective, planning | `sprint-facilitator`, `sprint-planning-precheck` |
-| TSP.9 | [Daily Loop](TSP/TSP.9%20Daily%20Loop/) — the morning plan and the evening stand-up, one record per day | `daily-loop-facilitator` |
-| TSP.10 | [Reporting](TSP/TSP.10%20Reporting/) — project status with the Essential 4, and the sprint update with its board | `reporting` |
-| TSP.11 | [Weekly Review](TSP/TSP.11%20Weekly%20Review/) — the week between the day and the sprint: beyond the sprint, the sprint check, the week ahead | `weekly-review-facilitator` |
-| TSP.12 | [Action Tracker](TSP/TSP.12%20Action%20Tracker/) — a team's shared list of the small actions agreed in a piece of work's sessions | `action-tracker-manager` |
-| TSP.13 | [Stakeholder Register](TSP/TSP.13%20Stakeholder%20Register/) — who has a stake in a project, where each stands, and what flows to them | `stakeholder-manager` |
-| TSP.14 | [Project Definition](TSP/TSP.14%20Project%20Definition/) — the Project Brief every project has: why, outcome and done-when, what it serves, and how it is measured | `project-definition-manager` |
-| TSP.15 | [Team Status Board](TSP/TSP.15%20Team%20Status%20Board/) — where a team updates its own status each sprint, and how it comes back into the WBS | `status-board-manager` |
-| TSP.16 | [Onboarding](TSP/TSP.16%20Onboarding/) — the project's guide for its team and for outsiders, generated from its own files, and onboarding in conversation | `onboarding-guide` |
+- **[The team guide](https://esp1ngard4.github.io/akos/atlas/)**: what a new product manager,
+  developer or tester reads on their first day.
+- **[The executive overview](https://esp1ngard4.github.io/akos/atlas/executive.html)**: what a
+  sponsor or another department receives.
 
-TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
-They are ordinary working tools, useful on their own — and they are here because a method with
-no worked example is just an opinion.
+## How a piece of work gets done
 
-TSP.8 is what uses them together. The sprint lives on the WBS rows, the retro routes to
-RAID, planning commits control activities from the TSP register, and nothing else is
-needed. Most teams already run a task tracker and a calendar, each in its own way, so
-[TD.8](TSP/TSP.8%20Sprint%20Ceremonies/TD.8%20-%20Sprint%20Ceremonies.md) says where
-they plug in and what to watch for, rather than pretending one setting fits all. TSP.9 is
-the same idea at the scale of a day, and its evening stand-up is what notices a sprint
-ceremony that was due, or a week gone without a review. TSP.11 is that weekly review: what
-falls between the day and the sprint, and whether the sprint is still on track.
-TSP.12 is the layer below the registers: the small actions a working session agrees,
-kept in one Markdown file the whole group can read and edit, filed with the work it serves.
-TSP.13 is who hears about the work: a project's stakeholders and its communications plan,
-with the contacts kept beside it and out of git.
-TSP.14 is what the project is: its brief, written with whoever owns the outcome,
-kept current before each status report, and revisited when a month has gone by.
-TSP.15 is how a team shares one WBS: each sprint's board in Excel, updated by the team or
-through Copilot, consolidated into the WBS by the product manager at the weekly review and the close-out.
-TSP.16 is how people come to work in it: a guide generated from the project itself, showing at every step
-what people do and what agents do, and an agent that walks a newcomer through their first week.
+```mermaid
+flowchart LR
+  C([Committed]) --> D[Discover<br/>agent researches] --> S[Specify<br/>agent drafts] --> P[Plan<br/>agent drafts]
+  P --> A{A person<br/>approves} --> W[Do<br/>agent and people] --> V([Verify and close<br/>a person confirms])
+  A -. revise .-> P
+  W -. the spec was wrong .-> S
+  classDef agent fill:#ece9fd,stroke:#5b47e0,color:#1b1450
+  classDef person fill:#fbefe1,stroke:#c46a12,color:#4a2a06
+  class D,S,P,W agent
+  class C,A,V person
+```
 
-TSP.3 has **two** skills, which is the same claim from the other direction: one owns
-the register row, the other owns the tool definition documents, and neither does the
-other's write.
+Each stop leaves its document in the work's folder (discovery, specification, plan, notes),
+so how a result was reached can always be shown. A small fix skips stops; the bigger or less
+certain the work, the more it makes.
 
-TSP.4 has **no skill**, deliberately. It runs a few times in a project's life, at
-moments where a human is deciding something. A tool is not obliged to have a skill;
-the register exists to record tools, and the skill is an optional attribute — which
-is the method's [first claim](method/00-the-unit-is-the-tool.md), demonstrated rather
-than asserted.
+## A week
 
-`registry/` is that worked example running: AKOS uses TSP.3 to catalogue what AKOS
-ships. The register is the source of truth; `REGISTRY.md` is generated from it, so the
-catalogue cannot drift from the thing that defines it.
+Two-week sprints. Planning on the first day: capacity, goals, then the work, with the agent
+writing the record. Every day, the team updates its tasks on the board, by hand or by asking
+Copilot. On Friday the agent proposes what moved and the product manager confirms it in one
+batch. On the last day, the review, the status report and the retro.
 
-**Registers are JSON.** Every write went through a script anyway, and a spreadsheet
-cost a subprocess to read, a dependency to install, and a file lock whenever the
-application or a sync client held it. What a spreadsheet gave back — validated
-dropdowns while typing — the commands enforce more strictly, since argparse refuses
-an invalid value where a dropdown only warns and paste bypasses entirely.
+## Start
 
-## Try it
-
-Skills load from `.github/skills/`, `.claude/skills/` or `.agents/skills/` in GitHub
-Copilot for VS Code, and the same `SKILL.md` format is read by Claude Code, Cursor,
-Codex CLI and others. **This repository is a catalogue, not a working environment** —
-the skills are not installed here. Put one in your own repo and your agent picks it
-up with no registration step.
+Everything runs on files in your own repository: JSON registers, Markdown, an Excel board.
+No service, no account, and nothing to install beyond Python 3.9.
 
 ```bash
 git clone https://github.com/Esp1ngard4/akos.git
-python akos/install.py list
-python akos/install.py add wbs-manager --into <your-repo>
+for s in project-definition-manager wbs-manager raid-manager sprint-facilitator \
+         weekly-review-facilitator reporting status-board-manager onboarding-guide; do
+  python akos/install.py add $s --into <your-repo>
+done
 ```
 
-That copies the skill into `<your-repo>/.agents/skills/` and writes
-`tools.lock.json` recording where it came from and at which commit. **Commit both.**
-`.agents/skills/` is read by GitHub Copilot, Codex, Cursor and others; Claude Code
-reads only `.claude/skills/`, so for Claude Code add `--dest .claude/skills`.
-Everyone who clones your repo then has the tool — no setup step, and a later change
-to it shows up in a pull request like any other.
+Commit `.agents/skills/` and `tools.lock.json` together, so everyone who clones gets the same
+tools. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
+`--dest .claude/skills`. Then ask your agent, in plain language: *"let's write the project
+brief"*, then *"let's run sprint planning"*.
 
-The lock is what makes the copy maintainable rather than a fork by accident:
+## The tools
 
-```bash
-python akos/install.py status --check   # has our copy drifted? (offline; good for CI)
-python akos/install.py update wbs-manager   # three-way merge upstream changes in
-```
+| | Tool | What the agent does with it | Skill |
+|---|---|---|---|
+| TSP.1 | [WBS Register](TSP/TSP.1%20WBS%20Register/) | Keeps the backlog: every piece of work, its criteria, estimate and sprint | `wbs-manager` |
+| TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) | Logs risks, actions, issues and decisions, each with an owner and a date to look again | `raid-manager` |
+| TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) | Keeps the inventory of the tools the project runs on | `tsp-manager`, `td-author` |
+| TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) | Nothing: a person installs and updates, and a lock records what was changed | *(none)* |
+| TSP.5 | [Artifact Register](TSP/TSP.5%20Artifact%20Register/) | Knows where every document lives, and checks the filing against the disk | `artifact-register` |
+| TSP.6 | [Content System](TSP/TSP.6%20Content%20System/) | Turns ideas into a strategy, plans and posts, each written to a contract | five `content-*` skills |
+| TSP.7 | [Notebook Manager](TSP/TSP.7%20Notebook%20Manager/) | Files notes and a diary in plain Markdown | `notebook-capture` |
+| TSP.8 | [Sprint Ceremonies](TSP/TSP.8%20Sprint%20Ceremonies/) | Runs grooming, planning, close-out and the retro with you, and writes each record | `sprint-facilitator`, `sprint-planning-precheck` |
+| TSP.9 | [Daily Loop](TSP/TSP.9%20Daily%20Loop/) | Plans your morning and closes your day, one record per day | `daily-loop-facilitator` |
+| TSP.10 | [Reporting](TSP/TSP.10%20Reporting/) | Drafts the status report and the sprint update from the records, for a person to rate | `reporting` |
+| TSP.11 | [Weekly Review](TSP/TSP.11%20Weekly%20Review/) | Checks the week: what falls due beyond the sprint, whether the sprint is on track, the week ahead | `weekly-review-facilitator` |
+| TSP.12 | [Action Tracker](TSP/TSP.12%20Action%20Tracker/) | Keeps the small actions a session agrees, each with its owner | `action-tracker-manager` |
+| TSP.13 | [Stakeholder Register](TSP/TSP.13%20Stakeholder%20Register/) | Knows who hears what and when, and says what is due to whom | `stakeholder-manager` |
+| TSP.14 | [Project Definition](TSP/TSP.14%20Project%20Definition/) | Writes the brief with whoever owns the outcome, and keeps it current | `project-definition-manager` |
+| TSP.15 | [Team Status Board](TSP/TSP.15%20Team%20Status%20Board/) | Sets up each sprint's board in Excel, and brings the team's updates into the backlog as proposals | `status-board-manager` |
+| TSP.16 | [Onboarding](TSP/TSP.16%20Onboarding/) | Generates the project's guide, and walks a new joiner through their first week | `onboarding-guide` |
 
-`update` applies upstream changes, keeps yours, and asks about the overlap only.
+The full list, generated from the catalogue's own register, is the [registry](registry/REGISTRY.md).
 
-A project that will own and evolve its tools can take their definition documents
-too, into its own TSP folder, locked the same way:
+## Building on it
 
-```bash
-python akos/install.py add wbs-manager --into <your-repo> --docs TSP
-python akos/install.py add TSP.4 --into <your-repo> --docs TSP   # a tool with no skill: its TD alone
-```
-[6. Sharing with a team](method/06-sharing-with-a-team.md) explains why it works this
-way; [TD.4](TSP/TSP.4%20Tool%20Installer/TD.4%20-%20Tool%20Installer.md) is the
-reference. A plain `cp -r` of the skill folder also works — you just lose the ability
-to answer "what did we change?" later.
-
-Then ask in plain language — *"create a WBS for project Atlas"*, *"add a risk about
-the vendor deadline"*, *"what's overdue for review?"* Skills trigger on their
-`description`, so nothing needs invoking by name.
-
-Every script also runs standalone, with no agent involved:
-
-```bash
-python "TSP/TSP.1 WBS Register/wbs-manager/scripts/create_wbs.py"  "WBS Atlas.json" "Atlas"
-python "TSP/TSP.1 WBS Register/wbs-manager/scripts/refresh_wbs.py" "WBS Atlas.json" "WBS Dashboard.html" "Atlas"
-```
-
-**Python 3.9+ and nothing else.** No dependencies, so there is no install step —
-registers are JSON and every import is standard library. Dashboards pull Chart.js
-and Grid.js from a CDN; offline, tables render and charts don't.
-
-## Verifying it works
-
-```bash
-python tests/smoke_test.py              # the working tree
-python tests/smoke_test.py --packaged   # what git actually ships
-```
-
-Every tool is exercised the way a new user would: create a register, render its
-dashboard, check the output is real rather than merely present. The installer gets
-the same treatment — vendor a tool into a throwaway project, confirm `status --check`
-passes clean, edit a file, confirm it now fails, then declare the change and confirm
-it passes again. Runs in seconds and needs nothing installed at all.
-
-TSP.5 gets an extra case of its own. It is the only tool here that asserts something
-about the world rather than about itself — the ID it assigns is written onto the file,
-so the register can be wrong in a way a script can detect. The test breaks the filing
-on purpose and confirms the audit notices, because a check that cannot fail is not a
-check.
-
-`--packaged` is the one that matters. It exports `git archive HEAD` and runs from
-there, so a file sitting untracked on disk is simply absent. That gap once shipped a
-tool whose dashboard template had never been committed, and every clone failed on
-first use while the working tree looked perfectly healthy. CI runs `--packaged` on
-every push, against Python 3.9 and 3.13.
-
-## Templates
-
-- [`templates/TD-template.md`](templates/TD-template.md) — the governance document structure. `td-author` (TSP.3's second skill) is what applies and audits it.
-- [`templates/SKILL-template.md`](templates/SKILL-template.md) — a skill skeleton, with notes on writing a `description` that actually triggers. Under-triggering is the common failure: a skill described in your own private vocabulary never matches anything you type.
+Redesigning a tool so an agent can operate it turns out to be mostly making it well governed:
+one source of truth, a documented structure, stated rules, and a place in a register of
+everything you depend on. That is a method, and it holds for any tool, with or without an
+agent. **[Building on AKOS](method/README.md)** covers it: why the unit is the tool rather
+than the skill, the seven method pieces, how the catalogue is organised, how an installed copy
+stays maintainable, and how it is all tested.
 
 ## Where this came from
 
