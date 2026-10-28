@@ -32,7 +32,11 @@ sys.path.insert(0, HERE)
 import xlsx                                                     # noqa: E402
 
 KIND = "akos-status-board"
-COLUMNS = ["WBS ID", "Title", "Owner", "Status", "Note", "AC verdict", "Updated on", "Updated by"]
+COLUMNS = ["WBS ID", "Title", "Owner", "Status", "Notes", "AC verdict", "Updated on", "Updated by"]
+# An older board named the column in the singular; it reads the same.
+RENAMED = {"Note": "Notes"}
+# One entry per line, newest on top: "2026-10-28 · Tom Becker: link works".
+NOTE_LINE = re.compile(r"^\s*(\d{4}-\d{2}-\d{2})\s*(?:[\u00b7\-\u2013|]\s*([^:]+?))?\s*:\s*(.+?)\s*$")
 WIDTHS = [9, 48, 18, 12, 44, 14, 13, 16]
 STATUSES = ["To do", "Doing", "Done", "Blocked", "Cancelled"]
 VERDICTS = ["met", "partly met", "not met"]
@@ -131,7 +135,7 @@ def load(path):
     hi = next((i for i, r in enumerate(sheet) if "WBS ID" in r and "Status" in r), None)
     if hi is None:
         sys.exit("%s has no Board sheet with a WBS ID and a Status column." % path)
-    header = [h.strip() for h in sheet[hi]]
+    header = [RENAMED.get(h.strip(), h.strip()) for h in sheet[hi]]
     extra = [h for h in header if h and h not in COLUMNS]
     rows = []
     for i, r in enumerate(sheet[hi + 1:], start=hi + 2):
@@ -148,17 +152,18 @@ HOW_TO = [
     ["This is the team's board for one sprint. Update your own rows as the work moves; the product manager brings them into the project's WBS at the weekly review and at the sprint's close-out."],
     [""],
     ["Status", "To do, Doing, Done or Blocked. Cancelled is set by the product manager only."],
-    ["Note", "One line on where it stands, or what is in the way when Blocked."],
-    ["AC verdict", "On a Done row: met, partly met or not met, against the row's acceptance criteria in the WBS. A partly met says in the Note what is left."],
+    ["Notes", "A dated log, newest on top, one entry per line (Alt+Enter for a new line): 2026-10-28 \u00b7 Your name: where it stands, or what is in the way. Add a line; never edit an older one."],
+    ["AC verdict", "On a Done row: met, partly met or not met, against the row's acceptance criteria in the WBS. A partly met says in Notes what is left."],
     ["Updated on / by", "When, and who. A date as YYYY-MM-DD."],
-    ["New work", "A row with no WBS ID is new work. Add a Title and a Note; the product manager decides with you whether it comes into the sprint."],
+    ["New work", "A row with no WBS ID is new work. Add a Title and a dated note; the product manager decides with you whether it comes into the sprint."],
     ["Don't", "Change a WBS ID, delete a row, or rename a column: the consolidation reads them."],
     [""],
     ["Asking Copilot in Excel"],
     ["", "Mark WBS 12 as Doing, updated today by me."],
-    ["", "Mark WBS 12 as Done, AC verdict met, note: released to production."],
-    ["", "Set WBS 14 to Blocked with the note: waiting for the test environment."],
-    ["", "Add a row with no WBS ID: title Fix the login timeout, note found in testing, status Doing."],
+    ["", "Add a note to WBS 12 on top of its Notes, dated today with my name: expiry after 24h still to do."],
+    ["", "Mark WBS 12 as Done, AC verdict met, and add a dated note on top: released to production."],
+    ["", "Set WBS 14 to Blocked and add a dated note on top: waiting for the test environment."],
+    ["", "Add a row with no WBS ID: title Fix the login timeout, status Doing, with a dated note: found in testing."],
 ]
 
 
@@ -183,9 +188,36 @@ def save(path, about, rows, extra, title):
     return n
 
 
+def parse_notes(cell):
+    """The Notes cell as entries, newest first: [{date, by, text}]. A line with
+    no date is kept, dated None, so nothing the team wrote is dropped."""
+    out = []
+    for line in (cell or "").splitlines():
+        if not line.strip():
+            continue
+        m = NOTE_LINE.match(line)
+        if m:
+            out.append({"date": m.group(1), "by": (m.group(2) or "").strip() or None, "text": m.group(3)})
+        else:
+            out.append({"date": None, "by": None, "text": line.strip()})
+    return out
+
+
+def add_note(cell, text, by, day=None):
+    """A new entry on top of the Notes cell."""
+    line = "%s \u00b7 %s: %s" % (day or date.today().isoformat(), by, text)
+    return line + ("\n" + cell if cell else "")
+
+
+def wbs_note(n):
+    """How a board note reads on the WBS row, so a later consolidation can tell
+    it is already there."""
+    return "On the team board, %s%s: %s" % (n["date"] or "undated", ", " + n["by"] if n["by"] else "", n["text"])
+
+
 def new_row(r):
     return {"WBS ID": str(r.get("ID")), "Title": r.get("Title", ""), "Owner": r.get("Owner", ""),
-            "Status": board_status(r.get("Status")), "Note": "", "AC verdict": "",
+            "Status": board_status(r.get("Status")), "Notes": "", "AC verdict": "",
             "Updated on": "", "Updated by": ""}
 
 
@@ -268,7 +300,7 @@ def cmd_sync(args):
         if w and w.get("Status") == "Cancelled" and row.get("Status") != "Cancelled" \
                 and (not wanted or row.get("WBS ID") in wanted):
             row["Status"] = "Cancelled"
-            row["Note"] = ("cancelled in the WBS; " + row.get("Note", "")).strip("; ")
+            row["Notes"] = add_note(row.get("Notes", ""), "cancelled in the WBS", "product manager")
             changes.append("marked WBS %s cancelled" % row["WBS ID"])
     if args.consolidated:
         b["about"]["Consolidated on"] = date.today().isoformat()
@@ -309,7 +341,15 @@ def proposals(data, sprint, b):
         who = " by %s" % row["Updated by"] if row.get("Updated by") else ""
         when = row.get("Updated on", "")
         base = {"row": row["_row"], "id": rid or None, "title": row.get("Title", ""), "board": status,
-                "note": row.get("Note", ""), "verdict": row.get("AC verdict", ""), "updated": when + who}
+                "notes": parse_notes(row.get("Notes", "")), "verdict": row.get("AC verdict", ""),
+                "updated": when + who}
+        # Notes dated on or after the last consolidation, less those the WBS
+        # row already holds: a note written on a consolidation's own day is
+        # neither missed nor brought in twice.
+        since = b["about"].get("Consolidated on") or ""
+        held = (by_id.get(rid) or {}).get("Comments") or ""
+        fresh = [n for n in base["notes"] if (not n["date"] or n["date"] >= since)
+                 and wbs_note(n) not in held]
         if status and status not in STATUSES:
             out.append(dict(base, kind="unreadable", say="Status %r is not one of %s." % (status, ", ".join(STATUSES))))
             continue
@@ -326,8 +366,11 @@ def proposals(data, sprint, b):
         base["wbs"] = ws
         date_ok = bool(re.match(r"^\d{4}-\d{2}-\d{2}$", when)) and when <= date.today().isoformat()
         if status == "Done" and ws not in ("Done", "Cancelled"):
+            # What happened is where the work ended: the newest entry. The
+            # history reaches the WBS as dated notes of its own.
+            latest = (base["notes"][0]["text"].rstrip(".") if base["notes"] else "")
             draft = "What happened: %s. AC: %s on the board; confirm each criterion. Follow-up: %s." % (
-                row.get("Note") or "done on the team's board",
+                latest or "done on the team's board",
                 row.get("AC verdict") or "no verdict given",
                 "the rest, as the note says" if row.get("AC verdict") == "partly met" else "none")
             out.append(dict(base, kind="close", closure=draft, actual_end=wbs_date(when) if date_ok else None,
@@ -342,6 +385,11 @@ def proposals(data, sprint, b):
             out.append(dict(base, kind="back", say="Back to To do on the board while the WBS says Implementing: ask why; change nothing unasked."))
         elif status in ("To do", "Doing", "Blocked") and ws == "Done":
             out.append(dict(base, kind="reopened", say="Open on the board, Done in the WBS: ask; a closed row is reopened only on purpose."))
+        if fresh and status != "Cancelled":
+            out.append(dict(base, kind="notes", entries=fresh, commands=[
+                "wbs.py note <wbs> --id %s \"%s\"" % (rid, wbs_note(n)) for n in reversed(fresh)],
+                say="%d note(s) since the last consolidation: each becomes a dated note on the WBS row, oldest first."
+                % len(fresh)))
     on_board = {r.get("WBS ID") for r in b["rows"] if r.get("WBS ID")}
     for r in cards(data, sprint):
         if str(r.get("ID")) not in on_board:
@@ -367,6 +415,8 @@ def cmd_propose(args):
         print("            %s" % p["say"])
         if p.get("closure"):
             print("            draft: %s" % p["closure"])
+        for n in p.get("entries", []) if p["kind"] == "notes" else []:
+            print("            %s%s: %s" % (n["date"] or "undated", " \u00b7 " + n["by"] if n["by"] else "", n["text"]))
     return 0
 
 

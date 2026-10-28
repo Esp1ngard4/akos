@@ -17,9 +17,11 @@ Python 3, standard library only. `wbs-manager` installed beside this skill. `<sk
 
 | Sheet | Holds |
 |---|---|
-| **Board** | A table: *WBS ID*, *Title*, *Owner*, *Status* (To do · Doing · Done · Blocked · Cancelled), *Note*, *AC verdict* (met · partly met · not met), *Updated on*, *Updated by*. The sprint's work only: its committed and pulled-in leaves, not the parents they make up |
+| **Board** | A table: *WBS ID*, *Title*, *Owner*, *Status* (To do · Doing · Done · Blocked · Cancelled), *Notes*, *AC verdict* (met · partly met · not met), *Updated on*, *Updated by*. The sprint's work only: its committed and pulled-in leaves, not the parents they make up |
 | **How to update** | For the team and for Copilot in Excel: what each column means, and prompts that work |
 | **About** | Scope, sprint, dates, the WBS it came from, *Set up on*, *Consolidated on*. Leave it as it is |
+
+**Notes is a dated log**, one entry per line, newest on top: `2026-10-28 · Tom Becker: link works; expiry still to do`. The team adds a line and never edits an older one, so the cell shows how the work evolved and several comments on one row stay apart. A line with no date is kept and proposed like any other.
 
 The team may add columns; they are kept. It should not rename or delete ours, change a WBS ID, or add sheets, which a rewrite does not keep. *Cancelled* is set by the product manager, through the WBS.
 
@@ -43,7 +45,7 @@ After a pull-in agreed with the product manager, a split's rest carried in, or a
 python <skills>/status-board-manager/scripts/board.py sync "<wbs>" --ids <ID> [<ID> ...]
 ```
 
-A row committed and missing is added; a row cancelled in the WBS is marked *Cancelled*, its note kept. Nothing else changes.
+A row committed and missing is added; a row cancelled in the WBS is marked *Cancelled*, with a dated note on top saying so. Nothing else changes.
 
 ### 3. Consolidate (the weekly review, the close-out, or on request)
 
@@ -58,10 +60,11 @@ A row committed and missing is added; a row cancelled in the WBS is marked *Canc
    | Proposal | What the product manager decides | Through |
    |---|---|---|
    | `start`: Doing on the board | Set it Implementing, with the board's date as `--actual-start` where given | `wbs.py set --status Implementing` |
-   | `close`: Done on the board | Close it. The closure note is drafted from the note and the AC verdict: **confirm each acceptance criterion with the product manager**, never take the board's verdict as the note | `wbs.py set --status Done --closure "…"` (`--actual-end` from the board's date) |
+   | `close`: Done on the board | Close it. The closure note is drafted from the newest note and the AC verdict (the earlier entries reach the row as notes): **confirm each acceptance criterion with the product manager**, never take the board's verdict as the note | `wbs.py set --status Done --closure "…"` (`--actual-end` from the board's date) |
    | `blocked` | A RAID issue, with an owner and a date to look again; Implementing if it had not started | `raid-manager` |
    | `new`: a row with no WBS ID | A pull-in (ask what it displaces), work outside the sprint, or not now. Its parent is asked, never guessed | `wbs.py add`, then `wbs.py set --pulled-in` when it starts |
    | `back`, `reopened` | Ask why. Nothing changes unasked | |
+   | `notes`: entries dated since the last consolidation | Each becomes a dated note on the WBS row, oldest first, saying it came from the board, its date and its author. One the row already holds is not proposed again | `wbs.py note` |
    | `missing`: committed, not on the board | Added at step 3 | |
    | `unknown`, `unreadable` | A WBS ID the register lacks, or a status off the list: ask the row's owner | |
 

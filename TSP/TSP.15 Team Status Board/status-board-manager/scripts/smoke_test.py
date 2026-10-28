@@ -89,6 +89,15 @@ def main():
         ok(rows[1] == ["12", "2026-10-27"], "a number reads as text, a date serial as YYYY-MM-DD", rows)
         ok(rows[2] == ["rich text", "TRUE"], "rich text and booleans", rows)
 
+        legacy = os.path.join(tmp, "legacy.xlsx")
+        xlsx.write(legacy, [xlsx.Sheet("Board", [["WBS ID", "Title", "Status", "Note"], [3, "Old", "Doing", "2026-10-01 \u00b7 Ann: x"]]),
+                            xlsx.Sheet("About", [[B.KIND, ""], ["Sprint", "S1"]])])
+        lb = B.load(legacy)
+        ok(lb["rows"][0].get("Notes") == "2026-10-01 \u00b7 Ann: x" and not lb["extra"], "a board with the older Note column reads as Notes", lb)
+        ok(B.parse_notes("2026-10-28 \u00b7 Tom Becker: link works\nplain line\n2026-10-26: no name")
+           == [{"date": "2026-10-28", "by": "Tom Becker", "text": "link works"}, {"date": None, "by": None, "text": "plain line"},
+               {"date": "2026-10-26", "by": None, "text": "no name"}], "notes parse by line: date, author, text; an undated line kept")
+
         print("\nboard")
         reg = os.path.join(tmp, "10. WBS", "WBS Demo.json")
         os.makedirs(os.path.dirname(reg))
@@ -127,12 +136,14 @@ def main():
         ok(not good and "already exists" in out, "a second setup for the sprint is refused", out)
 
         today = date.today().isoformat()
-        edit_board(path, {"2": {"Status": "Done", "Note": "released", "AC verdict": "met", "Updated on": today, "Updated by": "Sam"},
+        old = "2000-01-01"
+        edit_board(path, {"2": {"Status": "Done", "Notes": "%s \u00b7 Sam: released\n%s \u00b7 Sam: started on the form" % (today, old),
+                                "AC verdict": "met", "Updated on": today, "Updated by": "Sam"},
                           "3": {"Status": "Doing"},
-                          "4": {"Status": "Blocked", "Note": "waiting for the test environment"},
+                          "4": {"Status": "Blocked", "Notes": "%s \u00b7 Kim: waiting for the test environment" % today},
                           "5": {"Status": "To do"},
                           "6": {"Status": "Doing"},
-                          "_new": {"Fix the login timeout": {"Status": "Doing", "Note": "found in testing"},
+                          "_new": {"Fix the login timeout": {"Status": "Doing", "Notes": "%s \u00b7 Sam: found in testing" % today},
                                    "Odd one": {"WBS ID": "99", "Status": "Doing"}}}, drop=None)
         b = B.load(path)
         new_row = next(r["_row"] for r in b["rows"] if r.get("Title") == "Fix the login timeout")
@@ -151,6 +162,11 @@ def main():
         ok(("reopened", "6") in kinds, "open on the board, Done in the WBS, is asked about", props)
         ok(any(p["kind"] == "new" and p["title"] == "Fix the login timeout" for p in props), "a row with no WBS ID is new work", props)
         ok(("unknown", "99") in kinds, "a WBS ID the register lacks is flagged", props)
+        notes = next((p for p in props if p["kind"] == "notes" and p["id"] == "2"), None)
+        ok(notes and [n["text"] for n in notes["entries"]] == ["released", "started on the form"]
+           and notes["commands"][0].endswith("Sam: started on the form\"") and "2000-01-01" in notes["commands"][0],
+           "each dated note becomes a WBS note, oldest first, with its date and author", notes)
+        ok("released" in close["closure"] and "started on the form" not in close["closure"], "the closure draft takes the newest note; the history goes as notes", close)
 
         edit_board(path, {}, drop="4")
         good, out = board("propose", reg, "--json")
@@ -162,8 +178,10 @@ def main():
         b = B.load(path)
         rows = {r.get("WBS ID"): r for r in b["rows"]}
         ok(good and "7" in rows and "4" not in rows, "sync --ids adds the pull-in and only what it names", out)
-        ok(rows["2"]["Status"] == "Cancelled" and "released" in rows["2"]["Note"], "a cancellation is marked, the team's note kept", rows["2"])
-        ok(rows["5"]["Status"] == "To do" and any(r.get("Title") == "Fix the login timeout" and r.get("Note") == "found in testing" for r in b["rows"]),
+        ent = B.parse_notes(rows["2"]["Notes"])
+        ok(rows["2"]["Status"] == "Cancelled" and ent[0]["text"] == "cancelled in the WBS" and ent[0]["by"] == "product manager"
+           and ent[1]["text"] == "released", "a cancellation is marked with a dated note on top, the team's notes kept", rows["2"])
+        ok(rows["5"]["Status"] == "To do" and any(r.get("Title") == "Fix the login timeout" and r.get("Notes", "").endswith("found in testing") for r in b["rows"]),
            "the team's other cells are kept", b["rows"])
 
         wbs("add", reg, "Fix the login timeout", "--parent", "1")
@@ -178,6 +196,12 @@ def main():
         b = B.load(path)
         ok(good and "4" in {r.get("WBS ID") for r in b["rows"]} and b["about"]["Consolidated on"] == today,
            "sync brings the board in line and stamps the consolidation", out)
+        wbs("note", reg, "--id", "4", B.wbs_note({"date": today, "by": "Kim", "text": "waiting for the test environment"}))
+        edit_board(path, {"4": {"Notes": "%s \u00b7 Kim: still waiting\n%s \u00b7 Kim: waiting for the test environment" % (today, today)}})
+        good, out = board("propose", reg, "--json")
+        fresh = {p["id"]: [n["text"] for n in p["entries"]] for p in json.loads(out)["proposals"] if p["kind"] == "notes"}
+        ok(good and fresh.get("4") == ["still waiting"], "a note already on the WBS row is not proposed again", fresh)
+        ok("started on the form" not in str(fresh), "a note dated before the last consolidation is not proposed", fresh)
         lc = B.last_consolidated(reg, sprint)
         ok(lc and lc["consolidated"] == today, "last_consolidated reads the stamp, for the reports", lc)
 

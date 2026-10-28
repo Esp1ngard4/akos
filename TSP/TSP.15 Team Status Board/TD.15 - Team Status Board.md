@@ -42,12 +42,15 @@ Standard library only. Needs `wbs-manager` (TSP.1) installed beside it. The work
 
 **A step where it is installed, nothing where it is not.** There is no setting to turn the board on: the ceremonies look for the tool and a board, and say nothing when there is none. What a team works in is the team's decision; the tools follow it.
 
+**Notes are a dated log, and they reach the WBS one by one.** A row's Notes hold one entry per line, newest on top, each with its date and author. The cell then shows how the work evolved, and the consolidation brings each entry since the last one into the WBS row as a dated note of its own, so several comments on one row never merge into one. An entry the row already holds is recognised and not brought in twice, so a note written on a consolidation's own day is neither lost nor doubled.
+
 **Leaves on the board, parents with the product manager.** A committed parent is worked through its children, and closing it means its own acceptance criteria are met, which is the product manager's judgment. The board shows the work the team does.
 
 ## Naming conventions
 
 - **The board:** `Status Board <scope> <sprint>.xlsx`, beside the WBS. Recognised by its *About* sheet, not its name.
 - **Board statuses:** To do · Doing · Done · Blocked · Cancelled. **AC verdicts:** met · partly met · not met.
+- **Notes:** `YYYY-MM-DD · Name: text`, one entry per line, newest on top. On the WBS row a board note reads `On the team board, <date>, <name>: <text>`.
 - **Dates** on the board as `YYYY-MM-DD`; the WBS writes them its own way (`2026-Oct-27`), and the tool converts.
 
 ## Adapting it to your tools
@@ -76,7 +79,7 @@ Standard library only. Needs `wbs-manager` (TSP.1) installed beside it. The work
 
 ## How it is tested
 
-`status-board-manager/scripts/smoke_test.py` builds a scratch project with a sprint running today and checks: set-up writes the sprint's leaves and archives a consolidated board, refusing one that was not; the workbook reads back what was written, including shared strings and date cells as Excel saves them; the team's edits produce the right proposals (start, close with a drafted note and the board's date, blocked, new, back, reopened, missing, unknown); *sync* adds a pull-in and marks a cancellation, keeping the team's cells; *link* writes a new row's ID; the consolidation stamp. `tests/smoke_test.py` runs it, installs the skill, and checks the status report says how fresh the WBS is.
+`status-board-manager/scripts/smoke_test.py` builds a scratch project with a sprint running today and checks: set-up writes the sprint's leaves and archives a consolidated board, refusing one that was not; the workbook reads back what was written, including shared strings and date cells as Excel saves them; the team's edits produce the right proposals (start, close with a note drafted from the newest entry and the board's date, blocked, new, back, reopened, missing, unknown); dated notes become WBS notes oldest first, none brought in twice; a board with the older singular *Note* column still reads; *sync* adds a pull-in and marks a cancellation, keeping the team's cells; *link* writes a new row's ID; the consolidation stamp. `tests/smoke_test.py` runs it, installs the skill, and checks the status report says how fresh the WBS is.
 
 What is **not** tested is how a team uses it: whether people keep the board current, or whether a week between consolidations is right for them. Those are the retro's questions.
 
@@ -108,4 +111,4 @@ What is **not** tested is how a team uses it: whether people keep the board curr
 
 | Version | Date | Changes |
 |---|---|---|
-| v1.0 | 2026-10-28 | Published as TSP.15. One skill: the sprint's board set up from the WBS, updated when a commitment changes, and consolidated into the WBS through proposals a person confirms; `xlsx.py` reads and writes the workbook with the standard library. Steps in planning, the weekly review and the close-out where it is installed; the status report says how fresh the WBS is. |
+| v1.0 | 2026-10-28 | Published as TSP.15, with Notes as a dated log brought into the WBS entry by entry. One skill: the sprint's board set up from the WBS, updated when a commitment changes, and consolidated into the WBS through proposals a person confirms; `xlsx.py` reads and writes the workbook with the standard library. Steps in planning, the weekly review and the close-out where it is installed; the status report says how fresh the WBS is. |
