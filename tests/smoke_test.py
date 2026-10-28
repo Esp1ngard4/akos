@@ -1040,6 +1040,63 @@ REPORT_TOOL = "TSP.10 Reporting"
 PD_TOOL = "TSP.14 Project Definition"
 
 
+BOARD_TOOL = "TSP.15 Team Status Board"
+
+
+def test_status_board(root, scratch):
+    """The team's board: its own smoke test, installed into a project with the
+    WBS, and the status report saying how fresh the WBS is."""
+    print("\nTSP.15 Team Status Board")
+    tool = os.path.join(root, "TSP", BOARD_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    check("TD.15 present", any(n.startswith("TD.15") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool), str(broken_links(tool))[:200])
+    skill = os.path.join(tool, "status-board-manager")
+    for rel in ("SKILL.md", os.path.join("scripts", "board.py"), os.path.join("scripts", "xlsx.py"),
+                os.path.join("scripts", "smoke_test.py")):
+        check("ships %s" % rel.replace(os.sep, "/"), os.path.isfile(os.path.join(skill, rel)))
+    ok, out = run([os.path.join(skill, "scripts", "smoke_test.py")], scratch)
+    check("its own smoke test passes", ok and "All checks passed." in out, out[-400:])
+
+    proj = os.path.join(scratch, "board-project")
+    os.makedirs(proj, exist_ok=True)
+    installer = os.path.join(root, "install.py")
+    for name in ("wbs-manager", "sprint-facilitator", "reporting", "status-board-manager"):
+        ok, out = run([installer, "add", name, "--into", proj, "--catalogue", root], scratch)
+        if not check("install %s" % name, ok, out[-300:]):
+            return
+    skills = os.path.join(proj, ".agents", "skills")
+    planning = os.path.join(proj, "0. PrjMgm")
+    os.makedirs(planning, exist_ok=True)
+    wbs = os.path.join(skills, "wbs-manager", "scripts")
+    reg, conv, records = os.path.join(planning, "WBS Demo.json"), os.path.join(proj, "conventions.json"), os.path.join(proj, "records")
+    board = os.path.join(skills, "status-board-manager", "scripts", "board.py")
+    for cmd in ([os.path.join(wbs, "create_wbs.py"), reg, "Demo"],
+                [os.path.join(wbs, "wbs.py"), "sprints", "seed", conv, "--scope", "Demo", "--year", "2026", "--anchor", "2026-07-19"],
+                [os.path.join(wbs, "wbs.py"), "sprints", "import", reg, "--from", conv],
+                [os.path.join(wbs, "wbs.py"), "add", reg, "Signup page", "--sprint-planned", "S26.Q4.1"],
+                [os.path.join(skills, "sprint-facilitator", "scripts", "sprint_record.py"), "plan", records, "S26.Q4.1", "--calendar", conv],
+                [board, "setup", reg, "--sprint", "S26.Q4.1"]):
+        ok, out = run(cmd, scratch)
+        if not check("setup: %s %s" % (os.path.basename(cmd[0]), cmd[1] if len(cmd) > 1 and not os.path.isabs(cmd[1]) else ""), ok, out[-300:]):
+            return
+    report = os.path.join(skills, "reporting", "scripts", "report.py")
+
+    def header(day):
+        ok, out = run([report, "status", planning, "--records", records, "--sprint", "S26.Q4.1", "--as-of", day], scratch)
+        page = os.path.join(planning, "Reports", "Status", "%s Status.html" % day)
+        return ok, out, (io.open(page, encoding="utf-8").read() if os.path.exists(page) else "")
+
+    ok, out, page = header("2026-10-12")
+    check("the status report says the team board is not consolidated yet", ok and "team board not consolidated yet" in page, out[-300:])
+    ok, out = run([board, "sync", reg, "--sprint", "S26.Q4.1", "--consolidated"], scratch)
+    ok, out, page = header("2026-10-13")
+    check("after a consolidation, it says the WBS is as of that date",
+          ok and ("the WBS as of the team board&#x27;s last consolidation" in page
+                  or "the WBS as of the team board's last consolidation" in page), out[-300:])
+
+
 def test_project_definition(root, scratch):
     """The brief's tool: its own smoke test, installed into an empty project, and
     the status report reading the brief through it, or saying it is not there."""
@@ -2212,6 +2269,7 @@ def main():
         test_action_tracker(root, scratch)
         test_stakeholder_register(root, scratch)
         test_project_definition(root, scratch)
+        test_status_board(root, scratch)
         test_reporting(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
@@ -2229,7 +2287,7 @@ def main():
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
               "ceremonies, the daily loop, the weekly review, the action tracker, the "
-              "stakeholder register, project definition and reporting)." % len(TOOLS))
+              "stakeholder register, project definition, the team status board and reporting)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

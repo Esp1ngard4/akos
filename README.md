@@ -71,6 +71,7 @@ has described.
 | TSP.12 | [Action Tracker](TSP/TSP.12%20Action%20Tracker/) — a team's shared list of the small actions agreed in a piece of work's sessions | `action-tracker-manager` |
 | TSP.13 | [Stakeholder Register](TSP/TSP.13%20Stakeholder%20Register/) — who has a stake in a project, where each stands, and what flows to them | `stakeholder-manager` |
 | TSP.14 | [Project Definition](TSP/TSP.14%20Project%20Definition/) — the Project Brief every project has: why, outcome and done-when, what it serves, and how it is measured | `project-definition-manager` |
+| TSP.15 | [Team Status Board](TSP/TSP.15%20Team%20Status%20Board/) — where a team updates its own status each sprint, and how it comes back into the WBS | `status-board-manager` |
 
 TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with
@@ -90,6 +91,8 @@ TSP.13 is who hears about the work: a project's stakeholders and its communicati
 with the contacts kept beside it and out of git.
 TSP.14 is what the project is: its brief, written with whoever owns the outcome,
 kept current before each status report, and revisited when a month has gone by.
+TSP.15 is how a team shares one WBS: each sprint's board in Excel, updated by the team or
+through Copilot, consolidated into the WBS by the product manager at the weekly review and the close-out.
 
 TSP.3 has **two** skills, which is the same claim from the other direction: one owns
 the register row, the other owns the tool definition documents, and neither does the

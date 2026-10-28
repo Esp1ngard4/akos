@@ -173,6 +173,7 @@ What is **not** tested is whether the agent runs a ceremony well. No test assert
 
 ## Relationship to other tools
 
+- **TSP.15 Team Status Board**: where a team updates its status on a board, planning sets it up and the close-out consolidates it first.
 - **TSP.1 WBS Register**: the source of the sprint's state and figures.
 - **TSP.2 RAID Register**: where the retro routes actions, risks, issues and decisions, and what grooming's `refined --raid` reads.
 - **TSP.3 TSP Register**: planning commits due controls from it; row 8 registers this tool.
@@ -196,6 +197,7 @@ What is **not** tested is whether the agent runs a ceremony well. No test assert
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.5 | 2026-10-28 | **The team's board, where there is one** (TSP.15): planning's last step sets up the sprint's board, the close-out consolidates it before anything else, and a pull-in or a cancellation reaches it the same day. Each is a step only where the tool is installed. |
 | v1.4 | 2026-10-27 | **A pull-in states its effect, and the WBS tool asks for it.** Work taken in after planning gets its line in *Committed items* the day it is pulled in, with `effect:` either `displaces nothing` or the committed item it delays; `wbs.py` refuses to start an uncommitted row until it is answered (TD.1 v1.10), and `pullins` finds any line the record lacks. The close-out reads the effects first, so a slipped item's why names the pull-in that took its time, and a pull-in with no effect is recorded as `effect not stated` for the retro. Planning commits a parent a goal means to close, at `0h`. The close-out ends with the communications the stakeholder register (TSP.13) says are due, sent by the user, external ones through `report.py export --comm`. |
 | v1.3 | 2026-10-22 | **Partly done spillover is split at the close-out.** Step 4 asks of each unfinished leaf whether any of it was delivered: if so it is split (`wbs.py split`, TD.1 v1.9), the delivered part closing in the sprint and the rest carried at planning; if not it is carried whole. Planning carries a split's rest, and its parent only when the deliverable is promised again. |
 | v1.2 | 2026-10-12 | **Sprint goals become data, and a commitment means `Not Started`.** Goals were free lines with an `Achieved` cell, so nothing could count them. Each now has an ID, a *Done when* test, an optional *Bet* (the longer-cycle bet or objective it serves) and *Carried from* when it continues an earlier goal; committed items carry an `Area` and the `Goal` IDs they serve; the review answers each goal by ID with Yes, Partial or No and a *Why*, under a *Highlights* paragraph. `sprint_record.py goals` reads them back (verdicts, carried goals, the share of committed hours serving a goal) and names what breaks the layout, so a report reads `--json` instead of parsing Markdown. Records written before read as unstructured. Separately: Planning step 4 says so: committing a `Portfolio Backlog` or `Funnel` row moves it to `Not Started`, which `wbs.py` now does itself (TD.1 v1.6), and `check` warns on a committed row left behind. |

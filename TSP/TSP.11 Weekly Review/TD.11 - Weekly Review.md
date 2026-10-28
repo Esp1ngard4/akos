@@ -84,6 +84,7 @@ If goals are kept outside the registers, step 5 reminds the user to update it. K
 
 ## Relationship to other tools
 
+- **TSP.15 Team Status Board**: the team's board, consolidated in *Beyond the sprint* where a project keeps one.
 - **TSP.9 Daily Loop**: writes the day records the review reads, and its evening says when no weekly record is newer than a week. The risk scan the stand-up leaves out happens here.
 - **TSP.8 Sprint Ceremonies**: the goals, and the `Noticed` table where findings go. The review never runs a ceremony.
 - **TSP.1 WBS Register** and **TSP.2 RAID Register**: the work beyond the sprint, the committed work, and the risks.
@@ -110,6 +111,7 @@ If goals are kept outside the registers, step 5 reminds the user to update it. K
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.4 | 2026-10-28 | *Beyond the sprint* consolidates the team's board where a project keeps one (TSP.15): its proposals join the week's batch, decided with the product manager. |
 | v1.3 | 2026-10-28 | *Beyond the sprint* names the project briefs due a revisit (TSP.14): `brief.py check` per project, the *revisit due* line only, silent when none is. The revisit runs through Project Definition. A brief carries its own clock because this review, not a monthly one, is where it can be seen. |
 | v1.2 | 2026-10-27 | **The sprint check reads the stakeholder registers** (TSP.13): communications overdue and stakeholders below the engagement wanted with no action, three lines at most, silent when there are none. Read only; sending stays with the close-out. It replaces the *A stakeholder register* adaptation, now that one ships. |
 | v1.1 | 2026-10-26 | *Waiting on someone* also reads the action trackers (TSP.12): rows owed by someone other than the tracker's owner that are past their due date, or `TBD` with no checkpoint or a passed one, three at most, the missing checkpoints first. A chase is the row's Latest update, through `action-tracker-manager`. |

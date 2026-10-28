@@ -244,6 +244,8 @@ python <skill-path>/scripts/wbs.py set "<register>" --id 58 --status Done --clos
 
 `--pulled-in` sets `Sprint Added`, notes the effect on the row and prints the line for the sprint record's *Committed items*, with `Area` left for the user to fill: add it the same day (sprint-facilitator, *A pull-in states its effect*). `--outside-sprint` notes why and marks nothing. Never pick the answer: it is the user's. Other edits to an uncommitted row are not asked about.
 
+**Where the team keeps a status board** (`status-board-manager`), follow a pull-in, a carried split or a cancellation with its *Update the board*, so the team sees the commitment the same day. Without a board there is no such step; `wbs.py` itself knows nothing of boards.
+
 **The daily check** lists rows pulled into the running sprint that its record does not name yet, across every WBS register under a root folder (found by `meta.kind`, so a register created mid-sprint is included). The record is found as the sprint ceremonies find theirs (`<sprint>.md`, first line `# Sprint `), or named with `--records`. It reads an item as `<scope> <ID> <title>`, `<scope> 3, 4 <title>` for several rows, or the IDs in brackets after the title. The daily loop's evening runs it:
 
 ```bash

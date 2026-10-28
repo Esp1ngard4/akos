@@ -75,6 +75,8 @@ Ask the user which, in one question; the answer is theirs. Pulling in is fine: t
 
 The WBS tool asks at the moment work starts: `wbs.py set --status Implementing` on a row the sprint never committed to is refused until it is given `--pulled-in "<effect>"` or `--outside-sprint "<reason>"`, and a pull-in prints its line for *Committed items*, `Area` left for the user. Add that line the same day. `wbs.py pullins` lists any pulled-in row the record does not name yet; a daily routine runs it (`daily-loop-facilitator`, the evening).
 
+**Where the team keeps a status board** (`status-board-manager`), a pull-in, or a row cancelled mid-sprint, reaches the board the same day through its *Update the board*. Without a board there is no such step.
+
 ## Ready means three things are stated
 
 A candidate is **ready** when it states:
@@ -112,6 +114,8 @@ Grooming produces enough refined work to fill a sprint. Choosing among it is pla
 ## Running the sprint close-out
 
 On the sprint's last day, before the retro. **It inspects the result**: what the sprint delivered against what it took on. How the work went is the retro's question, and a close-out that drifts into "we should estimate differently" has taken the retro's job.
+
+0. **Consolidate the team's board first**, where the project keeps one (`status-board-manager`, *Consolidate*), so the close-out works from the team's latest. Without a board there is no step and nothing is said.
 
 1. **Open with the numbers**, across every register the sprint spanned:
 
@@ -175,11 +179,13 @@ On the next sprint's first day. The close-out and the retro ran the day before.
    ```
 
    Fill in the capacity line, the committed items, the goals (replace each `draft:` with the decided wording or drop it) and the fist of five. Pre-fill nothing the session has not decided.
+7. **Set up the team's board**, where the project keeps one (`status-board-manager`, *Set up*): the rows just committed, and the closed sprint's board archived. Without the tool there is no step.
 
 ## Relationship to other skills
 
 - **`sprint-planning-precheck`** is the second half of the close-out. It reads and reports; this skill decides and writes.
 - **`wbs-manager`** owns every write to a WBS row. This skill tells it what to write and when.
 - **`raid-manager`** owns RAID entries. This skill routes to it.
+- **`status-board-manager`**, where a team updates its status on a board: planning sets it up, the close-out consolidates it first.
 - **`tsp-manager`** owns control activities. Planning reads `due` and records `done`.
 - **A daily routine** can run `sprint_record.py status` each day so a missed ceremony surfaces without being asked for. It reports; it never runs a ceremony.

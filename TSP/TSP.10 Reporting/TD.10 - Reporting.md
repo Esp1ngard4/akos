@@ -68,6 +68,7 @@ Any of them can be shared outside the work as a filtered copy (`export`), as HTM
 
 ## Relationship to other tools
 
+- **Team Status Board (TSP.15)**: where a board exists, the status report says when it was last consolidated, since the WBS is only as fresh as that.
 - **WBS Register (TSP.1)**: the source of deliverables, baselines, closures and sprint membership. The reports never write to it.
 - **RAID Register (TSP.2)**: risks, issues, Changes and their outcomes, and each entry's DRI and trend. Read only.
 - **Sprint Ceremonies (TSP.8)**: the close-out generates a status report per project, and planning ends with the sprint update. The sprint records supply goals, capacity and the fist of five.
@@ -92,6 +93,7 @@ Any of them can be shared outside the work as a filtered copy (`export`), as HTM
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.6 | 2026-10-28 | **The status report says how fresh the WBS is** where a team board exists (TSP.15): *the WBS as of the team board's last consolidation*, or that it has not been consolidated yet. No board, nothing said. |
 | v1.5 | 2026-10-28 | **The brief is read through Project Definition (TSP.14).** The status report and the charter stop parsing the brief: they read it through `brief.py`, the measures' vocabulary and date checks are the brief's own, and only whether a value reads as a number stays here, since scoring needs it. The template moves from `templates/` into TSP.14. A copy without TSP.14 installed says so in the outcome section and on the charter, and runs on. The executive statement is found in the brief's own language. |
 | v1.4 | 2026-10-27 | **A project folder can hold more than registers, and number its folders.** Looking for the WBS and RAID, a JSON that is not a register (an installer's lock) is skipped; it used to stop every report. Reports go into the project's reports folder whatever its number (`05. Reports`, or `Reports`), so a project whose artifact register numbers its folders keeps one. Found installing the tools into an existing project's management folder. |
 | v1.3 | 2026-10-27 | **Reports can be shared, and a charter says what the project is.** `export` writes a filtered copy for someone outside the work, as HTML and optionally PDF, holding only RAID entries marked `Sharable = Y` and refusing an unconfirmed report; `--comm` takes the share level from the project's Stakeholder Register, and a status report records who receives it. `report.py charter` puts the project on one page from its brief and registers. Trends are drawn one way everywhere, up is better, as chips with a key; explanations sit behind an info icon; the key deliverables map stacks on a phone. *On Time* counts only a rebaseline to a later date. |

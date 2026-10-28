@@ -228,6 +228,36 @@
       "Description": "TD.4 v1.2: add names the catalogue skills the installed skill's SKILL.md mentions that the project does not have yet.",
       "ID": 38,
       "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TSP.15 published: the team's sprint board and its consolidation into the WBS, standard library only (xlsx.py), steps in planning, the weekly review and the close-out where installed.",
+      "ID": 39,
+      "Tool": "Team Status Board"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.8 v1.5: planning sets up the team's board, the close-out consolidates it first, a pull-in or a cancellation reaches it the same day (TSP.15), each only where installed.",
+      "ID": 40,
+      "Tool": "Sprint Ceremonies"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.11 v1.4: Beyond the sprint consolidates the team's board where a project keeps one (TSP.15).",
+      "ID": 41,
+      "Tool": "Weekly Review"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.1 v1.16: a pull-in, a carried split or a cancellation is followed by the board's update where a team board exists (TSP.15); wbs.py knows nothing of boards.",
+      "ID": 42,
+      "Tool": "WBS Register"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.10 v1.6: the status report says when the team's board was last consolidated (TSP.15).",
+      "ID": 43,
+      "Tool": "Reporting"
     }
   ],
   "control_activities": [],
@@ -278,8 +308,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T09:39:04",
-    "values_hash": "sha256:01058cf79536f422d1898186ff85cd7b3494b9dda6a3d230973b0c5589fc19ef",
+    "updated": "2026-10-28T13:08:27",
+    "values_hash": "sha256:4f70f7d214c667be33bd6835e85f4477a0472f76ebdd81350c1dc762ad08a434",
     "version": 1
   },
   "tools": [
@@ -475,6 +505,20 @@
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "project-definition-manager",
+      "Status": "In Progress",
+      "Type": "Tool"
+    },
+    {
+      "Description": "Where a team updates the status of its own work, one Excel board per sprint beside the WBS, edited by the team or through Copilot in Excel, and its consolidation into the WBS: set up at planning, updated when a commitment changes, consolidated at the weekly review and the close-out through proposals the product manager confirms. A step in those ceremonies only where it is installed; the WBS keeps one writer.",
+      "Doc Aux": "Yes",
+      "ID": 15,
+      "Last Reviewed": "2026-10-28",
+      "Links": "TSP/TSP.15 Team Status Board/TD.15 - Team Status Board.md",
+      "Name": "Team Status Board",
+      "Notes": "Not yet used on real work: exercised by its smoke test on a scratch project, and opened, edited and saved in Excel during its build. Needs wbs-manager beside it. Planner, Lists, Jira and GitHub Projects named in TD.15 as adaptations; none built.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "status-board-manager",
       "Status": "In Progress",
       "Type": "Tool"
     }

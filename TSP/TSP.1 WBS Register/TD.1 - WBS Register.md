@@ -37,6 +37,8 @@ This document covers what the skill doesn't: why the register exists, its naming
 
 ## Relationship to other tools
 
+**Team Status Board (TSP.15)** — where a team updates its status on a sprint board, the register keeps one writer: the board is consolidated into it, and a mid-sprint commitment reaches the board through its update.
+
 **Task tracker** — items move from the WBS into a tracker when committed to a sprint. One-way and manual. The WBS is not a task list and degrades into an unusable one if treated as such.
 
 **[RAID register](../TSP.2%20RAID%20Register/TD.2%20-%20RAID%20Register.md)** — different jobs. WBS is the roadmap of intended work; RAID is the live register of risks, issues, decisions and ideas. A RAID Action may correspond to a WBS item, but they are maintained independently and cross-referenced by ID. A RAID entry can name the row it bears on in its `WBS Ref` (`<scope>#<id>`); `wbs.py refined --raid` shows those open entries next to the candidate at grooming.
@@ -83,6 +85,7 @@ Once a sprint's work lives in two places — rows here, tasks in a tracker — t
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.16 | 2026-10-28 | **A team updates its status on a board, and the WBS keeps one writer** (TSP.15): a pull-in, a carried split or a cancellation is followed by the board's update, where a board exists. `wbs.py` itself knows nothing of boards. |
 | v1.15 | 2026-10-27 | **Sprints: one set of sprint figures, and the trend in Analytics.** The Sprint Board tab becomes Sprints: every sprint with work, newest first, the running one open and the older ones folded to their figures; each header is the Current Sprint strip, from `wbs.py metrics`; rows grouped Committed, Carried in, Pulled in and Closed here, each with a link to its parent. Analytics opens with committed against delivered hours per sprint and the velocity (average delivered over the last three ended sprints). The tab's own sprint sum, which disagreed with the metrics (Synaptica Q4.1: 200h against 76h committed and 176h delivered), goes, with the Unplanned list and the filters only it used. |
 | v1.14 | 2026-10-27 | **The Breakdown reads at any depth.** A level-1 row is a section band; below it a thin guide line per level shows which rows are siblings; a wrapped title stays under its own level; parent rows are semibold. Before, 18px a level, wrapped titles back at the left edge and parents looking like leaves lost the hierarchy below level 2. Chosen from three previews. |
 | v1.13 | 2026-10-27 | **A sprint card names its direct parent only.** On one line, cut with an ellipsis, the full chain in its tooltip; in a lane, a parent that is the lane's head is not repeated. The full path stays in the card's details. The full path ran outside the card on a board with long titles. |

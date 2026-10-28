@@ -84,6 +84,29 @@ def _stk():
     return _STK[0]
 
 
+# ─── The team's status board (status-board-manager, TSP.15) ─────────────────
+#
+# Where a team updates its status on a board and the product manager
+# consolidates it into the WBS, the WBS is only as fresh as the last
+# consolidation, so the status report says when that was. No board, or the
+# tool not installed: nothing is said, and the report reads as it always did.
+
+_BOARD = []
+
+
+def board_freshness(wbs_path, sprint):
+    if not _BOARD:
+        folder = optional_sibling("status-board-manager")
+        module = None
+        if folder:
+            scripts = os.path.join(folder, "scripts")
+            if scripts not in sys.path:
+                sys.path.append(scripts)
+            import board as module
+        _BOARD.append(module)
+    return _BOARD[0].last_consolidated(wbs_path, sprint) if _BOARD[0] else None
+
+
 def solo_default(scope=""):
     return {"meta": {"kind": "stakeholder-register", "scope": scope, "default": True, "settings": {}},
             "groups": [],
@@ -966,6 +989,7 @@ def cmd_status(args):
            "sources": {"wbs": os.path.relpath(wbs.path, prjmgm),
                        "raid": [os.path.relpath(p, prjmgm) for p in regs["raid"]]},
            "previous": None, "signals": signals,
+           "board": board_freshness(wbs.path, sprint),
            "focus": "", "highlights": "",
            # What waits on a decision is a Change with no Outcome. A RAID Decision
            # records a choice already made, so it asks nothing of the reader.
@@ -1807,8 +1831,12 @@ def render_status(rec):
     milestones = ('<section class="card"><h2>Key deliverables%s</h2>%s</section>' % (info_tip(e(ROADMAP_INFO)), roadmap_html(rec["milestones"], ids=not external)))
     risks = '<section class="card"><h2>Top risks and issues</h2>%s</section>' % risks_html(
         rec["risks"], "No risks or issues shared." if external else "No open risks or issues.")
-    sub = "%s · %s → %s · as of %s%s" % (e(rec["sprint"]), e(rec["period"]["start"]), e(rec["period"]["end"]),
-                                         e(rec["as_of"]), " · shared version" if external else "")
+    board = rec.get("board")
+    fresh = (" · the WBS as of the team board's last consolidation, %s" % e(board["consolidated"])
+             if board and board.get("consolidated") else
+             " · the team board not consolidated yet" if board else "")
+    sub = "%s · %s → %s · as of %s%s%s" % (e(rec["sprint"]), e(rec["period"]["start"]), e(rec["period"]["end"]),
+                                           e(rec["as_of"]), fresh, " · shared version" if external else "")
     return page("%s status" % rec["scope"], sub, summary_html(rec) + outcome_html(rec) + e4 + focus + milestones + risks + audiences_html(rec),
                 SHARED_FOOTER if external else None)
 
