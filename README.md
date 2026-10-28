@@ -75,18 +75,28 @@ batch. On the last day, the review, the status report and the retro.
 Everything runs on files in your own repository: JSON registers, Markdown, an Excel board.
 No service, no account, and nothing to install beyond Python 3.9.
 
+**A new project** is one command:
+
 ```bash
 git clone https://github.com/Esp1ngard4/akos.git
-for s in project-definition-manager wbs-manager raid-manager sprint-facilitator \
-         weekly-review-facilitator reporting status-board-manager onboarding-guide; do
-  python akos/install.py add $s --into <your-repo>
-done
+python akos/install.py init my-project --name "My project"
 ```
 
-Commit `.agents/skills/` and `tools.lock.json` together, so everyone who clones gets the same
-tools. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
-`--dest .claude/skills`. Then ask your agent, in plain language: *"let's write the project
-brief"*, then *"let's run sprint planning"*.
+It installs the project pack's tools and sets the project up the way the conventions say: the
+planning folder and its numbered folders, each register created empty by its own tool, a sprint
+calendar (two weeks from next Monday, unless you say otherwise), the brief's template and a first
+onboarding guide. Commit it, open it with your agent and say *"let's write the project brief"*.
+[Your first hour](https://esp1ngard4.github.io/akos/first-hour.html) walks through what follows.
+
+**A project already running** adds the tools it needs, one at a time:
+
+```bash
+python akos/install.py add wbs-manager --into <your-repo>
+```
+
+Either way, commit `.agents/skills/` and `tools.lock.json` together, so everyone who clones gets
+the same tools. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
+`--dest .claude/skills`.
 
 ## The tools
 

@@ -53,62 +53,58 @@ def e(text):
 
 # ─── Atlas, and the first hour that sets it up ───────────────────────────────
 
-def skill_script(skill, name):
-    for tool in sorted(os.listdir(TSP)):
-        path = os.path.join(TSP, tool, skill, "scripts", name)
-        if os.path.isfile(path):
-            return path
-    raise SystemExit("No %s in any %s" % (name, skill))
-
+PACK = json.load(io.open(os.path.join(ROOT, "packs", "project.json"), encoding="utf-8"))
+INIT = ["init", "Atlas", "--pack", "project", "--name", "Atlas", "--first-day", "2026-07-06"]
+WBS, RAID, STK = "0. PrjMgm/01. WBS/WBS Atlas.json", "0. PrjMgm/02. RAID/RAID Atlas.json", "0. PrjMgm/04. Comms/Stakeholders Atlas.json"
 
 # Each step: what you say, what the agent does, what you get, and the commands
-# it runs: (skill, script, args), args naming files under the Atlas folder.
+# that run, from the Atlas folder: (skill, script, args). The first step is the
+# installer's, run by a person; the rest run through the skills it installed.
 FIRST_HOUR = [
+    {"title": "Start the project",
+     "run_by": "you",
+     "agent": "Run the installer once, with the project pack. It installs the pack's %d tools and sets the project up the way the conventions say: "
+              "the planning folder with its numbered folders, each register created empty by its own tool, a sprint calendar, the brief's template, "
+              "and a first onboarding guide. Starting a project is a person's decision, so no agent does it." % len(PACK["skills"]),
+     "get": "A project an agent can work in from the first message. Commit it.",
+     "run": [("install", "install.py", INIT)]},
     {"title": "Write the brief",
      "say": "Let's write the project brief for Atlas.",
-     "agent": "Starts the brief from the template, then asks you why the project exists, what done looks like and what would make you stop, drafting each part for you to confirm.",
-     "get": "Project Brief.md: the statement the whole team reads first.",
+     "agent": "Asks you why the project exists, what done looks like and what would make you stop, and writes each part into the brief for you to confirm.",
+     "get": "The statement the whole team reads first.",
      "link": ("Atlas's brief", REPO + "/blob/main/site/atlas/Project%20Brief.md"),
-     "run": [("project-definition-manager", "brief.py", ["new", "0. PrjMgm", "--title", "Atlas"])]},
-    {"title": "Set up the backlog",
-     "say": "Set up a backlog for Atlas, with two-week sprints starting on Monday 6 July.",
-     "agent": "Creates the WBS register and imports a sprint calendar into it, so every piece of work can be committed to a sprint.",
-     "get": "WBS Atlas.json, and its dashboard whenever you ask for it.",
-     "run": [("wbs-manager", "create_wbs.py", ["0. PrjMgm/1. WBS/WBS Atlas.json", "Atlas"]),
-             ("wbs-manager", "wbs.py", ["sprints", "seed", "conventions.json", "--scope", "Atlas", "--year", "2026", "--anchor", "2026-07-06"]),
-             ("wbs-manager", "wbs.py", ["sprints", "import", "0. PrjMgm/1. WBS/WBS Atlas.json", "--from", "conventions.json"])]},
+     "fixture": ("Project Brief.md", "0. PrjMgm/07. Project Brief.md"),
+     "run": [("project-definition-manager", "brief.py", ["check", "0. PrjMgm"])]},
     {"title": "Break the work down",
      "say": "Add the self-service sign-up as a key deliverable, with four features: the form, email verification, the identity check and the welcome.",
      "agent": "Adds each row under its parent with a stable ID, holding every field to the register's own vocabulary.",
      "get": "Five rows, ready for acceptance criteria and estimates at grooming.",
-     "run": [("wbs-manager", "wbs.py", ["add", "0. PrjMgm/1. WBS/WBS Atlas.json", "Self-service sign-up", "--type", "Deliverable", "--key-deliverable", "Y"])]
-            + [("wbs-manager", "wbs.py", ["add", "0. PrjMgm/1. WBS/WBS Atlas.json", t, "--type", "Feature", "--parent", "1"])
+     "run": [("wbs-manager", "wbs.py", ["add", WBS, "Self-service sign-up", "--type", "Deliverable", "--key-deliverable", "Y"])]
+            + [("wbs-manager", "wbs.py", ["add", WBS, t, "--type", "Feature", "--parent", "1"])
                for t in ("Sign-up form", "Email verification", "Identity check", "Welcome to the dashboard")]},
     {"title": "Log what could go wrong, and what was decided",
      "say": "Log a risk: the provider's identity check may not be in its sandbox by sprint two. Maya owns it. And record that we chose one responsive flow over a separate mobile one.",
      "agent": "Writes each entry in its type's own sentence (because of, there is a risk that, which may result in), with an owner, and refuses one with a slot missing.",
-     "get": "A RAID register with a risk and a decision, each traceable.",
-     "run": [("raid-manager", "create_raid.py", ["0. PrjMgm/2. RAID/RAID Atlas.json", "Atlas"]),
-             ("raid-manager", "raid.py", ["add", "0. PrjMgm/2. RAID/RAID Atlas.json", "Identity check in the sandbox", "--type", "Risk",
+     "get": "A risk and a decision, each traceable.",
+     "run": [("raid-manager", "raid.py", ["add", RAID, "Identity check in the sandbox", "--type", "Risk",
                                           "--because-of", "a provider release we do not control",
                                           "--risk-that", "the payments provider's identity check is not in its sandbox by sprint two",
                                           "--may-result-in", "the identity step slipping a sprint", "--dri", "Maya Torres"]),
-             ("raid-manager", "raid.py", ["add", "0. PrjMgm/2. RAID/RAID Atlas.json", "One flow for web and mobile", "--type", "Decision",
+             ("raid-manager", "raid.py", ["add", RAID, "One flow for web and mobile", "--type", "Decision",
                                           "--chose", "one responsive flow", "--over", "a separate mobile flow", "--because", "the same steps, half the testing"])]},
     {"title": "Say who's who",
      "say": "Set up who's who: the product team, and the steering group with Ruth as sponsor. Steering gets the status report every sprint.",
-     "agent": "Creates the stakeholder register, its groups and people, and a communications plan saying who receives what, and when.",
-     "get": "A stakeholder register. Contacts go in a file beside it that stays out of git.",
-     "run": [("stakeholder-manager", "create_stk.py", ["0. PrjMgm/4. Comms", "--scope", "Atlas"]),
-             ("stakeholder-manager", "stk.py", ["add-group", "{stk}", "Product team", "--purpose", "Builds and verifies the product"]),
-             ("stakeholder-manager", "stk.py", ["add-group", "{stk}", "Steering", "--purpose", "Owns the outcome and the budget"])]
-            + [("stakeholder-manager", "stk.py", ["add", "{stk}", n, "--role", r, "--groups", g])
+     "agent": "Adds the groups and the people, and a communications plan saying who receives what, and when.",
+     "get": "Who's who in the guide, and what each audience receives. Contacts stay in a file beside it, out of git.",
+     "run": [("stakeholder-manager", "stk.py", ["add-group", STK, "Product team", "--purpose", "Builds and verifies the product"]),
+             ("stakeholder-manager", "stk.py", ["add-group", STK, "Steering", "--purpose", "Owns the outcome and the budget"])]
+            + [("stakeholder-manager", "stk.py", ["add", STK, n, "--role", r, "--groups", g])
                for n, r, g in (("Maya Torres", "Product manager", "G.1"), ("Leo Brandt", "Developer", "G.1"), ("Sara Lind", "Developer", "G.1"),
                                ("Ines Okafor", "Validation and quality", "G.1"), ("Ruth Calder", "Sponsor", "G.2"), ("Tom Reyes", "Head of support", "G.2"))]
-            + [("stakeholder-manager", "stk.py", ["add-comm", "{stk}", "Status report", "--mode", "push", "--audience", "G.2", "--cadence", "per sprint", "--channel", "email"]),
-               ("stakeholder-manager", "stk.py", ["add-comm", "{stk}", "Sprint review", "--mode", "push", "--audience", "G.1,G.2", "--cadence", "per sprint", "--channel", "meeting"])]},
+            + [("stakeholder-manager", "stk.py", ["add-comm", STK, "Status report", "--mode", "push", "--audience", "G.2", "--cadence", "per sprint", "--channel", "email"]),
+               ("stakeholder-manager", "stk.py", ["add-comm", STK, "Sprint review", "--mode", "push", "--audience", "G.1,G.2", "--cadence", "per sprint", "--channel", "meeting"])]},
     {"title": "Bring the team in",
-     "say": "Generate the onboarding guide.",
+     "say": "Regenerate the onboarding guide.",
      "agent": "Reads the brief, the registers and the tools installed, and writes the team guide and the executive overview from them. Nothing in either is typed by hand.",
      "get": "Two pages to share: one for the team, one for everyone else.",
      "link": ("Atlas's team guide", "atlas/"),
@@ -117,59 +113,25 @@ FIRST_HOUR = [
 NEXT = ("Let's run sprint planning.", "Capacity first, then the sprint's goals, then the work: the agent proposes, you decide, and it writes the record. "
         "From then on, the rhythm in Atlas's guide takes over.")
 
-# The tools Atlas's team runs: the project tools, not the personal ones.
-SKILLS = ["wbs-manager", "raid-manager", "sprint-facilitator", "weekly-review-facilitator", "reporting",
-          "project-definition-manager", "status-board-manager", "stakeholder-manager", "artifact-register",
-          "action-tracker-manager", "tsp-manager", "onboarding-guide"]
-FOLDERS = [(1, "WBS", "The backlog: every piece of work, and the sprint calendar"),
-           (2, "RAID", "Risks, actions, issues and decisions, each with an owner"),
-           (3, "Sprints", "The sprint records the ceremonies write"),
-           (4, "Comms", "The stakeholder register and the communications plan"),
-           (5, "Reports", "The status reports, generated each close-out"),
-           (6, "Onboarding", "This guide, generated from the project's own files"),
-           (7, "Artifact Register", "Where every document lives")]
-
 
 def build_atlas(where):
-    """Set Atlas up under `where`, running the first hour's steps; return its planning folder."""
+    """Set Atlas up under `where` by running the first hour; return its planning folder."""
     atlas = os.path.join(where, "Atlas")
-    prj = os.path.join(atlas, "0. PrjMgm")
-    os.makedirs(os.path.join(atlas, "1. Execution"))
-    for i, name, _ in FOLDERS:
-        os.makedirs(os.path.join(prj, "%d. %s" % (i, name)))
-    # What a team has before its first hour: the tools installed, a sprint record folder.
-    with io.open(os.path.join(prj, "tools.lock.json"), "w", encoding="utf-8") as fh:
-        json.dump({"source": REPO + ".git", "tools": {s: {} for s in SKILLS}}, fh, indent=2)
-    with io.open(os.path.join(prj, "3. Sprints", "S26.Q4.2.md"), "w", encoding="utf-8") as fh:
-        fh.write("# Sprint S26.Q4.2\n\n## Planning\n")
-
-    names = {}
+    skills = os.path.join(atlas, PACK.get("dest", ".agents/skills").replace("/", os.sep))
     for step in FIRST_HOUR:
+        if step.get("fixture"):
+            # The conversation writes the brief; here, Atlas's finished brief stands in for it.
+            shutil.copy(os.path.join(FIXTURES, step["fixture"][0]), os.path.join(atlas, step["fixture"][1]))
         for skill, name, args in step["run"]:
-            args = [os.path.join(atlas, a) if ("/" in a and not a.startswith("--")) or a in ("0. PrjMgm", "conventions.json") else a
-                    for a in (names.get(a, a) for a in args)]
-            p = subprocess.run([sys.executable, skill_script(skill, name)] + args, capture_output=True, text=True, encoding="utf-8", env=ENV, cwd=atlas)
+            if skill == "install":
+                cmd = [os.path.join(ROOT, "install.py")] + args + ["--source", REPO + ".git"]
+                cwd = where
+            else:
+                cmd, cwd = [os.path.join(skills, skill, "scripts", name)] + args, atlas
+            p = subprocess.run([sys.executable] + cmd, capture_output=True, text=True, encoding="utf-8", env=ENV, cwd=cwd)
             if p.returncode != 0:
                 sys.exit("First hour, %s: %s failed\n%s" % (step["title"], name, (p.stdout + p.stderr)[-1500:]))
-            if name == "create_stk.py":
-                comms = os.path.join(prj, "4. Comms")
-                names["{stk}"] = next(os.path.join(comms, n) for n in sorted(os.listdir(comms)) if n.endswith(".json"))
-        if step["title"] == "Write the brief":
-            # The conversation fills the template in; here, Atlas's finished brief stands in for it.
-            shutil.copy(os.path.join(FIXTURES, "Project Brief.md"), os.path.join(prj, "Project Brief.md"))
-
-    art = os.path.join(prj, "7. Artifact Register", "Artifact Register Atlas.json")
-    p = subprocess.run([sys.executable, skill_script("artifact-register", "create_artifact_register.py"), art, "Atlas"],
-                       capture_output=True, text=True, encoding="utf-8", env=ENV)
-    if p.returncode != 0:
-        sys.exit(p.stdout + p.stderr)
-    sys.path.insert(0, os.path.dirname(skill_script("artifact-register", "registry.py")))
-    import registry as R
-    data = R.load(art)
-    data.setdefault("artifacts", []).extend({"ID": i, "Name": n, "Type": "Folder", "Description": d, "Status": "Active", "Parent Digital": "0"}
-                                            for i, n, d in FOLDERS)
-    R.save(art, data)
-    return prj
+    return os.path.join(atlas, PACK["planning"])
 
 
 # ─── Reading the sources ─────────────────────────────────────────────────────
@@ -303,6 +265,11 @@ EXTRA_CSS = """<style>
 .toolcard:hover { border-color:color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .toolcard .k { font:600 12px var(--mono); color:var(--muted); }
 .toolcard p { font-size:14.5px; }
+.toplink.cta { background:var(--accent); color:var(--bg); }
+.toplink.cta:hover { color:var(--bg); filter:brightness(1.08); }
+.start p { margin-top:12px; font-size:15px; color:var(--ink2); }
+.actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+.actions .btn { text-decoration:none; }
 .chips { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
 .chip { font:600 11.5px var(--body); letter-spacing:.04em; text-transform:uppercase; padding:4px 10px; border-radius:999px; background:var(--tint); color:var(--ink2); }
 .hour { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:14px; counter-reset:hour; }
@@ -320,8 +287,23 @@ EXTRA_CSS = """<style>
 
 def nav(depth, here):
     up = "../" * depth
-    links = [("index.html", "Home"), ("tools/index.html", "The tools"), ("first-hour.html", "Your first hour"), ("atlas/", "Atlas")]
-    return "".join('<a class="toplink" href="%s%s"%s>%s</a>' % (up, h, ' aria-current="page"' if h == here else "", t) for h, t in links)
+    links = [("index.html", "Home"), ("tools/index.html", "The tools"), ("atlas/", "Atlas")]
+    return ("".join('<a class="toplink" href="%s%s"%s>%s</a>' % (up, h, ' aria-current="page"' if h == here else "", t) for h, t in links)
+            + '<a class="toplink" href="%s">GitHub</a>' % REPO
+            + '<a class="toplink cta" href="%sfirst-hour.html"%s>Start a project</a>' % (up, ' aria-current="page"' if here == "first-hour.html" else ""))
+
+
+def start(depth):
+    """Where every page ends up: the one command, and where to go from it."""
+    up = "../" * depth
+    cmd = ("git clone %s.git\npython akos/install.py init my-project --name \"My project\"" % REPO)
+    return G.section("start", "Start yours", "Start",
+                     '<div class="card cmd start"><pre>%s</pre><p>That is the whole setup: the pack\'s tools, the folders, the registers, the brief\'s template and a first guide. '
+                     'Then open the project with your agent and say <q>Let\'s write the project brief.</q></p>'
+                     '<div class="actions"><a class="btn primary" href="%sfirst-hour.html">Walk through the first hour</a>'
+                     '<a class="btn" href="%s">AKOS on GitHub</a><a class="btn" href="%s#start">Already running a project?</a></div></div>'
+                     % (e(cmd), up, REPO, REPO), "Start", "Start yours",
+                     "A new project, set up the way the conventions say, in one command. A project already running adds the tools it needs one at a time.")
 
 
 def page(title, sub, body, depth, here):
@@ -345,6 +327,7 @@ def front(title, intro, areas, people):
     out.append(G.section("people", "What stays with people", "What", '<div class="card personcard"><p>%s</p></div>' % e(people), "People", "What stays with people"))
     out.append(G.section("loop", "How work gets done", "How", G.work_loop({"execution": {}}, exec_=True), "How",
                          "How a piece of work gets done", "Researched, specified and planned before it is built: the agent drafts each stop, a person approves the plan."))
+    out.append(start(0))
     return page("AKOS: AI as a member of the team", "AI as a member of the team", "".join(out), 0, "index.html")
 
 
@@ -385,7 +368,9 @@ def tool_page(t, pages):
     links = ('<p class="src"><a href="%s/blob/main/%s">The full design document</a> · <a href="%s/tree/main/%s">The tool\'s folder</a></p>'
              % (REPO, quote("TSP/%s/%s" % (folder, td_name)), REPO, quote("TSP/" + folder)))
     out.append(G.section("install", "Install it", "How", '<div class="card cmd"><pre>git clone %s.git\n%s</pre></div>%s' % (REPO, e(cmds), links),
-                         "Start", "Install it"))
+                         "Start", "Install it", "Into a project already running. A new project gets this tool with the rest of the pack, in one command: "
+                         "see Start yours, below."))
+    out.append(start(1))
     return page("AKOS: %s" % t["name"], t["id"] + " · " + t["name"], "".join(out), 1, "")
 
 
@@ -393,14 +378,12 @@ def first_hour():
     def show(arg):
         return '"%s"' % arg if (" " in arg or "'" in arg) else arg
     steps = []
-    install = "\n".join(["git clone %s.git" % REPO, "for s in %s; do" % " ".join(SKILLS[:5]),
-                         "  python akos/install.py add $s --into <your-repo>", "done   # and the rest of the set"])
-    steps.append(("Install the tools", None, "Run the installer once, for the tools your team needs. It copies each skill into your repository and records where it came from, so everyone who clones has the same tools. Installing is a person's decision, so no agent does it.",
-                  "The skills, and tools.lock.json: commit both.", None, install))
     for s in FIRST_HOUR:
-        cmds = "\n".join("python <skills>/%s/scripts/%s %s" % (sk, name, " ".join(show(a.replace("{stk}", "0. PrjMgm/4. Comms/Stakeholders Atlas.json")) for a in args))
+        cmds = "\n".join(("python akos/install.py " if sk == "install" else "python <skills>/%s/scripts/%s " % (sk, name)) + " ".join(show(a) for a in args)
                          for sk, name, args in s["run"])
-        steps.append((s["title"], s["say"], s["agent"], s["get"], s.get("link"), cmds))
+        if s.get("fixture"):
+            cmds = "# the agent edits %s with you, then checks it\n%s" % (s["fixture"][1], cmds)
+        steps.append((s["title"], s.get("say"), s["agent"], s["get"], s.get("link"), cmds))
     items = []
     for n, (title, say, agent, get, link, cmds) in enumerate(steps, 1):
         lines = []
@@ -416,7 +399,7 @@ def first_hour():
     body = G.section("first-hour", "Your first hour", "Start", '<ol class="hour">%s</ol>' % "".join(items), "Try it", "Your first hour, on Atlas",
                      "Atlas is a made-up project. These are the steps that set it up, in the order a team would take them: what you say, what the agent does, "
                      "and what runs underneath. They are not illustrations: the site is built by running them.")
-    return page("AKOS: your first hour", "Your first hour", body, 0, "first-hour.html")
+    return page("AKOS: your first hour", "Your first hour", body + start(0), 0, "first-hour.html")
 
 
 def build():
@@ -431,8 +414,10 @@ def build():
         rec = O.gather(build_atlas(tmp), AS_OF)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    site["atlas/index.html"] = G.render_team(rec, "executive.html")
-    site["atlas/executive.html"] = G.render_exec(rec)
+    back = ('<a class="toplink" href="../">AKOS</a><a class="toplink" href="%s">GitHub</a>'
+            '<a class="toplink" href="../first-hour.html" style="background:var(--accent);color:var(--bg)">Start a project</a><div class="search">' % REPO)
+    site["atlas/index.html"] = G.render_team(rec, "executive.html").replace('<div class="search">', back, 1)
+    site["atlas/executive.html"] = G.render_exec(rec).replace('<div class="search">', back, 1)
     return site
 
 

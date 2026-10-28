@@ -2,6 +2,7 @@
 """Install AKOS tools into a project, and keep them in sync afterwards.
 
     python install.py list
+    python install.py init ../my-project --pack project --name "Atlas"
     python install.py add wbs-manager --into ../my-project
     python install.py status
     python install.py diff wbs-manager
@@ -22,6 +23,11 @@ The record lives in tools.lock.json at the project root.
 With --docs, a tool's definition document (its TD) is placed too, in the
 project's own TSP folder, and locked as its own entry: a project that owns and
 evolves its TDs still sees where the catalogue's have moved on.
+
+`init` starts a new project from a pack (packs/<name>.json): the pack's tools
+added as above, then its structure set up by those installed tools' own
+scripts. It refuses a folder that already holds a project; a running project
+adds its tools one at a time instead.
 """
 
 import argparse
@@ -454,6 +460,119 @@ def cmd_add(args):
     return 0
 
 
+# --- init: a new project from a pack ----------------------------------------
+
+PACKS = "packs"
+# What a freshly created repository may already hold before init.
+FRESH = {".git", ".gitignore", ".gitattributes", ".github", "README.md", "LICENSE", "LICENSE.md"}
+
+
+def read_pack(catalogue, name):
+    path = os.path.join(catalogue, PACKS, "%s.json" % name)
+    if not os.path.isfile(path):
+        have = sorted(n[:-5] for n in os.listdir(os.path.join(catalogue, PACKS)) if n.endswith(".json")) \
+            if os.path.isdir(os.path.join(catalogue, PACKS)) else []
+        sys.exit("No pack '%s'. Packs: %s" % (name, ", ".join(have) or "none"))
+    with io.open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def next_monday(today=None):
+    today = today or dt.date.today()
+    return today + dt.timedelta(days=(7 - today.weekday()) % 7 or 7)
+
+
+def run_skill(project, dest, skill, script, args):
+    path = os.path.join(project, dest.replace("/", os.sep), skill, "scripts", script)
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    p = subprocess.run([sys.executable, path] + args, cwd=project, capture_output=True, text=True,
+                       encoding="utf-8", env=env)
+    if p.returncode != 0:
+        sys.exit("init stopped at %s %s:\n%s" % (skill, script, (p.stdout + p.stderr)[-1500:]))
+    return p.stdout
+
+
+def cmd_init(args):
+    pack = read_pack(args.catalogue, args.pack)
+    project = os.path.abspath(args.project)
+    if os.path.abspath(args.catalogue) == project:
+        sys.exit("Refusing to start a project inside the catalogue itself. Pass a folder of your own.")
+    os.makedirs(project, exist_ok=True)
+    extra = sorted(n for n in os.listdir(project) if n not in FRESH)
+    if extra:
+        sys.exit("%s already holds a project (%s).\n"
+                 "init starts new projects only; add tools to a running one with:\n"
+                 "  python install.py add <skill> --into %s" % (project, ", ".join(extra[:4]), args.project))
+    first = dt.date.fromisoformat(args.first_day) if args.first_day else next_monday()
+    cat = read_catalogue(args.catalogue)
+    missing = [s for s in pack["skills"] if s not in cat]
+    if missing:
+        sys.exit("The pack names skills the catalogue lacks: %s" % ", ".join(missing))
+
+    print("Starting %s from the '%s' pack.\n" % (args.name, args.pack))
+    for skill in pack["skills"]:
+        a = argparse.Namespace(skill=skill, into=project, dest=args.dest, catalogue=args.catalogue,
+                               source=args.source, force=False, docs=None)
+        out = io.StringIO()
+        stdout, sys.stdout = sys.stdout, out
+        try:
+            cmd_add(a)
+        finally:
+            sys.stdout = stdout
+        print("  installed %s" % skill)
+
+    planning = os.path.join(project, pack["planning"])
+    os.makedirs(os.path.join(project, pack["execution"]), exist_ok=True)
+    for name, _ in pack["folders"]:
+        os.makedirs(os.path.join(planning, name), exist_ok=True)
+    # The artifact register numbers everything at the top of the planning
+    # folder: itself first (00), then each folder, so the ID in each name is
+    # the register's own.
+    art = os.path.join(planning, pack["register"]["file"].format(name=args.name))
+    run_skill(project, args.dest, "artifact-register", "create_artifact_register.py", [art, args.name])
+    run_skill(project, args.dest, "artifact-register", "artifact.py", ["add", art, art, "--id", "0", "--root", planning])
+    art = next(os.path.join(planning, n) for n in os.listdir(planning) if n.endswith(os.path.basename(art)))
+    for name, about in pack["folders"]:
+        run_skill(project, args.dest, "artifact-register", "artifact.py",
+                  ["add", art, os.path.join(planning, name), "--root", planning, "--name", name, "--type", "Folder",
+                   "--description", about])
+    numbered = {}
+    for n in os.listdir(planning):
+        m = re.match(r"^\d+\.\s*(.+)$", n)
+        if m:
+            numbered[m.group(1)] = os.path.join(planning, n)
+    print("  structure: %s/ with %s; %s/" % (pack["planning"], ", ".join(sorted(os.path.basename(p) for p in numbered.values())),
+                                             pack["execution"]))
+
+    values = dict(numbered, name=args.name, planning=planning, first_day=first.isoformat(), year=str(first.year), days=str(args.sprint_days))
+    for step in pack["steps"]:
+        skill, script, argv = step[:3]
+        run_skill(project, args.dest, skill, script, [a.format(**values) for a in argv])
+        print("  %s: %s" % (skill, step[3] if len(step) > 3 else script))
+
+    for filename, name, about in pack.get("documents", []):
+        path = os.path.join(planning, filename)
+        if os.path.exists(path):
+            run_skill(project, args.dest, "artifact-register", "artifact.py",
+                      ["add", art, path, "--root", planning, "--name", name, "--type", "Document", "--description", about])
+            print("  artifact-register: %s numbered" % filename)
+
+    if pack.get("gitignore"):
+        gi = os.path.join(project, ".gitignore")
+        have = io.open(gi, encoding="utf-8").read().split("\n") if os.path.exists(gi) else []
+        add = [line for line in pack["gitignore"] if line not in have]
+        if add:
+            with io.open(gi, "a", encoding="utf-8") as fh:
+                fh.write(("\n" if have and have[-1] else "") + "\n".join(add) + "\n")
+
+    print("\n%s is set up: %d tools, sprints of %d days from %s, and its guide in %s."
+          % (args.name, len(pack["skills"]), args.sprint_days, first.isoformat(), os.path.relpath(numbered.get("Onboarding", planning), project)))
+    print("Commit everything, then say to your agent:")
+    for line in pack.get("next", []):
+        print("  \"%s\"" % line)
+    return 0
+
+
 def works_with(cat, lock, skill):
     """The catalogue's other skills that this skill's SKILL.md names, in
     backticks, and that the project does not have yet. The skill's own text is
@@ -775,6 +894,17 @@ def main():
                    help="also place the tool's TD in FOLDER/<tool folder>/ (relative to --into), "
                         "locked as its own entry")
     p.set_defaults(func=cmd_add)
+
+    p = subs.add_parser("init", help="start a new project from a pack: its tools and its structure")
+    p.add_argument("project", help="the new project's folder (empty, or a fresh repository)")
+    p.add_argument("--pack", default="project", help="a pack in packs/ (default: project)")
+    p.add_argument("--name", required=True, help="the project's name, e.g. \"Atlas\"")
+    p.add_argument("--sprint-days", type=int, default=14, help="sprint length in days (default: 14)")
+    p.add_argument("--first-day", metavar="YYYY-MM-DD", help="the first sprint's first day (default: next Monday)")
+    p.add_argument("--dest", default=DEFAULT_DEST, help="skills directory (default: %s)" % DEFAULT_DEST)
+    p.add_argument("--catalogue", default=CATALOGUE)
+    p.add_argument("--source", help="URL to record (default: the catalogue's origin)")
+    p.set_defaults(func=cmd_init)
 
     p = subs.add_parser("status", help="compare installed copies against the lock")
     p.add_argument("--check", action="store_true",

@@ -264,6 +264,18 @@
       "Description": "TSP.16 published: the project's onboarding guide in two editions and the onboard me conversation; first built inside Reporting and moved out before publishing.",
       "ID": 44,
       "Tool": "Onboarding"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.4 v1.3: install.py init starts a new project from a pack (packs/project.json): its tools, its structure, its registers made by their own tools, the brief and a first guide.",
+      "ID": 45,
+      "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.5 v1.4: add and rename save to where the register went when they re-prefix the register or its folder.",
+      "ID": 46,
+      "Tool": "Artifact Register"
     }
   ],
   "control_activities": [],
@@ -314,8 +326,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T14:43:09",
-    "values_hash": "sha256:9e28bdb370aaf248660c17c149b41c41686c839c4122e93794a91b805a2b042f",
+    "updated": "2026-10-28T19:06:19",
+    "values_hash": "sha256:ae69432befd0fc209e2aa8abbbb4c260152a02201d2956b6598dc1be8db2f141",
     "version": 1
   },
   "tools": [

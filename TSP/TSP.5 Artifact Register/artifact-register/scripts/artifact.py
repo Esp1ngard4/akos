@@ -95,6 +95,17 @@ def rename_on_disk(path, new_name, dry):
     return dest
 
 
+def followed(register, old, new):
+    """The register's path after `old` was renamed to `new`: re-prefixing the
+    register itself, or the folder it sits in, moves the register with it."""
+    reg, old = os.path.abspath(register), os.path.abspath(old)
+    if new and reg == old:
+        return os.path.abspath(new)
+    if new and reg.startswith(old + os.sep):
+        return os.path.join(os.path.abspath(new), os.path.relpath(reg, old))
+    return register
+
+
 def report(register, root, tool_register):
     """Re-check after the edit, so a half-done operation says so now."""
     errors, warnings, _ = checks.run(R.load(register), root=root,
@@ -168,8 +179,10 @@ def cmd_add(args):
         print("  disk    none - physical artifact. Label it %s"
               % S.format_id(artifact_id, width))
     else:
-        rename_on_disk(args.path, target_name(artifact_id, name, args.path, width),
-                       args.dry_run)
+        new = rename_on_disk(args.path, target_name(artifact_id, name, args.path, width),
+                             args.dry_run)
+        if not args.dry_run:
+            return finish(args, data, followed(args.register, args.path, new))
     return finish(args, data)
 
 
@@ -183,8 +196,10 @@ def cmd_rename(args):
 
     path = locate(args.root, args.id)
     if path:
-        rename_on_disk(path, target_name(args.id, args.name, path, width),
-                       args.dry_run)
+        new = rename_on_disk(path, target_name(args.id, args.name, path, width),
+                             args.dry_run)
+        if not args.dry_run:
+            return finish(args, data, followed(args.register, path, new))
     else:
         print("  disk    nothing found with prefix %s%s" %
               (args.id, "" if args.root else " (pass --root to rename the file too)"))

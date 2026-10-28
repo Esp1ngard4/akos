@@ -108,6 +108,15 @@ The tools themselves, one line each, are in the [README](../README.md#the-tools)
 
 ## Installing, and keeping the copy maintainable
 
+A new project starts from a pack, in one command: the tools and the structure the
+conventions describe, each register created by its own tool.
+
+```bash
+python akos/install.py init my-project --name "My project"   # packs/project.json
+```
+
+The rest of this section is the installer underneath, which a running project uses directly.
+
 Skills load from `.github/skills/`, `.claude/skills/` or `.agents/skills/` in GitHub
 Copilot for VS Code, and the same `SKILL.md` format is read by Claude Code, Cursor,
 Codex CLI and others. **This repository is a catalogue, not a working environment** —

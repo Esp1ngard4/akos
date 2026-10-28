@@ -63,6 +63,7 @@ the exact content the copy was taken from, and a tag can be moved.
 | Command | Does |
 |---|---|
 | `list` | What the catalogue publishes |
+| `init <folder> --name <project> [--pack project]` | Start a new project from a pack: its tools added and locked, then its structure set up by those tools' own scripts. Refuses a folder that already holds a project |
 | `add <skill> --into <project>` | Vendor it and write the lock entry |
 | `add <skill> --into <project> --docs <folder>` | Also place the tool's TD in `<folder>/<tool folder>/`, locked as its own entry (`TSP.n docs`) |
 | `add TSP.n --into <project> --docs <folder>` | The TD alone, for a tool with no skill (or a TD wanted without its skill) |
@@ -89,6 +90,7 @@ what turns "drift is detectable" into "drift is detected".
   installed skill's SKILL.md names in backticks, and that the project does not have
   yet, are listed after the install, one line. The skill's own text is the list, so
   nothing beside it has to be kept in step; whether to add them is the user's call.
+- **A pack is a new project's starting point** (`packs/<name>.json`): the skills to add, the planning and execution folders, the folders the artifact register numbers (itself first, as 00), the steps that create each register through the installed tool's own script, the documents to number once they exist, the lines `.gitignore` needs, and what to say first. `init` holds no knowledge of any tool: a step is a skill, a script and its arguments, so the structure is the tools' own and a change to a tool reaches new projects through the pack untouched. It runs on an empty folder or a fresh repository only; a running project adds tools one at a time, because its structure is already its own. Like everything else here it is a person's decision, so no skill runs it.
 - **Commit the skill folder and the lock together.** Either without the other is
   worse than neither: a lock with no skill is a promise, and a skill with no lock
   is exactly the unrecorded copy this tool exists to prevent.
@@ -149,6 +151,8 @@ copy, and `accept`, so the drift detection is itself under test.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.3 | 2026-10-28 | **`init` starts a new project from a pack.** `packs/project.json` names the project pack's tools and its structure; `init` adds the tools, has the artifact register number the planning folder (itself as 00), creates each register through its own installed script, starts the brief, generates the onboarding guide, and prints what to say first. The site's Atlas is built with it, so CI runs the pack on every push. Raised by the user after the site: a team starting fresh was installing tools one by one and building the structure by hand. |
 | v1.2 | 2026-10-28 | **`add` names what the skill works with.** After an install, the catalogue skills the installed skill's SKILL.md mentions in backticks and the project lacks are listed in one line, so installing the status report says the brief has a tool of its own (TSP.14) rather than leaving a reader to find out from a missing section. |
 | v1.1 | 2026-10-27 | **A tool's TD can be installed and locked too.** `add --docs <folder>` places the tool's TD in the project's TSP folder as its own lock entry, once per tool; `add TSP.n --docs` places a TD alone, for a tool with no skill. The entry covers the TD files only, so a project can keep its own notes beside a TD, evolve the TD, and still `update` from the catalogue with its edits kept. Conventions say where project-management tools go: their own folder, with its own `.github/skills/` and lock. The default destination becomes `.agents/skills/`, read by most agents; Claude Code reads only `.claude/skills/`, so it takes `--dest` (tested). Raised preparing an existing project's install. |
-| v1.0 | 2026-08-31 | Initial version. Written to answer how a team shares tools when the junction approach cannot survive a clone |
+
+Earlier versions are in this file's git history.

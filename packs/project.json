@@ -1,0 +1,37 @@
+{
+  "pack": "project",
+  "description": "A team project run on AKOS: the brief, the backlog and its sprints, the RAID, who's who, the ceremonies and the weekly review, the team board, reporting, action trackers, the artifact register and the onboarding guide.",
+  "skills": ["project-definition-manager", "wbs-manager", "raid-manager", "sprint-facilitator", "sprint-planning-precheck",
+             "weekly-review-facilitator", "reporting", "status-board-manager", "stakeholder-manager", "action-tracker-manager",
+             "artifact-register", "onboarding-guide"],
+  "planning": "0. PrjMgm",
+  "execution": "1. Execution",
+  "register": {"file": "Artifact Register {name}.json"},
+  "folders": [
+    ["WBS", "The backlog: every piece of work, the sprint calendar, and each sprint's team board"],
+    ["RAID", "Risks, actions, issues and decisions, each with an owner and a date to look again"],
+    ["Sprints", "The sprint records the ceremonies write"],
+    ["Comms", "The stakeholder register and the communications plan; contacts stay out of git"],
+    ["Reports", "The status reports and sprint updates, generated from the records"],
+    ["Onboarding", "The project's guide for its team and for outsiders, generated from its own files"]
+  ],
+  "steps": [
+    ["wbs-manager", "create_wbs.py", ["{WBS}/WBS {name}.json", "{name}"], "the backlog"],
+    ["wbs-manager", "wbs.py", ["sprints", "seed", "{WBS}/Agile Conventions {name}.json", "--scope", "{name}", "--year", "{year}",
+                               "--anchor", "{first_day}", "--length", "{days}"], "the sprint calendar"],
+    ["wbs-manager", "wbs.py", ["sprints", "import", "{WBS}/WBS {name}.json", "--from", "{WBS}/Agile Conventions {name}.json"], "the calendar, into the backlog"],
+    ["raid-manager", "create_raid.py", ["{RAID}/RAID {name}.json", "{name}"], "the RAID"],
+    ["stakeholder-manager", "create_stk.py", ["{Comms}", "--scope", "{name}"], "the stakeholder register, and its contacts file"],
+    ["project-definition-manager", "brief.py", ["new", "{planning}", "--title", "{name}"], "the brief, from its template"],
+    ["onboarding-guide", "onboard.py", ["guide", "{planning}"], "the onboarding guide"]
+  ],
+  "documents": [
+    ["Project Brief.md", "Project Brief", "Why the project exists, its outcome and done-when, what would make it stop, and how it is measured"]
+  ],
+  "gitignore": ["Contacts *.csv"],
+  "next": [
+    "Let's write the project brief.",
+    "Set up who's who, and who receives what.",
+    "Let's run sprint planning."
+  ]
+}
