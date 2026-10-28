@@ -5,6 +5,7 @@
     python artifact.py add    <register> <path> --name "Land Deed" --type Document
     python artifact.py add    <register> --name "Box of deeds" --type Item  # physical
     python artifact.py add    <register> <path> --id 22        # row exists, lost its prefix
+    python artifact.py add    <register> <path> --new-id 0     # a planned number no row holds
     python artifact.py rename <register> --id 22 --name "New Name" --root <folder>
     python artifact.py move   <register> --id 22 --parent-digital 12 --root <folder>
     python artifact.py retire <register> --id 22 --root <folder> --yes
@@ -159,7 +160,14 @@ def cmd_add(args):
             row["Name"] = args.name
         print("Re-prefixing existing artifact %s (%s)" % (artifact_id, name))
     else:
-        artifact_id = str(next_id(rows))
+        if getattr(args, "new_id", None) is not None:
+            # A planned number. A retired row stays in the register, so an ID no
+            # row holds was never used: claiming it reuses nothing.
+            if str(args.new_id) in set(S.clean(r.get("ID")) for r in rows):
+                sys.exit("ID %s is already in the register; --new-id only claims a number no row holds." % args.new_id)
+            artifact_id = str(args.new_id)
+        else:
+            artifact_id = str(next_id(rows))
         name = args.name or os.path.splitext(strip_prefix(original))[0]
         today = dt.date.today().isoformat()
         row = {"ID": int(artifact_id), "Name": name, "Status": "Active",
@@ -439,6 +447,8 @@ def main():
                    help="the file or folder to register; omit for a "
                         "physical artifact that has no file")
     s.add_argument("--id", help="existing row whose file lost its prefix")
+    s.add_argument("--new-id", type=int, metavar="N",
+                   help="register under this ID instead of the next one; refused if any row holds it")
     s.add_argument("--name")
     s.add_argument("--type", choices=S.TYPES)
     s.add_argument("--description")

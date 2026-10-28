@@ -207,8 +207,8 @@ and leave rows pointing at nothing.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.6 | 2026-10-28 | **`add --new-id N` claims a planned number.** IDs come from the highest plus one, so a register whose own row is 02 could not number the folders above it 00 and 01. `--new-id` registers under a number no row holds; a retired row stays in the register, so such a number was never used, and claiming it reuses nothing. |
 | v1.5 | 2026-10-28 | **A register can live in a folder of its own.** `create_artifact_register.py --folder` makes the folder the register's row, so a project keeps it as `00. Artifact Register/` like any other register, and the audit stays clean without looking inside. Asked for by the user on the first `install.py init`, which had left the register as a bare file at the top. |
 | v1.4 | 2026-10-28 | **The register follows its own rename.** `add` and `rename` re-prefix the folder or file they are given; when that is the register itself, or the folder it sits in, the register moved under the command and the save failed after the rename, leaving the disk numbered and the row unwritten. They now save to where the register went. Found setting up a project with `install.py init`, which numbers the register as 00. |
-| v1.3 | 2026-10-27 | **The disk scan can ignore files a tool names itself.** `meta.settings.ignore`, `tools.lock.json` by default in a new register, so a project that installs its tools beside its registers keeps a clean audit. Found installing the tools into an existing project. |
 
 Earlier versions are in this file's git history.

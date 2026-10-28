@@ -288,6 +288,24 @@
       "Description": "TD.4 v1.4: add and init stop with a plain message when the catalogue is not a git clone; init keeps the artifact register in 00. Artifact Register/.",
       "ID": 48,
       "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.4 v1.5: init numbers the planning folder 00 and the execution folder 01; the register describes the whole project.",
+      "ID": 49,
+      "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.5 v1.6: add --new-id claims a planned number no row holds.",
+      "ID": 50,
+      "Tool": "Artifact Register"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.1 v1.17: create_wbs.py --execution declares the Execution folder at creation.",
+      "ID": 51,
+      "Tool": "WBS Register"
     }
   ],
   "control_activities": [],
@@ -338,8 +356,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T20:21:42",
-    "values_hash": "sha256:458da140c381c229061876718b4c897f6e26f151ec593333b26d807cc907c8c1",
+    "updated": "2026-10-28T21:23:45",
+    "values_hash": "sha256:c4a4cfac3150da82722a28ed13534d90515a8de81f652e81fd94ff3c5525a38c",
     "version": 1
   },
   "tools": [

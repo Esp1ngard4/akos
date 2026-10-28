@@ -4,8 +4,8 @@
   "skills": ["project-definition-manager", "wbs-manager", "raid-manager", "sprint-facilitator", "sprint-planning-precheck",
              "weekly-review-facilitator", "reporting", "status-board-manager", "stakeholder-manager", "action-tracker-manager",
              "artifact-register", "onboarding-guide"],
-  "planning": "0. PrjMgm",
-  "execution": "1. Execution",
+  "planning": ["PrjMgm", "Project management: the registers, the records, the reports and the brief"],
+  "execution": ["Execution", "The work itself: one folder per WBS row, WP.<WBS ID> <Title>, with its discovery, specification, plan and notes"],
   "register": {"folder": "Artifact Register", "file": "Artifact Register {name}.json"},
   "folders": [
     ["WBS", "The backlog: every piece of work, the sprint calendar, and each sprint's team board"],
@@ -16,7 +16,7 @@
     ["Onboarding", "The project's guide for its team and for outsiders, generated from its own files"]
   ],
   "steps": [
-    ["wbs-manager", "create_wbs.py", ["{WBS}/WBS {name}.json", "{name}"], "the backlog"],
+    ["wbs-manager", "create_wbs.py", ["{WBS}/WBS {name}.json", "{name}", "--execution", "../../{execution}"], "the backlog"],
     ["wbs-manager", "wbs.py", ["sprints", "seed", "{WBS}/Agile Conventions {name}.json", "--scope", "{name}", "--year", "{year}",
                                "--anchor", "{first_day}", "--length", "{days}"], "the sprint calendar"],
     ["wbs-manager", "wbs.py", ["sprints", "import", "{WBS}/WBS {name}.json", "--from", "{WBS}/Agile Conventions {name}.json"], "the calendar, into the backlog"],

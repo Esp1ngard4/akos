@@ -225,26 +225,29 @@ def test_init(root, scratch):
         lock = json.load(fh)
     check("every tool in the pack installed and locked", all(s in lock["tools"] for s in pack["skills"]),
           sorted(set(pack["skills"]) - set(lock["tools"])))
-    plan = os.path.join(project, pack["planning"])
+    plan = os.path.join(project, "00. " + pack["planning"][0])
+    check("the planning folder is 00 and the execution folder 01, numbered by the artifact register",
+          os.path.isdir(plan) and os.path.isdir(os.path.join(project, "01. " + pack["execution"][0])), sorted(os.listdir(project)))
     top = sorted(os.listdir(plan)) if os.path.isdir(plan) else []
-    want = ["%02d. %s" % (i, f[0]) for i, f in enumerate(pack["folders"], 1)]
-    check("the planning folder, numbered by its artifact register", all(w in top for w in want)
-          and any(n.startswith("00. Artifact Register") for n in top) and "%02d. Project Brief.md" % (len(want) + 1) in top, top)
-    check("the execution folder", os.path.isdir(os.path.join(project, pack["execution"])))
-    wbs = os.path.join(plan, "01. WBS", "WBS Greenfield.json")
+    want = ["02. Artifact Register"] + ["%02d. %s" % (i, f[0]) for i, f in enumerate(pack["folders"], 3)]
+    check("the planning folder's contents continue the sequence", all(w in top for w in want)
+          and "%02d. Project Brief.md" % (len(want) + 2) in top, top)
+    wbs = os.path.join(plan, "03. WBS", "WBS Greenfield.json")
     with io.open(wbs, encoding="utf-8") as fh:
         sprints = json.load(fh).get("sprints") or []
     check("a WBS with a sprint calendar from the first day", sprints and sprints[0]["Starts"] <= "2026-11-02" <= sprints[-1]["Ends"], len(sprints))
-    check("the RAID and the stakeholder register", os.path.isfile(os.path.join(plan, "02. RAID", "RAID Greenfield.json"))
-          and os.path.isfile(os.path.join(plan, "04. Comms", "Stakeholders Greenfield.json")))
-    check("the onboarding guide", os.path.isfile(os.path.join(plan, "06. Onboarding", "Guide.html")))
+    with io.open(wbs, encoding="utf-8") as fh:
+        check("the WBS declares the execution folder", (json.load(fh)["meta"].get("execution") or {}).get("folder") == "../../01. Execution")
+    check("the RAID and the stakeholder register", os.path.isfile(os.path.join(plan, "04. RAID", "RAID Greenfield.json"))
+          and os.path.isfile(os.path.join(plan, "06. Comms", "Stakeholders Greenfield.json")))
+    check("the onboarding guide", os.path.isfile(os.path.join(plan, "08. Onboarding", "Guide.html")))
     with io.open(os.path.join(project, ".gitignore"), encoding="utf-8") as fh:
         check("contacts kept out of git", "Contacts *.csv" in fh.read())
-    reg = os.path.join(plan, "00. Artifact Register", "Artifact Register Greenfield.json")
+    reg = os.path.join(plan, "02. Artifact Register", "Artifact Register Greenfield.json")
     check("the artifact register in a folder of its own", os.path.isfile(reg), top)
     ok, out = run([os.path.join(project, ".agents", "skills", "artifact-register", "scripts", "audit_artifact_register.py"),
-                   reg, "--root", plan], root)
-    check("the artifact register audits clean", "0 error(s), 0 warning(s)" in out, out[-400:])
+                   reg, "--root", project], root)
+    check("the artifact register audits the whole project clean", "0 error(s), 0 warning(s)" in out, out[-400:])
     ok, out = run([installer, "status", "--project", project, "--check"], root)
     check("status --check clean", ok, out[-300:])
     ok, out = run([installer, "init", project, "--name", "Again", "--catalogue", root], root)

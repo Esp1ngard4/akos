@@ -55,7 +55,8 @@ def e(text):
 
 PACK = json.load(io.open(os.path.join(ROOT, "packs", "project.json"), encoding="utf-8"))
 INIT = ["init", "Atlas", "--pack", "project", "--name", "Atlas", "--first-day", "2026-07-06"]
-WBS, RAID, STK = "0. PrjMgm/01. WBS/WBS Atlas.json", "0. PrjMgm/02. RAID/RAID Atlas.json", "0. PrjMgm/04. Comms/Stakeholders Atlas.json"
+PLAN = "00. PrjMgm"
+WBS, RAID, STK = PLAN + "/03. WBS/WBS Atlas.json", PLAN + "/04. RAID/RAID Atlas.json", PLAN + "/06. Comms/Stakeholders Atlas.json"
 
 # Each step: what you say, what the agent does, what you get, and the commands
 # that run, from the Atlas folder: (skill, script, args). The first step is the
@@ -73,8 +74,8 @@ FIRST_HOUR = [
      "agent": "Asks you why the project exists, what done looks like and what would make you stop, and writes each part into the brief for you to confirm.",
      "get": "The statement the whole team reads first.",
      "link": ("Atlas's brief", REPO + "/blob/main/site/atlas/Project%20Brief.md"),
-     "fixture": ("Project Brief.md", "0. PrjMgm/07. Project Brief.md"),
-     "run": [("project-definition-manager", "brief.py", ["check", "0. PrjMgm"])]},
+     "fixture": ("Project Brief.md", PLAN + "/09. Project Brief.md"),
+     "run": [("project-definition-manager", "brief.py", ["check", PLAN])]},
     {"title": "Break the work down",
      "say": "Add the self-service sign-up as a key deliverable, with four features: the form, email verification, the identity check and the welcome.",
      "agent": "Adds each row under its parent with a stable ID, holding every field to the register's own vocabulary.",
@@ -108,7 +109,7 @@ FIRST_HOUR = [
      "agent": "Reads the brief, the registers and the tools installed, and writes the team guide and the executive overview from them. Nothing in either is typed by hand.",
      "get": "Two pages to share: one for the team, one for everyone else.",
      "link": ("Atlas's team guide", "atlas/"),
-     "run": [("onboarding-guide", "onboard.py", ["guide", "0. PrjMgm", "--as-of", AS_OF.isoformat()])]},
+     "run": [("onboarding-guide", "onboard.py", ["guide", PLAN, "--as-of", AS_OF.isoformat()])]},
 ]
 NEXT = ("Let's run sprint planning.", "Capacity first, then the sprint's goals, then the work: the agent proposes, you decide, and it writes the record. "
         "From then on, the rhythm in Atlas's guide takes over.")
@@ -131,7 +132,7 @@ def build_atlas(where):
             p = subprocess.run([sys.executable] + cmd, capture_output=True, text=True, encoding="utf-8", env=ENV, cwd=cwd)
             if p.returncode != 0:
                 sys.exit("First hour, %s: %s failed\n%s" % (step["title"], name, (p.stdout + p.stderr)[-1500:]))
-    return os.path.join(atlas, PACK["planning"])
+    return os.path.join(atlas, PLAN)
 
 
 # ─── Reading the sources ─────────────────────────────────────────────────────

@@ -86,7 +86,9 @@ The filename should carry the ID the register holds in its own scope; it seeds
 itself as that artifact. With `--folder`, the register sits in a folder of its own
 (`00. Artifact Register/Artifact Register Atlas.json`), as the other registers do,
 and the folder is that artifact: the folder's name carries the ID, and the audit
-does not look inside it.
+does not look inside it. `add --new-id N` registers under a planned number no row
+holds, for a layout decided before the register existed (the planning folder as 00,
+the execution folder as 01, the register's own folder as 02).
 
 ```
 python create_artifact_register.py "7. Artifact Register, Atlas.json" "Atlas" \

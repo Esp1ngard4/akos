@@ -535,29 +535,38 @@ def cmd_init(args):
             sys.stdout = stdout
         print("  installed %s" % skill)
 
-    planning = os.path.join(project, pack["planning"])
-    os.makedirs(os.path.join(project, pack["execution"]), exist_ok=True)
-    for name, _ in pack["folders"]:
-        os.makedirs(os.path.join(planning, name), exist_ok=True)
-    # The artifact register numbers everything at the top of the planning
-    # folder: its own folder first (00), then each folder, so the ID in each
-    # name is the register's own.
+    # The artifact register describes the whole project: the planning folder is
+    # 00, the execution folder 01, and the planning folder's contents follow,
+    # the register's own folder first.
+    plan_name, plan_about = pack["planning"]
+    exec_name, exec_about = pack["execution"]
     reg = pack["register"]
-    art = os.path.join(planning, "00. " + reg["folder"], reg["file"].format(name=args.name))
+    os.makedirs(os.path.join(project, exec_name))
+    art = os.path.join(project, plan_name, "02. " + reg["folder"], reg["file"].format(name=args.name))
     run_skill(project, args.dest, "artifact-register", "create_artifact_register.py", [art, args.name, "--folder"])
+    art_rel = os.path.relpath(art, os.path.join(project, plan_name))
+
+    def artifact(path, *extra):
+        run_skill(project, args.dest, "artifact-register", "artifact.py", ["add", art, path, "--root", project] + list(extra))
+
+    artifact(os.path.join(project, plan_name), "--new-id", "0", "--name", plan_name, "--type", "Folder", "--description", plan_about, "--parent-digital", "Main")
+    planning = next(os.path.join(project, n) for n in os.listdir(project) if re.match(r"^\d+\.\s*%s$" % re.escape(plan_name), n))
+    art = os.path.join(planning, art_rel)
+    artifact(os.path.join(project, exec_name), "--new-id", "1", "--name", exec_name, "--type", "Folder", "--description", exec_about, "--parent-digital", "Main")
+    run_skill(project, args.dest, "artifact-register", "artifact.py", ["move", art, "--id", "2", "--parent-digital", "0"])
     for name, about in pack["folders"]:
-        run_skill(project, args.dest, "artifact-register", "artifact.py",
-                  ["add", art, os.path.join(planning, name), "--root", planning, "--name", name, "--type", "Folder",
-                   "--description", about])
+        os.makedirs(os.path.join(planning, name))
+        artifact(os.path.join(planning, name), "--name", name, "--type", "Folder", "--description", about, "--parent-digital", "0")
     numbered = {}
     for n in os.listdir(planning):
         m = re.match(r"^\d+\.\s*(.+)$", n)
         if m:
             numbered[m.group(1)] = os.path.join(planning, n)
-    print("  structure: %s/ with %s; %s/" % (pack["planning"], ", ".join(sorted(os.path.basename(p) for p in numbered.values())),
-                                             pack["execution"]))
+    print("  structure: %s/ (%s), %s/" % (os.path.basename(planning), ", ".join(sorted(os.path.basename(p) for p in numbered.values())),
+                                         next(n for n in os.listdir(project) if n.endswith(exec_name))))
 
-    values = dict(numbered, name=args.name, planning=planning, first_day=first.isoformat(), year=str(first.year), days=str(args.sprint_days))
+    execution = next(n for n in os.listdir(project) if re.match(r"^\d+\.\s*%s$" % re.escape(exec_name), n))
+    values = dict(numbered, name=args.name, planning=planning, execution=execution, first_day=first.isoformat(), year=str(first.year), days=str(args.sprint_days))
     for step in pack["steps"]:
         skill, script, argv = step[:3]
         run_skill(project, args.dest, skill, script, [a.format(**values) for a in argv])
@@ -566,8 +575,7 @@ def cmd_init(args):
     for filename, name, about in pack.get("documents", []):
         path = os.path.join(planning, filename)
         if os.path.exists(path):
-            run_skill(project, args.dest, "artifact-register", "artifact.py",
-                      ["add", art, path, "--root", planning, "--name", name, "--type", "Document", "--description", about])
+            artifact(path, "--name", name, "--type", "Document", "--description", about, "--parent-digital", "0")
             print("  artifact-register: %s numbered" % filename)
 
     if pack.get("gitignore"):

@@ -72,6 +72,8 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("output")
     p.add_argument("project", help="project this WBS covers")
+    p.add_argument("--execution", metavar="FOLDER",
+                   help="the Execution folder, relative to the register's folder, when it is not the standard one")
     p.add_argument("--force", action="store_true")
     args = p.parse_args()
     if os.path.exists(args.output) and not args.force:
@@ -90,6 +92,8 @@ def main():
                                             "delivers": DELIVERS,
                                             "horizon": HORIZONS,
                                             "key deliverable": YESNO}})
+    if args.execution:
+        data["meta"]["execution"] = {"folder": args.execution}
     R.save(args.output, data)
     print("Created %s" % args.output)
     print("  project: %s | %d item fields" % (args.project, len(ITEM_FIELDS)))
