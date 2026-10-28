@@ -1037,6 +1037,81 @@ def test_stakeholder_register(root, scratch):
 REPORT_TOOL = "TSP.10 Reporting"
 
 
+PD_TOOL = "TSP.14 Project Definition"
+
+
+def test_project_definition(root, scratch):
+    """The brief's tool: its own smoke test, installed into an empty project, and
+    the status report reading the brief through it, or saying it is not there."""
+    import json
+    print("\nTSP.14 Project Definition")
+    tool = os.path.join(root, "TSP", PD_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    check("TD.14 present", any(n.startswith("TD.14") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool), str(broken_links(tool))[:200])
+    skill = os.path.join(tool, "project-definition-manager")
+    for rel in ("SKILL.md", os.path.join("templates", "Project Brief.md"),
+                os.path.join("scripts", "brief.py"), os.path.join("scripts", "smoke_test.py")):
+        check("ships %s" % rel.replace(os.sep, "/"), os.path.isfile(os.path.join(skill, rel)))
+    ok, out = run([os.path.join(skill, "scripts", "smoke_test.py")], scratch)
+    check("its own smoke test passes", ok and "All checks passed." in out, out[-400:])
+
+    # Installed beside the status report, in a project with nothing else.
+    proj = os.path.join(scratch, "pd-project")
+    os.makedirs(proj, exist_ok=True)
+    installer = os.path.join(root, "install.py")
+    ok, out = run([installer, "add", "wbs-manager", "--into", proj, "--catalogue", root], scratch)
+    ok1, _ = run([installer, "add", "sprint-facilitator", "--into", proj, "--catalogue", root], scratch)
+    ok = ok and ok1
+    ok2, out2 = run([installer, "add", "reporting", "--into", proj, "--catalogue", root], scratch)
+    check("installing reporting names the brief's tool as not installed yet",
+          ok and ok2 and "Works with, not installed here:" in out2 and "project-definition-manager" in out2, out2[-400:])
+    skills = os.path.join(proj, ".agents", "skills")
+    report = os.path.join(skills, "reporting", "scripts", "report.py")
+    planning = os.path.join(proj, "0. PrjMgm")
+    os.makedirs(planning, exist_ok=True)
+    wbs = os.path.join(skills, "wbs-manager", "scripts")
+    reg, conv = os.path.join(planning, "WBS Demo.json"), os.path.join(proj, "conventions.json")
+    records = os.path.join(proj, "records")
+    for cmd in ([os.path.join(wbs, "create_wbs.py"), reg, "Demo"],
+                [os.path.join(wbs, "wbs.py"), "sprints", "seed", conv, "--scope", "Demo",
+                 "--year", "2026", "--anchor", "2026-07-19"],
+                [os.path.join(wbs, "wbs.py"), "sprints", "import", reg, "--from", conv],
+                [os.path.join(skills, "sprint-facilitator", "scripts", "sprint_record.py"),
+                 "plan", records, "S26.Q4.1", "--calendar", conv]):
+        ok, out = run(cmd, scratch)
+        if not check("setup: %s" % os.path.basename(cmd[0]), ok, out[-300:]):
+            return
+    brief = (u"# Demo — Project Brief\n\n**Size:** lean · **Written:** 2026-10-01 · **Last revised:** 2026-10-01 · **Serves:** G-1\n\n"
+             u"> **To** test the tool **so that** the brief has one reader.\n\n## Why\n\nBecause.\n\n## Outcome and done-when\n\n"
+             u"The brief is read the same way everywhere.\n\nDone when:\n\n1. Read.\n\n**Stop if:** nobody reads it.\n")
+    io.open(os.path.join(planning, "Project Brief.md"), "w", encoding="utf-8").write(brief)
+
+    def status(day):
+        ok, out = run([report, "status", planning, "--records", records, "--sprint", "S26.Q4.1",
+                       "--as-of", day], scratch)
+        path = os.path.join(planning, "Reports", "Status", "%s Status.json" % day)
+        return ok, out, (json.load(io.open(path, encoding="utf-8")) if os.path.exists(path) else {})
+
+    ok, out, rec = status("2026-10-12")
+    check("without it, the status report says the brief's tool is not installed, and runs on",
+          ok and "not installed" in ((rec.get("outcome") or {}).get("reason") or ""), (str(rec.get("outcome")) + out)[:400])
+    ok, out = run([installer, "add", "project-definition-manager", "--into", proj, "--catalogue", root], scratch)
+    check("install.py add project-definition-manager succeeds", ok, out[-300:])
+    ok, out, rec = status("2026-10-13")
+    o = rec.get("outcome") or {}
+    check("with it, the status report takes the outcome and what it serves from the brief",
+          ok and o.get("outcome") == "The brief is read the same way everywhere." and o.get("serves") == "G-1", str(o)[:400])
+    pd = os.path.join(skills, "project-definition-manager", "scripts", "brief.py")
+    ok, out = run([pd, "check", planning, "--today", "2026-12-01"], scratch)
+    check("check, as the weekly review runs it, names a brief due a revisit",
+          not ok and "revisit due: last revised 2026-10-01" in out, out[-300:])
+    ok, out = run([pd, "check", proj, "--wbs", "--today", "2026-10-11"], scratch)
+    check("a project folder resolves to its brief, and a lean one with a WBS is told to grow",
+          "grow it to full" in out, out[-300:])
+
+
 def test_reporting(root, scratch):
     """Both reports, end to end, on a project built with AKOS's own tools.
 
@@ -1138,7 +1213,8 @@ def test_reporting(root, scratch):
 
     # --- the brief: outcome and measures in the status report -----------------
     brief = os.path.join(project, "Project Brief.md")
-    template = io.open(os.path.join(root, "templates", "Project-Brief-template.md"), encoding="utf-8").read()
+    template = io.open(os.path.join(root, "TSP", PD_TOOL, "project-definition-manager", "templates",
+                                    "Project Brief.md"), encoding="utf-8").read()
     io.open(brief, "w", encoding="utf-8").write(template)
     ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
                    "--as-of", "2026-10-17"], work)
@@ -2135,6 +2211,7 @@ def main():
         test_weekly_review(root, scratch)
         test_action_tracker(root, scratch)
         test_stakeholder_register(root, scratch)
+        test_project_definition(root, scratch)
         test_reporting(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
@@ -2152,7 +2229,7 @@ def main():
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
               "ceremonies, the daily loop, the weekly review, the action tracker, the "
-              "stakeholder register and reporting)." % len(TOOLS))
+              "stakeholder register, project definition and reporting)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

@@ -629,19 +629,25 @@ def update_facts(last, this, committed, wbss, raid, risks, facts):
 # ─── Outcome and measures ────────────────────────────────────────────────────
 #
 # What the project is for, and whether it is getting there: the outcome, what it
-# serves and the measures, all from the project's brief (`Project Brief.md` beside
-# its registers; templates/Project-Brief-template.md), each measure scored like a
-# key result and judged against its pace. A separate signal, On Outcome, kept out
-# of Overall so the delivery verdict's trend stays comparable.
+# serves and the measures, all from the project's brief, which owns them, each
+# measure scored like a key result and judged against its pace. A separate
+# signal, On Outcome, kept out of Overall so the delivery verdict's trend stays
+# comparable. The brief is read through project-definition-manager (TSP.14),
+# never parsed here; without it installed the section says so.
 
 # No portfolio register ships here: the brief carries the outcome and what the
 # project serves. register_row() stays so a register can be wired in later.
 PROJECT_REGISTER = None
-BRIEF_NAME = "Project Brief.md"
-MEASURE_COLS = ("ID", "Measure", "Role", "Kind", "C/A", "Baseline", "From", "Target", "By",
-                "How measured", "Every", "Current", "As of", "Source", "WBS")
-ROLES, KINDS, CA, SOURCES = ("lag", "lead"), ("H", "M", "N"), ("C", "A"), ("measured", "estimated", "asked")
-EVERY_DAYS = {"week": 7, "sprint": 14, "month": 31, "quarter": 92, "year": 366}
+_PD = optional_sibling("project-definition-manager")
+if _PD and os.path.join(_PD, "scripts") not in sys.path:
+    sys.path.append(os.path.join(_PD, "scripts"))
+try:
+    import brief as B                                           # noqa: E402
+except ImportError:
+    B = None
+MEASURE_COLS = B.MEASURE_COLS if B else ()
+EVERY_DAYS = B.EVERY_DAYS if B else {}
+NO_PD = "project-definition-manager (TSP.14), which reads the brief, is not installed"
 ASPIRATIONAL = 0.7      # an aspirational measure is fully met at 0.7 of its target
 DONE_WORDS, OPEN_WORDS = ("done", "yes", "met", "delivered"), ("", "no", "not done", "open", "not met")
 
@@ -656,40 +662,6 @@ def register_row(prjmgm, path):
         if folder and here.endswith(os.path.normcase(os.path.normpath(folder))):
             return row
     return None
-
-
-def brief_sections(text):
-    """The executive statement, the outcome paragraph, the done-when list and the
-    Measures table's rows, from a brief written to the template."""
-    lines = text.split("\n")
-    statement = next((l.lstrip("> ").replace("**", "").strip() for l in lines
-                      if l.startswith(">") and "**To**" in l), None)
-    # A brief may name what it serves in its header line; where a register
-    # holds it too, the register's wins.
-    serves = next((m.group(1).strip() for m in (re.search(r"\*\*Serves:\*\*\s*([^·\n]+)", l)
-                                                  for l in lines[:12]) if m), None)
-    outcome, done_when, rows, header = None, [], [], None
-    sec = None
-    for i, line in enumerate(lines):
-        if line.startswith("## "):
-            sec = line[3:].strip().lower()
-        elif line.startswith("### "):
-            sec = line[4:].strip().lower()
-        if sec and sec.startswith("outcome") and not line.startswith("#"):
-            if outcome is None and line.strip() and not line.startswith(("|", ">", "-")) \
-                    and not re.match(r"^\d+\.", line) and not line.lower().startswith("done when"):
-                outcome = line.strip()
-            m = re.match(r"^\d+\.\s+(.*)", line)
-            if m:
-                done_when.append(m.group(1).strip())
-        if sec == "measures" and line.startswith("|"):
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if header is None:
-                header = cells
-            elif not set(line.replace("|", "").strip()) <= set("-: "):
-                rows.append(dict(zip(header, cells)))
-    return {"statement": statement, "outcome": outcome, "done_when": done_when,
-            "serves": serves, "header": header, "rows": rows}
 
 
 def measure_value(cell, kind, role=""):
@@ -721,15 +693,8 @@ def _date(cell):
 def score_measure(row, as_of, prev_scores, find):
     """Score 0-1, pace, staleness and flags for one measure."""
     mid, kind, ca = row.get("ID", "?"), row.get("Kind", ""), row.get("C/A", "")
-    for col, vocab in (("Role", ROLES), ("Kind", KINDS), ("C/A", CA), ("Source", SOURCES)):
-        if row.get(col) and row.get(col) not in vocab:
-            find.append("%s: %s %r is not %s" % (mid, col, row.get(col), " / ".join(vocab)))
-    if row.get("Every") and row["Every"] not in EVERY_DAYS:
-        find.append("%s: Every %r is not %s" % (mid, row["Every"], " / ".join(EVERY_DAYS)))
+    find.extend(B.measure_findings(row))         # vocabulary and dates: the brief's own rules
     start, by, taken = _date(row.get("From")), _date(row.get("By")), _date(row.get("As of"))
-    for col, d in (("From", start), ("By", by), ("As of", taken)):
-        if row.get(col) and d is None:
-            find.append("%s: %s %r is not a date (YYYY-MM-DD)" % (mid, col, row[col]))
     base, target = measure_value(row.get("Baseline"), kind), measure_value(row.get("Target"), kind)
     current = measure_value(row.get("Current"), kind)
     if kind in ("N", "H"):
@@ -786,19 +751,24 @@ def outcome_block(prjmgm, as_of, register_path, prev):
     """The record's outcome block: what the project is for, its measures scored,
     and the findings. `present` is False when there is nothing to rate."""
     row = register_row(prjmgm, register_path)
-    path = os.path.join(prjmgm, BRIEF_NAME)
-    out = {"present": False, "brief": BRIEF_NAME if os.path.exists(path) else None,
+    path = B.find(prjmgm) if B else None
+    out = {"present": False, "brief": os.path.basename(path) if path else None,
            "outcome": (row or {}).get("Outcome"), "serves": (row or {}).get("Serves"),
            "statement": None, "done_when": [], "measures": [], "findings": []}
     if row is None and register_path:
         out["findings"].append("no portfolio register row has this project's folder")
-    if not os.path.exists(path):
+    if B is None:
+        out["reason"] = NO_PD[0].upper() + NO_PD[1:]
+        return out
+    if not path:
         out["reason"] = "No Project Brief in %s" % os.path.basename(prjmgm)
         return out
-    parts = brief_sections(io.open(path, encoding="utf-8").read())
+    parts = B.read(path)
     out["statement"], out["done_when"] = parts["statement"], parts["done_when"]
-    out["outcome"] = out["outcome"] or parts["outcome"]
-    out["serves"] = out["serves"] or parts["serves"]
+    # The brief owns the outcome and what the project serves; a register's
+    # copies stand in only where the brief is silent.
+    out["outcome"] = parts["outcome"] or out["outcome"]
+    out["serves"] = parts["serves"] or out["serves"]
     if not parts["rows"]:
         out["reason"] = "The brief has no Measures table (a lean brief)"
         return out
@@ -2055,13 +2025,9 @@ def md_block(text):
 def brief_parts(path):
     """A brief's sections as the charter shows them, and what it says about itself."""
     text = io.open(path, encoding="utf-8").read()
-    head = text.split("\n")[:24]
-    size = next((m.group(1).lower() for m in (re.search(r"\*\*Size:\*\*\s*(\w+)", l) for l in head) if m), None)
-    revised = next((m.group(1) for m in (re.search(r"\*\*Last revised:\*\*\s*([\d-]+)", l) for l in head) if m), None)
-    parts = brief_sections(text)
+    parts = B.parse(text)
+    size, revised, stop = parts["size"], parts["last_revised"], parts["stop_if"]
     secs = md_sections(text)
-    stop = next((m.group(1).strip() for m in (re.match(r"^\*\*Stop if:\*\*\s*(.*)", l)
-                                              for l in (secs.get("Outcome and done-when") or "").split("\n")) if m), None)
     measures = [{"id": r.get("ID"), "measure": r.get("Measure"), "role": r.get("Role"), "ca": r.get("C/A"),
                  "baseline": r.get("Baseline"), "target": r.get("Target"), "by": r.get("By")}
                 for r in parts["rows"]]
@@ -2121,8 +2087,7 @@ def cmd_charter(args):
     regs = discover(prjmgm)
     wbs = Wbs(regs["wbs"][0]) if len(regs["wbs"]) == 1 else None
     raid = raid_entries(regs["raid"]) if regs["raid"] else None
-    bpath = os.path.join(prjmgm, BRIEF_NAME)
-    bpath = bpath if os.path.exists(bpath) else None
+    bpath = B.find(prjmgm) if B else None
     scope = wbs.scope if wbs else os.path.basename(prjmgm)
     rec = {"kind": "charter", "version": 1, "scope": scope, "as_of": as_of.isoformat(),
            "generated": datetime.now().isoformat(timespec="seconds"),
@@ -2130,7 +2095,7 @@ def cmd_charter(args):
            "deliverables": charter_deliverables(wbs) if wbs else None,
            "stakeholders": charter_stakeholders(prjmgm, scope),
            "risks": top_risks(raid, as_of) if raid is not None else None,
-           "sources": {"brief": BRIEF_NAME if bpath else None,
+           "sources": {"brief": os.path.basename(bpath) if bpath else None,
                        "wbs": os.path.relpath(wbs.path, prjmgm) if wbs else None,
                        "raid": [os.path.relpath(x, prjmgm) for x in regs["raid"]]},
            "summary": {"text": None, "confirmed_on": None}}
@@ -2152,7 +2117,8 @@ def cmd_charter(args):
 def render_charter(rec):
     external = rec.get("audience") == "external"
     b = rec.get("brief")
-    nobrief = ('<p class="muted">No Project Brief yet: write one from templates/Project-Brief-template.md.</p>'
+    nobrief = (('<p class="muted">No Project Brief yet: write one with project-definition-manager (TSP.14).</p>'
+                if B else '<p class="muted">No brief read: %s.</p>' % NO_PD)
                if not external else '<p class="muted">Not written yet.</p>')
     lean = lambda what: '<p class="muted">A lean brief: %s.</p>' % what
     src = lambda text: '<p class="src">%s</p>' % e(text)

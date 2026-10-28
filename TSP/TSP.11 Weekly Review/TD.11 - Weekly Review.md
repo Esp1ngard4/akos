@@ -90,6 +90,7 @@ If goals are kept outside the registers, step 5 reminds the user to update it. K
 - **TSP.12 Action Tracker**: the actions owed by others, read in *Waiting on someone*; a chase goes through its skill.
 - **TSP.10 Reporting**: the sprint update, refreshed for the sprint check.
 - **TSP.13 Stakeholder Register**: the communications overdue and the engagement gaps with no action, read in the sprint check, three lines at most.
+- **TSP.14 Project Definition**: a project brief due a revisit, read in *Beyond the sprint*, one line per project; the revisit runs through its skill.
 - **TSP.7 Notebook Manager**: takes the closing offer.
 - **TSP.3 TSP Register**: row 11.
 
@@ -109,6 +110,6 @@ If goals are kept outside the registers, step 5 reminds the user to update it. K
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.3 | 2026-10-28 | *Beyond the sprint* names the project briefs due a revisit (TSP.14): `brief.py check` per project, the *revisit due* line only, silent when none is. The revisit runs through Project Definition. A brief carries its own clock because this review, not a monthly one, is where it can be seen. |
 | v1.2 | 2026-10-27 | **The sprint check reads the stakeholder registers** (TSP.13): communications overdue and stakeholders below the engagement wanted with no action, three lines at most, silent when there are none. Read only; sending stays with the close-out. It replaces the *A stakeholder register* adaptation, now that one ships. |
 | v1.1 | 2026-10-26 | *Waiting on someone* also reads the action trackers (TSP.12): rows owed by someone other than the tracker's owner that are past their due date, or `TBD` with no checkpoint or a passed one, three at most, the missing checkpoints first. A chase is the row's Latest update, through `action-tracker-manager`. |
-| v1.0 | 2026-10-26 | Published as TSP.11. The weekly review as one skill with its own record, run on the day records, the sprint records and the registers alone: beyond the sprint read from the registers, the sprint check mid-sprint only, findings routed rather than acted on. A task tracker, a calendar, inboxes and a goal tracker are described as adaptations rather than shipped. |

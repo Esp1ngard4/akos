@@ -204,6 +204,30 @@
       "Description": "TD.1 v1.12: card details link the parents and list the children; #item=<ID> opens the dashboard at a card.",
       "ID": 34,
       "Tool": "WBS Register"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TSP.14 published: the Project Brief as its own tool, with the template moved in from templates/, brief.py as the one reader, the brief owning the outcome and what the project serves, and its own revisit clock.",
+      "ID": 35,
+      "Tool": "Project Definition"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.10 v1.5: the status report and the charter read the brief through Project Definition (TSP.14); without it installed they say so and run on.",
+      "ID": 36,
+      "Tool": "Reporting"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.11 v1.3: Beyond the sprint names the project briefs due a revisit (TSP.14).",
+      "ID": 37,
+      "Tool": "Weekly Review"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.4 v1.2: add names the catalogue skills the installed skill's SKILL.md mentions that the project does not have yet.",
+      "ID": 38,
+      "Tool": "Tool Installer"
     }
   ],
   "control_activities": [],
@@ -254,8 +278,8 @@
         ]
       }
     },
-    "updated": "2026-10-27T14:57:50",
-    "values_hash": "sha256:0f0280e98f33e656db37cf297d6b295f4a0278ebefc7509d16342add86cd3fba",
+    "updated": "2026-10-28T09:39:04",
+    "values_hash": "sha256:01058cf79536f422d1898186ff85cd7b3494b9dda6a3d230973b0c5589fc19ef",
     "version": 1
   },
   "tools": [
@@ -437,6 +461,20 @@
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "stakeholder-manager",
+      "Status": "In Progress",
+      "Type": "Tool"
+    },
+    {
+      "Description": "The documents that define a project: above all the Project Brief every project has (why it exists, its outcome and done-when, Stop if, what it serves, and for a full brief its measures, appetite, scope, approach and who it is for), and further definition documents when a project needs one. Writes, grows, keeps current and revisits the brief; brief.py is the one reader of its format, used by the status report, the charter and the weekly review.",
+      "Doc Aux": "Yes",
+      "ID": 14,
+      "Last Reviewed": "2026-10-28",
+      "Links": "TSP/TSP.14 Project Definition/TD.14 - Project Definition.md",
+      "Name": "Project Definition",
+      "Notes": "Not yet used on real work: exercised by its own smoke test and by the repository's, through the status report, the charter and the weekly review. Standard library, no dependencies.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "project-definition-manager",
       "Status": "In Progress",
       "Type": "Tool"
     }

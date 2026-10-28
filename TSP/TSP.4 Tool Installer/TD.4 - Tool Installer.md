@@ -85,6 +85,10 @@ what turns "drift is detectable" into "drift is detected".
   in `.agents/skills/` was neither listed nor invocable, one in `.claude/skills/`
   was both), so a project using it installs with `--dest .claude/skills`.
   `--dest .github/skills` serves Copilot only.
+- **`add` names what the skill works with.** The catalogue's other skills that the
+  installed skill's SKILL.md names in backticks, and that the project does not have
+  yet, are listed after the install, one line. The skill's own text is the list, so
+  nothing beside it has to be kept in step; whether to add them is the user's call.
 - **Commit the skill folder and the lock together.** Either without the other is
   worse than neither: a lock with no skill is a promise, and a skill with no lock
   is exactly the unrecorded copy this tool exists to prevent.
@@ -145,5 +149,6 @@ copy, and `accept`, so the drift detection is itself under test.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-10-28 | **`add` names what the skill works with.** After an install, the catalogue skills the installed skill's SKILL.md mentions in backticks and the project lacks are listed in one line, so installing the status report says the brief has a tool of its own (TSP.14) rather than leaving a reader to find out from a missing section. |
 | v1.1 | 2026-10-27 | **A tool's TD can be installed and locked too.** `add --docs <folder>` places the tool's TD in the project's TSP folder as its own lock entry, once per tool; `add TSP.n --docs` places a TD alone, for a tool with no skill. The entry covers the TD files only, so a project can keep its own notes beside a TD, evolve the TD, and still `update` from the catalogue with its edits kept. Conventions say where project-management tools go: their own folder, with its own `.github/skills/` and lock. The default destination becomes `.agents/skills/`, read by most agents; Claude Code reads only `.claude/skills/`, so it takes `--dest` (tested). Raised preparing an existing project's install. |
 | v1.0 | 2026-08-31 | Initial version. Written to answer how a team shares tools when the junction approach cannot survive a clone |

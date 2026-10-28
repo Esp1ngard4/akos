@@ -33,6 +33,7 @@ python install.py add <skill> --into <your-project>
 | TSP.11 | **Weekly Review** | In Progress | `weekly-review-facilitator` | [TD.11](../TSP/TSP.11%20Weekly%20Review/TD.11%20-%20Weekly%20Review.md) |
 | TSP.12 | **Action Tracker** | In Progress | `action-tracker-manager` | [TD.12](../TSP/TSP.12%20Action%20Tracker/TD.12%20-%20Action%20Tracker.md) |
 | TSP.13 | **Stakeholder Register** | In Progress | `stakeholder-manager` | [TD.13](../TSP/TSP.13%20Stakeholder%20Register/TD.13%20-%20Stakeholder%20Register.md) |
+| TSP.14 | **Project Definition** | In Progress | `project-definition-manager` | [TD.14](../TSP/TSP.14%20Project%20Definition/TD.14%20-%20Project%20Definition.md) |
 
 ## What each is for
 
@@ -62,6 +63,8 @@ python install.py add <skill> --into <your-project>
 
 **TSP.13 Stakeholder Register** — For one project, who has a stake in it, where each stands and what flows to them: groups, stakeholders with power, interest and current against desired engagement, and a communications plan with each communication's audience, cadence, channel, share level and last sending. Resolves an audience to people and addresses at the moment of sending, says what is due or overdue, and generates a dashboard. Contacts per project in a CSV kept out of git, which the tool checks. Sends nothing.
 
+**TSP.14 Project Definition** — The documents that define a project: above all the Project Brief every project has (why it exists, its outcome and done-when, Stop if, what it serves, and for a full brief its measures, appetite, scope, approach and who it is for), and further definition documents when a project needs one. Writes, grows, keeps current and revisits the brief; brief.py is the one reader of its format, used by the status report, the charter and the weekly review.
+
 ## Status meanings
 
 | Status | Meaning |
@@ -73,4 +76,4 @@ python install.py add <skill> --into <your-project>
 
 ---
 
-Generated from `registry/TSP Register.json` on 2026-10-27.
+Generated from `registry/TSP Register.json` on 2026-10-28.

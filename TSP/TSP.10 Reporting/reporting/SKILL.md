@@ -30,7 +30,7 @@ The sprint records must carry structured goals (goal IDs, *Done when*, an `Area`
 
 ## Running a report
 
-0. **Status only: bring the brief's measures up to date.** Any measure whose `As of` is older than its `Every` is due. Read the *measured* ones from the source their `How measured` names, ask the user for the *asked* ones, and write `Current` and `As of` in the project's `Project Brief.md`. A value left stale is reported as stale, never guessed.
+0. **Status only: bring the brief's measures up to date** (`project-definition-manager`, *Keep current*): any measure whose `As of` is older than its `Every` is due, read or asked, and written in the brief. A value left stale is reported as stale, never guessed.
 1. Run the command. It prints the proposed ratings (status) and the summary rules.
 2. **Status only: go through the Essential 4 with the user.** Show each proposed rating with its evidence (in the record's `signals.<name>.evidence`). The user confirms it, or overrides it **with a reason**, which `confirm` requires:
 
@@ -96,7 +96,7 @@ Overall is the worst of the four; Mood (the fist of five) and On Outcome are sho
 
 ## Outcome and measures
 
-The status report opens, after the summary, with what the project is for and whether it is getting there. Everything comes from the project's brief, `Project Brief.md` in the project folder beside its registers, written from `templates/Project-Brief-template.md`: the outcome sentence, the done-when list, an optional `**Serves:**` in its header line, and the Measures table.
+The status report opens, after the summary, with what the project is for and whether it is getting there. Everything comes from the project's brief, `Project Brief.md` beside its registers, read through `project-definition-manager` (TSP.14), which owns it and writes it: the outcome sentence, the done-when list, the `**Serves:**` in its header line, and the Measures table. Without that skill installed, the section says so and the report runs on.
 
 - **Each measure is scored 0-1 like a key result:** a number by its progress from baseline to target, a habit by its rate against the target rate, a milestone done or not. An aspirational (`A`) measure is met at 0.7 of its target.
 - **Pace is judged at the date the value was taken:** on pace when the score is at least the share of the time from `From` to `By` that had passed by its `As of`. A value not read within its `Every` is **stale**; a measure past its `By` below target is **past due**.

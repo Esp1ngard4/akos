@@ -70,6 +70,7 @@ has described.
 | TSP.11 | [Weekly Review](TSP/TSP.11%20Weekly%20Review/) — the week between the day and the sprint: beyond the sprint, the sprint check, the week ahead | `weekly-review-facilitator` |
 | TSP.12 | [Action Tracker](TSP/TSP.12%20Action%20Tracker/) — a team's shared list of the small actions agreed in a piece of work's sessions | `action-tracker-manager` |
 | TSP.13 | [Stakeholder Register](TSP/TSP.13%20Stakeholder%20Register/) — who has a stake in a project, where each stands, and what flows to them | `stakeholder-manager` |
+| TSP.14 | [Project Definition](TSP/TSP.14%20Project%20Definition/) — the Project Brief every project has: why, outcome and done-when, what it serves, and how it is measured | `project-definition-manager` |
 
 TSP.1–3 and TSP.5 are each a JSON source of truth with a generated HTML dashboard.
 They are ordinary working tools, useful on their own — and they are here because a method with
@@ -87,6 +88,8 @@ TSP.12 is the layer below the registers: the small actions a working session agr
 kept in one Markdown file the whole group can read and edit, filed with the work it serves.
 TSP.13 is who hears about the work: a project's stakeholders and its communications plan,
 with the contacts kept beside it and out of git.
+TSP.14 is what the project is: its brief, written with whoever owns the outcome,
+kept current before each status report, and revisited when a month has gone by.
 
 TSP.3 has **two** skills, which is the same claim from the other direction: one owns
 the register row, the other owns the tool definition documents, and neither does the
@@ -193,7 +196,6 @@ every push, against Python 3.9 and 3.13.
 ## Templates
 
 - [`templates/TD-template.md`](templates/TD-template.md) — the governance document structure. `td-author` (TSP.3's second skill) is what applies and audits it.
-- [`templates/Project-Brief-template.md`](templates/Project-Brief-template.md) — a project's brief: why, outcome and done-when, and the measures the status report (TSP.10) scores. Lean for a small project, full once it keeps a WBS.
 - [`templates/SKILL-template.md`](templates/SKILL-template.md) — a skill skeleton, with notes on writing a `description` that actually triggers. Under-triggering is the common failure: a skill described in your own private vocabulary never matches anything you type.
 
 ## Where this came from

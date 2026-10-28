@@ -92,6 +92,14 @@ Pull both, then present once.
 - **Waiting on someone:** open RAID entries whose `Review On` or `Next Review On` has passed, and open `Action` entries whose `DRI` is not the user. **The user, in a register, is its author** (`meta.settings.author`, which `raid-manager` writes); when none is set, ask once how they appear in the registers. Name them, and ask which need a chase. A chase is a log entry through `raid-manager`, on a yes.
 - **Waiting on someone, in the action trackers:** every active tracker (`action-tracker-manager`; files opening with an `action-tracker-meta` block, `status: Active`). Open rows whose `Owner` is not the tracker's `owner` and whose due date has passed, or whose `TBD` has no checkpoint or a passed one (`TBD · checkpoint YYYY-MM-DD`, in the Due date cell). **Three at most**: a `TBD` with no checkpoint first, then the most overdue, with the count of the rest. A chase is the row's `Latest update`, through `action-tracker-manager`, on a yes.
 
+- **Briefs due a revisit**, where projects keep one (`project-definition-manager`), read only:
+
+  ```bash
+  python <skills>/project-definition-manager/scripts/brief.py check "<project folder>"
+  ```
+
+  For each project in play, only the *revisit due* line, one per project; silent when none is due. The revisit itself (is the outcome still right, has *Stop if* tripped, what it serves, its size) runs now or at a time the user names, through `project-definition-manager`.
+
 Propose the changes as one batch; apply only the ones confirmed.
 
 ### 3. The sprint check: mid-sprint weeks only

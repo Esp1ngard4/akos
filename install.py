@@ -445,9 +445,22 @@ def cmd_add(args):
     if doc_key and doc_key in lock["tools"]:
         drec = lock["tools"][doc_key]
         print("  + TD %s -> %s (%d file(s))" % (doc_action, drec["path"], len(drec["files"])))
+    missing = works_with(cat, lock, args.skill)
+    if missing:
+        print("  Works with, not installed here: %s" % ", ".join(missing))
+        print("    python install.py add <name> --into %s" % args.into)
     print("\nCommit the skill folder%s and %s together, so the team gets %s on "
           "clone." % (", its TD" if doc_key else "", LOCK_NAME, "them all" if doc_key else "both"))
     return 0
+
+
+def works_with(cat, lock, skill):
+    """The catalogue's other skills that this skill's SKILL.md names, in
+    backticks, and that the project does not have yet. The skill's own text is
+    the list, so nothing beside it has to be kept in step."""
+    text = read_text(os.path.join(cat[skill]["path"], "SKILL.md"))
+    named = set(re.findall(r"`([a-z][a-z0-9-]+)`", text))
+    return sorted(n for n in named if n in cat and n != skill and n not in lock["tools"])
 
 
 def compare(recorded, root, only=None):
