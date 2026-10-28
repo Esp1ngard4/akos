@@ -462,6 +462,22 @@ tr:hover td{background:#f0f4ff}
 .sprint-header{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:2px solid #4472C4;margin-bottom:8px}
 .sprint-name{font-size:16px;font-weight:700}
 .sprint-meta{font-size:12px;color:#6b7280}
+/* Sprints: the trend across sprints, then each sprint newest first. */
+.sp-toggle{cursor:pointer}
+.sp-toggle:hover .sprint-name{color:#4472C4}
+.sp-trend{border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:20px}
+.sp-cols{display:flex;gap:22px;align-items:flex-end;height:130px;overflow-x:auto;padding-top:16px}
+.sp-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none;height:100%}
+.sp-bars{flex:1;display:flex;align-items:flex-end;gap:3px}
+.sp-bars i{display:block;width:20px;position:relative;border-radius:3px 3px 0 0;min-height:2px}
+.sp-bars i span{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:10px;color:#6b7280;font-style:normal;white-space:nowrap}
+.sp-trend i.c{background:#c7d4ef}.sp-trend i.d{background:#22c55e}
+.sp-lbl{font-size:11px;color:#374151;white-space:nowrap}
+.sp-lbl.now{color:#4472C4;font-weight:600}
+.sp-key{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;color:#6b7280;margin-top:8px}
+.sp-key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.sp-group{font-size:12px;font-weight:600;color:#374151;margin:12px 0 6px}
+.sp-group span{color:#6b7280;font-weight:400}
 .chart-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}
 .chart-box{flex:1;min-width:220px;padding:16px;border:1px solid #e5e7eb;border-radius:8px}
 .chart-title{font-size:13px;font-weight:600;margin-bottom:12px}
@@ -583,7 +599,6 @@ const S=__STATS__;
 const SPRINTS=__SPRINTS__;
 const BOARDS=__BOARDS__;
 
-let fStatus='All',fPriority='All',fType='All';
 let activeTab='tree';
 let showCancelled=false;   // R28: kept deliberately, noise by default
 let zoom='month';          // day | month | quarter | sprint
@@ -762,49 +777,6 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
 
 /* ---------- the rest of the plumbing ---------- */
 
-/* A row belongs to a sprint it was committed to, pulled into, or closed in,
-   and appears on each of their boards labelled by which. Only its home sprint
-   counts its hours, or a row that spans two inflates both. */
-const sprintGroups={};
-const SPRINT_ROLES=[['sp','Committed'],['sa','Pulled in'],['se','Closed here']];
-function sprintHome(d){
-  const later=(d.sc||[]).filter(v=>v&&v.startsWith('S'));
-  return [d.se,later[later.length-1],d.sp,d.sa].find(v=>v&&v.startsWith('S'))||null;
-}
-function rebuildSprints(){
-  Object.keys(sprintGroups).forEach(k=>delete sprintGroups[k]);
-  filtered().forEach(d=>{
-    const home=sprintHome(d),roles={};
-    SPRINT_ROLES.forEach(([k,label])=>{
-      const sp=d[k];
-      if(sp&&sp.startsWith('S'))(roles[sp]=roles[sp]||[]).push(label);
-    });
-    (d.sc||[]).forEach(sp=>{
-      if(sp&&sp.startsWith('S'))(roles[sp]=roles[sp]||[]).push('Carried in');
-    });
-    Object.keys(roles).forEach(sp=>{
-      if(!sprintGroups[sp])sprintGroups[sp]={items:[],effort:0,done:0};
-      sprintGroups[sp].items.push(Object.assign({},d,{_role:roles[sp].join(' · ')}));
-      if(sp===home){
-        if(!liveParent(d))sprintGroups[sp].effort+=d.e||0;
-        if(d.s==='Done')sprintGroups[sp].done++;
-      }
-    });
-  });
-}
-function filtered(){
-  return DATA.filter(d=>{
-    if(!visible(d))return false;
-    if(fStatus!=='All'&&d.s!==fStatus)return false;
-    if(fPriority!=='All'&&d.p!==fPriority)return false;
-    if(fType!=='All'&&d.ty!==fType)return false;
-    return true;
-  });
-}
-function unique(key){
-  const vals=new Set();DATA.forEach(d=>{if(d[key])vals.add(d[key]);});
-  return [...vals].sort();
-}
 function badge(s){
   const m={'Done':'b-done','Implementing':'b-impl','Not Started':'b-ns','Portfolio Backlog':'b-bl','Funnel':'b-fn','Cancelled':'b-cx'};
   return `<span class="badge ${m[s]||'b-no'}">${s}</span>`;
@@ -815,10 +787,6 @@ function bars(data,mx){
     return `<div class="bar-row"><div class="bar-label">${d.l}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(w,8)}%;background:${d.c}">${d.v}</div></div></div>`;
   }).join('');
 }
-function renderFilters(){
-  const sel=(id,cur,opts)=>`<select onchange="${id}=this.value;render()">${['All',...opts].map(o=>`<option${o===cur?' selected':''}>${o}</option>`).join('')}</select>`;
-  return `<div class="filters">${sel('fStatus',fStatus,unique('s'))}${sel('fPriority',fPriority,unique('p'))}${sel('fType',fType,unique('ty'))}</div>`;
-}
 function renderKPIs(){
   return `<div class="kpi-strip">
     <div class="kpi"><div class="kpi-val">${S.total}</div><div class="kpi-label">Total Items</div></div>
@@ -826,7 +794,7 @@ function renderKPIs(){
     <div class="kpi"><div class="kpi-val" style="color:#22c55e">${S.done}</div><div class="kpi-label">Done</div></div>
     <div class="kpi"><div class="kpi-val" style="color:#f59e0b">${S.not_started}</div><div class="kpi-label">Not Started</div></div>
     <div class="kpi"><div class="kpi-val">${S.total_effort}h</div><div class="kpi-label">Total Effort</div></div>
-    <div class="kpi"><div class="kpi-val">${Object.keys(sprintGroups).length}</div><div class="kpi-label">Planned Sprints</div></div>
+    <div class="kpi"><div class="kpi-val">${Object.keys(BOARDS).length}</div><div class="kpi-label">Sprints</div></div>
   </div>`;
 }
 
@@ -869,7 +837,6 @@ function renderTree(){
   let reachable=0;walk(()=>reachable++);
   const untyped=DATA.filter(d=>!d.ty).length;
   if(untyped)h+=`<p class="muted">${untyped} row(s) with no Type, shown as —.</p>`;
-  h+=`<p class="muted">Filters do not apply here: hiding a parent would break the tree.</p>`;
   return h;
 }
 
@@ -952,26 +919,60 @@ function renderDeliverables(){
 
 /* ---------- Sprint board ---------- */
 
+/* ---------- Sprints ---------- */
+
+/* Every sprint with work, newest first (the trend across them is in Analytics), drawn from BOARDS - the cards and the
+   figures wbs.py gives (sprint_board, sprint_metrics) - so a sprint reads the
+   same here as on Current Sprint, in `wbs.py metrics` and in its record. The
+   latest sprint opens; the older ones fold to their figures. */
+const SP_ROLES=['Committed','Carried in','Pulled in','Closed here'];
+let openSprints=null;
+function toggleSprint(sp){openSprints.has(sp)?openSprints.delete(sp):openSprints.add(sp);render();}
+function sprintTrend(list){
+  const mx=Math.max(1,...list.map(s=>{const m=BOARDS[s.Sprint].m;return Math.max(m.committed.h,m.delivered.h);}));
+  // Velocity: delivered hours, averaged over the last three sprints that have ended.
+  const ended=list.filter(s=>s.Ends<TODAY).slice(-3);
+  const avg=ended.length?Math.round(ended.reduce((a,s)=>a+BOARDS[s.Sprint].m.delivered.h,0)/ended.length*10)/10:null;
+  const vel=avg==null?'':`<span><b>Velocity ${avg}h</b>: average delivered, last ${ended.length} ended sprint${ended.length===1?'':'s'}</span>`;
+  const bar=(cls,v)=>`<i class="${cls}" style="height:${Math.round(v/mx*100)}%"><span>${v}</span></i>`;
+  return `<div class="sp-trend"><div class="chart-title">Committed against delivered, hours</div><div class="sp-cols">${list.map(s=>{
+    const m=BOARDS[s.Sprint].m;
+    return `<div class="sp-col" title="${s.Sprint}: ${m.committed.h}h committed (${m.committed.n}), ${m.pulled_in.h}h pulled in (${m.pulled_in.n}), ${m.delivered.h}h delivered (${m.delivered.n})">
+      <div class="sp-bars">${bar('c',m.committed.h)}${bar('d',m.delivered.h)}</div><div class="sp-lbl${s.Sprint===RUNNING?' now':''}">${s.Sprint}${s.Sprint===RUNNING?' (running)':''}</div></div>`;}).join('')}</div>
+    <div class="sp-key"><span><i class="c"></i>Committed</span><span><i class="d"></i>Delivered, pulled-in work included</span>${vel}</div></div>`;
+}
 function renderBoard(){
-  const sprints=Object.keys(sprintGroups).sort();
+  const list=SPRINTS.filter(s=>BOARDS[s.Sprint]);
+  if(!list.length)return '<p class="muted">No sprint holds any row yet.</p>';
+  if(!openSprints)openSprints=new Set([RUNNING&&BOARDS[RUNNING]?RUNNING:list[list.length-1].Sprint]);
   let h='';
-  sprints.forEach(sp=>{
-    const g=sprintGroups[sp];
-    h+=`<div class="sprint-section"><div class="sprint-header"><div class="sprint-name">${sp}</div>
-      <div class="sprint-meta">${g.items.length} items · ${g.effort}h · ${g.done} done</div></div>
-      <table><tr><th>ID</th><th>Code</th><th>Title</th><th>How</th><th>Status</th><th>Priority</th><th>Effort</th><th>Type</th><th>Owner</th></tr>`;
-    g.items.forEach(d=>{h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c}</td><td>${d.t}</td><td class="muted">${d._role||'-'}</td><td>${badge(d.s)}</td><td>${d.p||'-'}</td><td>${d.e||'-'}h</td><td>${d.ty||'-'}</td><td>${d.o||'-'}</td></tr>`;});
-    h+=`</table></div>`;
+  [...list].reverse().forEach(s=>{
+    const b=BOARDS[s.Sprint],open=openSprints.has(s.Sprint);
+    h+=`<div class="sprint-section"><div class="sprint-header sp-toggle" onclick="toggleSprint('${s.Sprint}')">
+      <span class="twisty">${open?'&#9662;':'&#9656;'}</span><div class="sprint-name">${s.Sprint}</div>
+      <div class="sprint-meta">${kbWhen(s)}${s.Sprint===RUNNING?' &middot; current':''}</div></div>${kbFigures(b.m)}`;
+    if(open){
+      const cards=Object.entries(b.cards).map(([id,x])=>({d:byId.get(id),role:x.r,h:x.h,pa:x.pa})).filter(c=>c.d&&visible(c.d));
+      SP_ROLES.forEach(role=>{
+        const cs=cards.filter(c=>c.role===role).sort((a,b)=>byCode(a.d,b.d));
+        if(!cs.length)return;
+        h+=`<div class="sp-group">${role} <span>${cs.length}</span></div>
+          <table><tr><th>ID</th><th>Item</th><th>Status</th><th>Effort</th><th>Type</th><th>Owner</th></tr>`;
+        cs.forEach(c=>{
+          const d=c.d,a=ancestors(d.id),p=a[a.length-1];
+          const parent=p?`<div class="kb-path" title="${esc(a.map(x=>x.t||x.id).join(' > '))}"><span>&rsaquo;</span><button class="idbtn" onclick="openDetail(${p.id})">${esc(p.t)||esc(p.id)}</button></div>`:'';
+          h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td>
+            <td><div>${esc(d.t)||'<em class="warn">(no title)</em>'}</div>${parent}</td><td>${badge(d.s)}</td>
+            <td>${c.pa?(c.h?c.h+'h in sprint':'-'):(d.e?d.e+'h':'-')}</td><td>${d.ty||'-'}</td><td>${d.o||'-'}</td></tr>`;
+        });
+        h+=`</table>`;
+      });
+    }
+    h+=`</div>`;
   });
-  const unplanned=filtered().filter(d=>!sprintHome(d));
-  if(unplanned.length){
-    h+=`<div class="sprint-section"><div class="sprint-header"><div class="sprint-name">Unplanned</div>
-      <div class="sprint-meta">${unplanned.length} items</div></div>
-      <table><tr><th>ID</th><th>Code</th><th>Title</th><th>Status</th><th>Effort</th><th>Type</th><th>Owner</th></tr>`;
-    unplanned.forEach(d=>{h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c}</td><td>${d.t}</td><td>${badge(d.s)}</td><td>${d.e||'-'}h</td><td>${d.ty||'-'}</td><td>${d.o||'-'}</td></tr>`;});
-    h+=`</table></div>`;
-  }
-  return h||'<p class="muted">Nothing matches the current filters.</p>';
+  const none=DATA.filter(d=>visible(d)&&!Object.values(BOARDS).some(b=>b.cards[String(d.id)])).length;
+  if(none)h+=`<p class="muted">${none} row(s) are in no sprint: see <button class="linkbtn" onclick="activeTab='tree';render()">Breakdown</button>.</p>`;
+  return h;
 }
 
 /* ---------- Current Sprint ---------- */
@@ -1090,11 +1091,10 @@ function renderAnalytics(){
   const C=['#4472C4','#22c55e','#f59e0b','#8b5cf6','#ec4899','#ef4444'];
   const mk=o=>Object.keys(o).map((k,i)=>({l:k,v:o[k],c:C[i%C.length]}));
   const sd=mk(S.statuses),pd=mk(S.priorities),td=mk(S.types);
-  const spd=Object.keys(sprintGroups).sort().map((sp,i)=>({l:sp,v:sprintGroups[sp].effort,c:C[i%C.length]}));
-  return `<div class="chart-row"><div class="chart-box"><div class="chart-title">Status Distribution</div>${bars(sd,Math.max(...sd.map(d=>d.v),1))}</div>
+  const list=SPRINTS.filter(s=>BOARDS[s.Sprint]);
+  return `${list.length?sprintTrend(list):''}<div class="chart-row"><div class="chart-box"><div class="chart-title">Status Distribution</div>${bars(sd,Math.max(...sd.map(d=>d.v),1))}</div>
   <div class="chart-box"><div class="chart-title">Priority Breakdown</div>${bars(pd,Math.max(...pd.map(d=>d.v),1))}</div></div>
-  <div class="chart-row"><div class="chart-box"><div class="chart-title">Type Distribution</div>${td.length?bars(td,Math.max(...td.map(d=>d.v),1)):'<p class="muted">No types assigned</p>'}</div>
-  <div class="chart-box"><div class="chart-title">Sprint Effort Allocation</div>${spd.length?bars(spd,Math.max(...spd.map(d=>d.v),1)):'<p class="muted">No sprints planned</p>'}</div></div>`;
+  <div class="chart-row"><div class="chart-box"><div class="chart-title">Type Distribution</div>${td.length?bars(td,Math.max(...td.map(d=>d.v),1)):'<p class="muted">No types assigned</p>'}</div></div>`;
 }
 
 /* ---------- roadmap ---------- */
@@ -1292,14 +1292,11 @@ function renderRoadmap(){
 /* ---------- shell ---------- */
 
 function render(){
-  rebuildSprints();
-  const tabs=[['current','Current Sprint'],['tree','Breakdown'],['deliverables','Deliverables'],['verify','Verification'],['roadmap','Roadmap'],['sprints','Sprint Board'],['analytics','Analytics']];
+  const tabs=[['current','Current Sprint'],['tree','Breakdown'],['deliverables','Deliverables'],['verify','Verification'],['roadmap','Roadmap'],['sprints','Sprints'],['analytics','Analytics']];
   const body={current:renderCurrent,tree:renderTree,deliverables:renderDeliverables,verify:renderVerify,roadmap:renderRoadmap,sprints:renderBoard,analytics:renderAnalytics}[activeTab]();
-  const showFilters=(activeTab==='sprints'||activeTab==='analytics');
   document.getElementById('app').innerHTML=`${renderKPIs()}
   <div class="tabs">${tabs.map(([k,l])=>`<div class="tab ${activeTab===k?'active':''}" onclick="activeTab='${k}';render()">${l}</div>`).join('')}</div>
   ${S.cancelled?`<div class="filters"><span class="btn${showCancelled?' on':''}" onclick="showCancelled=!showCancelled;render()">${showCancelled?'Hiding nothing':'Show '+S.cancelled+' cancelled'}</span></div>`:''}
-  ${showFilters?renderFilters():''}
   <div class="panel active">${body}</div>
   <div class="timestamp">Generated __TIMESTAMP__</div>`;
   if(!document.getElementById('detail')){const m=document.createElement('div');m.id='detail';document.body.appendChild(m);}

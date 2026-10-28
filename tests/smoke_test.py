@@ -1755,6 +1755,9 @@ def test_pull_ins(root, scratch):
           ok and "function ancestors(" in html and 'class="crumbs"' in html and "Children (" in html, out[-200:])
     check("dashboard: a sprint card links its direct parent only, the full chain in its tooltip",
           "p=a[a.length-1]" in html and 'class="kb-path" title=' in html and "a.map(crumbLink)" not in html)
+    check("dashboard: the Sprints tab reads the sprint metrics (BOARDS), newest first, with the trend and velocity in Analytics",
+          "['sprints','Sprints']" in html and "function sprintTrend(" in html and "sprintGroups" not in html
+          and "[...list].reverse()" in html and "Velocity " in html)
     check("dashboard: the Breakdown shows level-1 bands, a guide per level and titles wrapped at their level",
           'class="tree-l1"' in html and 'class="guide"' in html and 'class="tcell"' in html and 'class="tt"' in html)
     check("dashboard: #item=<ID> opens a card, with Copy link and the browser's Back",
