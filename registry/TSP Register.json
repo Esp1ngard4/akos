@@ -276,6 +276,18 @@
       "Description": "TD.5 v1.4: add and rename save to where the register went when they re-prefix the register or its folder.",
       "ID": 46,
       "Tool": "Artifact Register"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.5 v1.5: create_artifact_register.py --folder, the register in a folder of its own.",
+      "ID": 47,
+      "Tool": "Artifact Register"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.4 v1.4: add and init stop with a plain message when the catalogue is not a git clone; init keeps the artifact register in 00. Artifact Register/.",
+      "ID": 48,
+      "Tool": "Tool Installer"
     }
   ],
   "control_activities": [],
@@ -326,8 +338,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T19:06:19",
-    "values_hash": "sha256:ae69432befd0fc209e2aa8abbbb4c260152a02201d2956b6598dc1be8db2f141",
+    "updated": "2026-10-28T20:21:42",
+    "values_hash": "sha256:458da140c381c229061876718b4c897f6e26f151ec593333b26d807cc907c8c1",
     "version": 1
   },
   "tools": [

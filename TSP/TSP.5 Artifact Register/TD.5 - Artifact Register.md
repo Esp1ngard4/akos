@@ -207,8 +207,8 @@ and leave rows pointing at nothing.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.5 | 2026-10-28 | **A register can live in a folder of its own.** `create_artifact_register.py --folder` makes the folder the register's row, so a project keeps it as `00. Artifact Register/` like any other register, and the audit stays clean without looking inside. Asked for by the user on the first `install.py init`, which had left the register as a bare file at the top. |
 | v1.4 | 2026-10-28 | **The register follows its own rename.** `add` and `rename` re-prefix the folder or file they are given; when that is the register itself, or the folder it sits in, the register moved under the command and the save failed after the rename, leaving the disk numbered and the row unwritten. They now save to where the register went. Found setting up a project with `install.py init`, which numbers the register as 00. |
 | v1.3 | 2026-10-27 | **The disk scan can ignore files a tool names itself.** `meta.settings.ignore`, `tools.lock.json` by default in a new register, so a project that installs its tools beside its registers keeps a clean audit. Found installing the tools into an existing project. |
-| v1.2 | 2026-09-01 | **The register is JSON.** Every write went through a script anyway, and a spreadsheet cost a subprocess to read, a dependency to install, and a file lock whenever the application or a sync client held it. The dropdowns a spreadsheet gave back are enforced more strictly by the commands - argparse refuses an invalid value where a dropdown only warns and paste bypasses entirely. `add` also gained the case it was missing: an artifact with no file. Most of a general reference register is physical, and requiring a path excluded the majority. The tool now has **no runtime dependencies at all** |
 
 Earlier versions are in this file's git history.

@@ -6,7 +6,7 @@
              "artifact-register", "onboarding-guide"],
   "planning": "0. PrjMgm",
   "execution": "1. Execution",
-  "register": {"file": "Artifact Register {name}.json"},
+  "register": {"folder": "Artifact Register", "file": "Artifact Register {name}.json"},
   "folders": [
     ["WBS", "The backlog: every piece of work, the sprint calendar, and each sprint's team board"],
     ["RAID", "Risks, actions, issues and decisions, each with an owner and a date to look again"],

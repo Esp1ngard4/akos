@@ -3,9 +3,12 @@
 """Create an empty Artifact Register for a scope.
 
     python create_artifact_register.py "07. Artifact Register, Atlas.json" "Atlas"
+    python create_artifact_register.py "00. Artifact Register/Artifact Register Atlas.json" "Atlas" --folder
 
 The filename should start with the ID this register holds in its own scope - it
 is an artifact of that scope like any other, and it seeds itself as that row.
+With --folder the register lives in a folder of its own, as the other registers
+do, and that folder is the row: the folder's name carries the ID.
 """
 import argparse
 import datetime as dt
@@ -20,11 +23,13 @@ DEFAULT_LOCATIONS = [("Physical", "Home"), ("Physical", "Office"),
                      ("Digital", "Cloud drive"), ("Digital", "Local disk")]
 
 
-def build(path, scope, locations, areas, width):
-    seed_match = S.ID_PREFIX.match(os.path.basename(path))
+def build(path, scope, locations, areas, width, folder=False):
+    # The row is the register's file, or with `folder` the folder it sits in.
+    entry = os.path.basename(os.path.dirname(os.path.abspath(path))) if folder else os.path.basename(path)
+    seed_match = S.ID_PREFIX.match(entry)
     seed = int(seed_match.group(1)) if seed_match else 0
 
-    stem = os.path.splitext(os.path.basename(path))[0]
+    stem = entry if folder else os.path.splitext(entry)[0]
     prefix = S.ID_PREFIX.match(stem)
     # Name excludes the ID prefix; the prefix is rebuilt from the ID whenever a
     # filename is generated. Storing it in both places is how you get "07. 07. x".
@@ -33,8 +38,9 @@ def build(path, scope, locations, areas, width):
 
     data = R.new(S.KIND, scope, {
         "artifacts": [{
-            "ID": seed, "Name": name, "Description": "This register.",
-            "Type": "Document", "Parent Digital": S.ROOT_PARENT,
+            "ID": seed, "Name": name,
+            "Description": "This register's folder: the register, and its dashboard." if folder else "This register.",
+            "Type": "Folder" if folder else "Document", "Parent Digital": S.ROOT_PARENT,
             "Parent Physical": S.NO_PARENT, "Status": "Active",
             "Created On": today, "Last Reviewed": today,
         }],
@@ -58,6 +64,8 @@ def main():
     p.add_argument("--id-width", type=int, default=S.ID_WIDTH_DEFAULT, metavar="N",
                    help="digits to pad IDs to on filenames (default: %d). Two suits "
                         "a register under 100 artifacts." % S.ID_WIDTH_DEFAULT)
+    p.add_argument("--folder", action="store_true",
+                   help="the register sits in a folder of its own, and that folder is its row")
     p.add_argument("--force", action="store_true", help="overwrite an existing file")
     args = p.parse_args()
 
@@ -77,17 +85,20 @@ def main():
             sys.exit("--area wants ID:Name, got %r" % spec)
         areas.append((aid.strip(), name.strip()))
 
+    if args.folder:
+        os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     seed = build(args.output, args.scope, locations or DEFAULT_LOCATIONS,
-                 areas, args.id_width)
+                 areas, args.id_width, args.folder)
     padded = S.format_id(seed, args.id_width)
     print("Created %s" % args.output)
     print("  scope: %s | %d locations | %d areas | IDs padded to %d digits"
           % (args.scope, len(locations or DEFAULT_LOCATIONS), len(areas),
              args.id_width))
-    print("  seeded with itself as artifact %s" % padded)
-    if not os.path.basename(args.output).startswith(padded + "."):
-        print("  note: rename this file to start %s. so its own prefix is padded too"
-              % padded)
+    entry = os.path.basename(os.path.dirname(os.path.abspath(args.output))) if args.folder else os.path.basename(args.output)
+    print("  seeded with its %s as artifact %s" % ("folder" if args.folder else "file", padded))
+    if not entry.startswith(padded + "."):
+        print("  note: rename the %s to start %s. so its own prefix is padded too"
+              % ("folder" if args.folder else "file", padded))
     print("\nNext:")
     print('  python artifact.py add "%s" <path> --name "..." --root <folder>'
           % args.output)

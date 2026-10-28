@@ -83,7 +83,10 @@ Lookup sheets: `Locations` (ID, Location, Active, Kind) and `Areas of Focus`.
 ## Creating a register
 
 The filename should carry the ID the register holds in its own scope; it seeds
-itself as that artifact.
+itself as that artifact. With `--folder`, the register sits in a folder of its own
+(`00. Artifact Register/Artifact Register Atlas.json`), as the other registers do,
+and the folder is that artifact: the folder's name carries the ID, and the audit
+does not look inside it.
 
 ```
 python create_artifact_register.py "7. Artifact Register, Atlas.json" "Atlas" \

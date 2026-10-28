@@ -240,7 +240,8 @@ def test_init(root, scratch):
     check("the onboarding guide", os.path.isfile(os.path.join(plan, "06. Onboarding", "Guide.html")))
     with io.open(os.path.join(project, ".gitignore"), encoding="utf-8") as fh:
         check("contacts kept out of git", "Contacts *.csv" in fh.read())
-    reg = next(os.path.join(plan, n) for n in top if n.startswith("00. Artifact Register"))
+    reg = os.path.join(plan, "00. Artifact Register", "Artifact Register Greenfield.json")
+    check("the artifact register in a folder of its own", os.path.isfile(reg), top)
     ok, out = run([os.path.join(project, ".agents", "skills", "artifact-register", "scripts", "audit_artifact_register.py"),
                    reg, "--root", plan], root)
     check("the artifact register audits clean", "0 error(s), 0 warning(s)" in out, out[-400:])
@@ -248,6 +249,10 @@ def test_init(root, scratch):
     check("status --check clean", ok, out[-300:])
     ok, out = run([installer, "init", project, "--name", "Again", "--catalogue", root], root)
     check("init refuses a folder that already holds a project", not ok and "already holds a project" in out, out[-300:])
+    nogit = os.path.join(scratch, "akos-zip")
+    shutil.copytree(root, nogit, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+    ok, out = run([os.path.join(nogit, "install.py"), "init", os.path.join(scratch, "from-zip"), "--name", "Zip"], nogit)
+    check("a ZIP download is told to clone, not shown a traceback", not ok and "git clone" in out and "Traceback" not in out, out[-300:])
 
 
 def test_installer(root, scratch):

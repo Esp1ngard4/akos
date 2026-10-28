@@ -62,6 +62,18 @@ def git(args, cwd=None, check=True):
     return proc.stdout.decode("utf-8", "replace").strip()
 
 
+def require_clone(catalogue):
+    """The lock records the commit a tool came from; that is what lets `update`
+    merge later. A ZIP download has no commit, so say so plainly."""
+    top = git(["rev-parse", "--show-toplevel"], cwd=catalogue, check=False)
+    same = top and os.path.normcase(os.path.abspath(top)) == os.path.normcase(os.path.abspath(catalogue))
+    if not same or not git(["rev-parse", "HEAD"], cwd=catalogue, check=False):
+        sys.exit("%s is not a git clone (a ZIP download, perhaps).\n"
+                 "The lock records the version each tool came from, which is what makes\n"
+                 "updates possible, and only a clone has one. Clone it instead:\n"
+                 "  git clone https://github.com/Esp1ngard4/akos.git" % os.path.abspath(catalogue))
+
+
 def content(path):
     """File bytes, with text line endings normalized to LF.
 
@@ -359,6 +371,7 @@ def install_shared(entry, lock, project, dest_parent, dest_parent_rel, catalogue
 
 
 def cmd_add(args):
+    require_clone(args.catalogue)
     cat = read_catalogue(args.catalogue)
     docs = read_docs(args.catalogue) if args.docs else {}
     tool_id = re.match(r"^TSP\.\d+$", args.skill)
@@ -493,6 +506,7 @@ def run_skill(project, dest, skill, script, args):
 
 
 def cmd_init(args):
+    require_clone(args.catalogue)
     pack = read_pack(args.catalogue, args.pack)
     project = os.path.abspath(args.project)
     if os.path.abspath(args.catalogue) == project:
@@ -526,12 +540,11 @@ def cmd_init(args):
     for name, _ in pack["folders"]:
         os.makedirs(os.path.join(planning, name), exist_ok=True)
     # The artifact register numbers everything at the top of the planning
-    # folder: itself first (00), then each folder, so the ID in each name is
-    # the register's own.
-    art = os.path.join(planning, pack["register"]["file"].format(name=args.name))
-    run_skill(project, args.dest, "artifact-register", "create_artifact_register.py", [art, args.name])
-    run_skill(project, args.dest, "artifact-register", "artifact.py", ["add", art, art, "--id", "0", "--root", planning])
-    art = next(os.path.join(planning, n) for n in os.listdir(planning) if n.endswith(os.path.basename(art)))
+    # folder: its own folder first (00), then each folder, so the ID in each
+    # name is the register's own.
+    reg = pack["register"]
+    art = os.path.join(planning, "00. " + reg["folder"], reg["file"].format(name=args.name))
+    run_skill(project, args.dest, "artifact-register", "create_artifact_register.py", [art, args.name, "--folder"])
     for name, about in pack["folders"]:
         run_skill(project, args.dest, "artifact-register", "artifact.py",
                   ["add", art, os.path.join(planning, name), "--root", planning, "--name", name, "--type", "Folder",
