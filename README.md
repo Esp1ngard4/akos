@@ -66,7 +66,7 @@ has described.
 | TSP.7 | [Notebook Manager](TSP/TSP.7%20Notebook%20Manager/) — plain-Markdown notebooks and a diary | `notebook-capture` |
 | TSP.8 | [Sprint Ceremonies](TSP/TSP.8%20Sprint%20Ceremonies/) — grooming, close-out, retrospective, planning | `sprint-facilitator`, `sprint-planning-precheck` |
 | TSP.9 | [Daily Loop](TSP/TSP.9%20Daily%20Loop/) — the morning plan and the evening stand-up, one record per day | `daily-loop-facilitator` |
-| TSP.10 | [Reporting](TSP/TSP.10%20Reporting/) — project status with the Essential 4, the sprint update with its board, and the project guide for onboarding | `reporting` |
+| TSP.10 | [Reporting](TSP/TSP.10%20Reporting/) — project status with the Essential 4, and the sprint update with its board | `reporting` |
 | TSP.11 | [Weekly Review](TSP/TSP.11%20Weekly%20Review/) — the week between the day and the sprint: beyond the sprint, the sprint check, the week ahead | `weekly-review-facilitator` |
 | TSP.12 | [Action Tracker](TSP/TSP.12%20Action%20Tracker/) — a team's shared list of the small actions agreed in a piece of work's sessions | `action-tracker-manager` |
 | TSP.13 | [Stakeholder Register](TSP/TSP.13%20Stakeholder%20Register/) — who has a stake in a project, where each stands, and what flows to them | `stakeholder-manager` |

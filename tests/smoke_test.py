@@ -1090,18 +1090,6 @@ def test_status_board(root, scratch):
 
     ok, out, page = header("2026-10-12")
     check("the status report says the team board is not consolidated yet", ok and "team board not consolidated yet" in page, out[-300:])
-    ok, out = run([report, "guide", planning, "--as-of", "2026-10-12"], scratch)
-    gdir = os.path.join(planning, "Reports", "Guide")
-    team = io.open(os.path.join(gdir, "2026-10-12 Guide.html"), encoding="utf-8").read() if ok else ""
-    execu = io.open(os.path.join(gdir, "2026-10-12 Guide (executive).html"), encoding="utf-8").read() if ok else ""
-    check("guide writes the team guide and the executive overview", ok and team and execu, out[-300:])
-    check("the team guide teaches the board: Copilot in Excel, the board's file, three role paths",
-          "Copilot in Excel" in team and "Status Board Demo S26.Q4.1.xlsx" in team
-          and all(r in team for r in ("Product manager", "Developer", "Validation and quality")), team[:300])
-    check("the team guide says what the sprint is and draws its rhythm", "Sprint S26.Q4.1" in team and "<svg" in team)
-    check("the executive overview holds no file, path or command",
-          not any(x in execu for x in ("WBS Demo.json", "Status Board Demo", "0. PrjMgm", "report.py", "board.py", "Copilot in Excel")), "")
-    check("the executive overview carries the six principles", execu.count('class="means"') == 6)
     ok, out = run([board, "sync", reg, "--sprint", "S26.Q4.1", "--consolidated"], scratch)
     ok, out, page = header("2026-10-13")
     check("after a consolidation, it says the WBS is as of that date",
@@ -1172,11 +1160,6 @@ def test_project_definition(root, scratch):
     o = rec.get("outcome") or {}
     check("with it, the status report takes the outcome and what it serves from the brief",
           ok and o.get("outcome") == "The brief is read the same way everywhere." and o.get("serves") == "G-1", str(o)[:400])
-    ok, out = run([report, "guide", planning, "--records", records, "--as-of", "2026-10-13"], scratch)
-    gpage = os.path.join(planning, "Reports", "Guide", "2026-10-13 Guide.html")
-    team = io.open(gpage, encoding="utf-8").read() if os.path.exists(gpage) else ""
-    check("with no board, the guide's paths say it to the agent, and the brief's outcome leads",
-          ok and "Copilot in Excel" not in team and "the agent" in team and "The brief is read the same way everywhere." in team, out[-300:])
     pd = os.path.join(skills, "project-definition-manager", "scripts", "brief.py")
     ok, out = run([pd, "check", planning, "--today", "2026-12-01"], scratch)
     check("check, as the weekly review runs it, names a brief due a revisit",

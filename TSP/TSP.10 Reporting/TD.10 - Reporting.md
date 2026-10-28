@@ -4,12 +4,11 @@
 
 Say how the work is going, to someone who does not read the registers. Reports are generated from the WBS, RAID and the sprint records, never written from memory, and each one opens with a short summary that a stakeholder can follow without any of the codes the registers use.
 
-Four reports ship:
+Three reports ship:
 
 - **The project status report**: what the project is for and whether it is getting there (its outcome and measures, from the project's brief), then the *Essential 4* (On Time, On Scope, On Quality, Resources), each proposed from the registers with its evidence and confirmed by the person who owns the project, plus the decisions and help the project needs, its key deliverables by month and its top risks.
 - **The sprint update**, after sprint planning: the last sprint's outcome beside the new sprint's commitments, across every project the sprint touches, with the sprint's cards as a board on a tab of their own.
 - **The project charter**, on demand: the project on one page for someone who reads none of the registers, from its brief and its registers, each section naming its source.
-- **The project guide**, on demand: onboarding in two editions from one record, the team guide for the product team and the executive overview for people outside it, generated from the project's own files.
 
 Any of them can be shared outside the work as a filtered copy (`export`), as HTML and optionally PDF.
 
@@ -55,8 +54,6 @@ Any of them can be shared outside the work as a filtered copy (`export`), as HTM
 
 **What leaves the project is opted in, entry by entry.** An external copy holds a RAID entry only when it is marked `Sharable = Y`; one nobody has thought about stays internal. It drops what names who the work waits on, the evidence under each rating, the card-level board and the facts block, and it refuses a report whose ratings or summary are not confirmed: only what was agreed is shared. The share level comes from the communication that sends the report, so the register and the copy cannot disagree.
 
-**The guide teaches the project as it is set up.** It is generated from the project's brief, registers, tool lock and calendar, so what it tells a newcomer is what the project actually runs on: which tools are installed decides which paths it shows, and the team board, where installed, decides whether people are told to update the board or to tell the agent. Two editions from one record, because a team member needs the how and someone outside the team needs the principles and the rhythm, and the outside edition must hold nothing internal. One screen first, then one idea per card, the tools a team member uses before the product manager's, paths of five steps per role: a guide that shows everything at once is not read.
-
 **The charter is generated, never written.** A brief is where the words are authored; the registers hold the rest. A charter written by hand would be a third copy that drifts. Nothing in it is rated, so it can be shared straight away, and a shared charter shows stakeholders by role and group, never by name.
 
 **One trend convention: up is better.** Every report and the RAID board draw a trend the same way, an arrow in a tinted circle, with a key at the foot of the page. Records store the level, never the arrow, so no reader has to know which way an arrow pointed; records written under the older convention read correctly.
@@ -96,7 +93,6 @@ Any of them can be shared outside the work as a filtered copy (`export`), as HTM
 
 | Version | Date | Changes |
 |---|---|---|
-| v1.7 | 2026-10-28 | **The project guide** (`report.py guide`): onboarding in two editions from one record, the team guide and the executive overview, each a page and optionally a PDF, generated from the brief, the registers, the tool lock and the sprint calendar; the paths follow the status tool installed. Rendered by `guide.py` beside `report.py`. |
 | v1.6 | 2026-10-28 | **The status report says how fresh the WBS is** where a team board exists (TSP.15): *the WBS as of the team board's last consolidation*, or that it has not been consolidated yet. No board, nothing said. |
 | v1.5 | 2026-10-28 | **The brief is read through Project Definition (TSP.14).** The status report and the charter stop parsing the brief: they read it through `brief.py`, the measures' vocabulary and date checks are the brief's own, and only whether a value reads as a number stays here, since scoring needs it. The template moves from `templates/` into TSP.14. A copy without TSP.14 installed says so in the outcome section and on the charter, and runs on. The executive statement is found in the brief's own language. |
 | v1.4 | 2026-10-27 | **A project folder can hold more than registers, and number its folders.** Looking for the WBS and RAID, a JSON that is not a register (an installer's lock) is skipped; it used to stop every report. Reports go into the project's reports folder whatever its number (`05. Reports`, or `Reports`), so a project whose artifact register numbers its folders keeps one. Found installing the tools into an existing project's management folder. |

@@ -149,7 +149,7 @@ SPRINT_RECORD = os.path.join(sibling("sprint-facilitator"), "scripts", "sprint_r
 # One folder per report type under a Reports folder, so reports stay findable
 # as types are added. The type stays in the file name as well: a report sent
 # on its own has lost its folder.
-TYPE_DIRS = {"status-report": "Status", "sprint-update": "Sprint Update", "charter": "Charter", "guide": "Guide"}
+TYPE_DIRS = {"status-report": "Status", "sprint-update": "Sprint Update", "charter": "Charter"}
 
 
 # The project's reports folder: `Reports`, or `<NN>. Reports` where the project
@@ -1398,11 +1398,6 @@ def write_record(path, rec):
     with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rec, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
-    if rec["kind"] == "guide":
-        for name, html_text in guide_pages(path, rec):
-            with io.open(name, "w", encoding="utf-8", newline="\n") as fh:
-                fh.write(html_text)
-        return
     page = {"status-report": render_status, "charter": render_charter}.get(rec["kind"], render_update)(rec)
     with io.open(path[:-5] + ".html", "w", encoding="utf-8", newline="\n") as fh:
         fh.write(page)
@@ -2112,207 +2107,6 @@ def charter_deliverables(wbs):
     return out
 
 
-# ─── The project guide ───────────────────────────────────────────────────────
-#
-# Two editions from one record (spec WP51): the team guide, for the product
-# team, and the executive overview, for people outside it, at the external
-# share level. Gathered here from the project's own files; rendered by
-# guide.py. Generated, never written: regenerating is how it stays true.
-
-SPRINT_FILE = re.compile(r"^S\d{2}\.Q\d\.\d+\.md$")
-LOCK_NAME = "tools.lock.json"
-
-
-def guide_pages(path, rec):
-    import guide as G
-    return [(path[:-5] + ".html", G.render_team(rec)), (path[:-5] + " (executive).html", G.render_exec(rec))]
-
-
-def find_up(folder, name, levels=4):
-    cur = os.path.abspath(folder)
-    for _ in range(levels):
-        cand = os.path.join(cur, name)
-        if os.path.isfile(cand):
-            return cand
-        up = os.path.dirname(cur)
-        if up == cur:
-            break
-        cur = up
-    return None
-
-
-def find_kind(folder, kind):
-    """The first JSON under a folder whose meta.kind is this, or None."""
-    for root, dirs, files in os.walk(folder):
-        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in ("PreviousV", "Archive"))
-        for name in sorted(files):
-            if name.endswith(".json"):
-                try:
-                    with io.open(os.path.join(root, name), encoding="utf-8") as fh:
-                        meta = json.load(fh).get("meta")
-                except (OSError, ValueError, AttributeError):
-                    continue
-                if isinstance(meta, dict) and meta.get("kind") == kind:
-                    return os.path.join(root, name)
-    return None
-
-
-def find_records(folder):
-    for root, dirs, files in os.walk(folder):
-        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "PreviousV"]
-        if any(SPRINT_FILE.match(f) for f in files):
-            return root
-    return None
-
-
-def installed_skills(prjmgm):
-    """The skills installed for this project: its lock, else the folder this
-    skill sits in."""
-    lock = find_up(prjmgm, LOCK_NAME)
-    if lock:
-        with io.open(lock, encoding="utf-8") as fh:
-            return sorted(k for k in json.load(fh).get("tools", {}) if not k.endswith(" docs"))
-    skills = os.path.dirname(os.path.dirname(HERE))
-    return sorted(n for n in os.listdir(skills) if os.path.isfile(os.path.join(skills, n, "SKILL.md")))
-
-
-def first_sentence(text):
-    m = re.match(r"(.+?[.;:])(\s|$)", (text or "").strip())
-    return (m.group(1) if m else (text or "")).rstrip(".;:")[:110]
-
-
-def guide_folders(prjmgm):
-    """The planning folder's top level, each with what it is for: from the
-    artifact register where its number names an artifact, else by what it holds."""
-    about, source = {}, None
-    art = find_kind(prjmgm, "artifact-register")
-    if art:
-        source = "artifact-register"
-        for a in R.rows(R.load(art), "artifacts"):
-            if a.get("Type") == "Folder" and a.get("ID") is not None:
-                about[str(a["ID"])] = first_sentence(a.get("Description"))
-    out = []
-    for name in sorted(os.listdir(prjmgm)):
-        full = os.path.join(prjmgm, name)
-        if name.startswith((".", "~$")) or not os.path.isdir(full) or name in ("PreviousV",):
-            continue
-        m = re.match(r"^0*(\d+)\.\s*", name)
-        out.append({"name": name, "about": about.get(m.group(1)) if m else None})
-    return out, source
-
-
-def guide_people(prjmgm, scope):
-    data = stakeholders(prjmgm, scope)
-    if data["meta"].get("default"):
-        return {}, [], None
-    people = [s for s in data.get("stakeholders", []) if R.clean(s.get("Status")) in ("", "Active")]
-    groups = []
-    for g in data.get("groups", []):
-        if R.clean(g.get("Status")) not in ("", "Active"):
-            continue
-        members = [{"name": s.get("Name"), "role": s.get("Role") or ""} for s in people if g.get("ID") in (s.get("Groups") or [])]
-        if members:
-            groups.append({"name": g.get("Name"), "members": members})
-    loose = [{"name": s.get("Name"), "role": s.get("Role") or ""} for s in people if not s.get("Groups")]
-    if loose:
-        groups.append({"name": "Others", "members": loose})
-    by_id = {s.get("ID"): s for s in people}
-    gname = {g.get("ID"): g.get("Name") for g in data.get("groups", [])}
-    comms = []
-    for c in data.get("communications", []):
-        if R.clean(c.get("Status")) not in ("", "Active"):
-            continue
-        aud = [gname.get(a) or (by_id.get(a) or {}).get("Role") or a for a in (c.get("Audience") or [])]
-        comms.append({"what": c.get("What"), "cadence": c.get("Cadence"), "audience": ", ".join(x for x in aud if x)})
-    pm = next((s.get("Name") for s in people if "product manager" in (s.get("Role") or "").lower()), None)
-    return {"groups": groups}, comms, pm
-
-
-def cmd_guide(args):
-    prjmgm = os.path.abspath(args.project)
-    if not os.path.isdir(prjmgm):
-        sys.exit("No folder at %s" % prjmgm)
-    as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
-    regs = discover(prjmgm)
-    wbs = Wbs(regs["wbs"][0]) if len(regs["wbs"]) == 1 else None
-    scope = wbs.scope if wbs else os.path.basename(prjmgm)
-    skills = installed_skills(prjmgm)
-    rel = lambda p: os.path.relpath(p, prjmgm).replace(os.sep, "/") if p else None
-    records = args.records or find_records(prjmgm)
-
-    sprint = None
-    if wbs and R.rows(wbs.data, "sprints"):
-        iso = as_of.isoformat()
-        win = next((s for s in R.rows(wbs.data, "sprints") if s["Starts"] <= iso <= s["Ends"]), None)
-        if win:
-            start, end = date.fromisoformat(win["Starts"]), date.fromisoformat(win["Ends"])
-            sprint = {"id": win["Sprint"], "starts": win["Starts"], "ends": win["Ends"],
-                      "day": (as_of - start).days + 1, "days": (end - start).days + 1, "goals": []}
-            if records:
-                for s in run_json([SPRINT_RECORD, "goals", records, "--json"]):
-                    if s.get("sprint") == win["Sprint"]:
-                        sprint["goals"] = [{"id": g.get("id"), "goal": g.get("goal"), "done_when": g.get("done_when")} for g in s.get("goals", [])]
-
-    brief = None
-    bpath = B.find(prjmgm) if B else None
-    if bpath:
-        text = io.open(bpath, encoding="utf-8").read()
-        parts, secs = B.parse(text), md_sections(text)
-        brief = {"statement": parts["statement"], "outcome": parts["outcome"], "done_when": parts["done_when"],
-                 "stop_if": parts["stop_if"], "serves": parts["serves"], "why": (secs.get("Why") or "").strip() or None,
-                 "who": (secs.get("Who it is for") or "").strip() or None,
-                 "measures": [r.get("Measure") for r in parts["rows"] if r.get("Measure")]}
-
-    board = board_freshness(wbs.path, sprint["id"] if sprint else None) if wbs else None
-    where = {
-        "project-definition-manager": rel(bpath) or "no brief yet",
-        "wbs-manager": rel(wbs.path) if wbs else None,
-        "status-board-manager": (os.path.dirname(rel(wbs.path)) + "/" + board["board"]).lstrip("/") if board and wbs else "set up at each sprint's planning",
-        "raid-manager": rel(regs["raid"][0]) if regs["raid"] else None,
-        "sprint-facilitator": rel(records),
-        "reporting": rel(reports_root(prjmgm)),
-        "stakeholder-manager": rel(find_kind(prjmgm, "stakeholder-register")) or "no register yet",
-        "weekly-review-facilitator": "the product manager's weekly records",
-        "action-tracker-manager": "beside the work each tracker serves",
-        "artifact-register": rel(find_kind(prjmgm, "artifact-register")),
-        "tsp-manager": rel(find_kind(prjmgm, "tsp-register")) or rel(find_up(prjmgm, "TSP Register.json", 1)),
-    }
-    import guide as G
-    tools = [{"skill": s, "where": where.get(s)} for s in G.ORDER if s in skills]
-    folders, folders_from = guide_folders(prjmgm)
-    people, comms, pm = guide_people(prjmgm, scope)
-    if not pm:
-        for path in regs["raid"] + ([wbs.path] if wbs else []):
-            pm = R.load(path).get("meta", {}).get("settings", {}).get("author") or pm
-            if pm:
-                break
-    registers = [n for n, have in (("Brief", brief), ("Backlog", wbs), ("Team board", board), ("Risks and decisions", regs["raid"]),
-                                   ("Sprint records", records)) if have]
-    rec = {"kind": "guide", "version": 1, "scope": scope, "as_of": as_of.isoformat(),
-           "generated": datetime.now().isoformat(timespec="seconds"),
-           "folder_name": os.path.basename(prjmgm), "pm": pm, "brief": brief, "sprint": sprint,
-           "status_tool": "board" if "status-board-manager" in skills else "agent", "board": board,
-           "ceremonies": {"planning": "sprint-facilitator" in skills, "closeout": "sprint-facilitator" in skills,
-                          "weekly": "weekly-review-facilitator" in skills, "daily": "daily-loop-facilitator" in skills},
-           "tools": tools, "folders": folders, "folders_from": folders_from, "people": people, "comms": comms,
-           "registers": registers}
-    out_dir = reports_dir(reports_root(prjmgm), "guide")
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, "%s Guide.json" % as_of.isoformat())
-    write_record(path, rec)
-    print("Guide for %s (as of %s)" % (scope, as_of))
-    print("  brief: %s · sprint: %s · status: %s · %d tool(s) · people: %s"
-          % ("yes" if brief else "none yet", sprint["id"] if sprint else "no calendar",
-             "the team board" if rec["status_tool"] == "board" else "through the agent", len(tools),
-             "%d group(s)" % len(people.get("groups", [])) if people else "no register"))
-    print("  Record:    %s\n  Team:      %s\n  Executive: %s" % (path, path[:-5] + ".html", path[:-5] + " (executive).html"))
-    if args.pdf:
-        for html_path in (path[:-5] + ".html", path[:-5] + " (executive).html"):
-            used = print_pdf(html_path, html_path[:-5] + ".pdf")
-            print("  PDF:       %s" % (html_path[:-5] + ".pdf" if used else "not written: no Chrome or Edge found"))
-    return 0
-
-
 def cmd_charter(args):
     prjmgm = os.path.abspath(args.project)
     if not os.path.isdir(prjmgm):
@@ -2478,12 +2272,6 @@ def main():
     s.add_argument("project", help="the folder holding the project's brief and registers")
     s.add_argument("--as-of", metavar="YYYY-MM-DD")
     s.set_defaults(func=cmd_charter)
-    s = sub.add_parser("guide", help="the project guide: the team edition and the executive overview")
-    s.add_argument("project", help="the folder holding the project's brief and registers")
-    s.add_argument("--as-of", metavar="YYYY-MM-DD")
-    s.add_argument("--records", help="the sprint records folder, when it is not found under the project")
-    s.add_argument("--pdf", action="store_true", help="also print both pages to PDF with Chrome or Edge")
-    s.set_defaults(func=cmd_guide)
     s = sub.add_parser("render", help="rebuild the view from its record")
     s.add_argument("record")
     s.set_defaults(func=cmd_render)
