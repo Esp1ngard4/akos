@@ -188,6 +188,14 @@ tool whose dashboard template had never been committed, and every clone failed o
 first use while the working tree looked perfectly healthy. CI runs `--packaged` on
 every push, against Python 3.9 and 3.13.
 
+The site on GitHub Pages is generated too, from the README, each tool's TD, TSP.16 and the
+Atlas fixtures. After changing any of them, rebuild it; CI fails while `docs/` is behind:
+
+```bash
+python site/build_site.py           # writes docs/
+python site/build_site.py --check   # what CI runs
+```
+
 ## Templates
 
 - [`templates/TD-template.md`](../templates/TD-template.md) — the governance document structure. `td-author` (TSP.3's second skill) is what applies and audits it.

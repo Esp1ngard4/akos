@@ -92,24 +92,24 @@ brief"*, then *"let's run sprint planning"*.
 
 | | Tool | What the agent does with it | Skill |
 |---|---|---|---|
-| TSP.1 | [WBS Register](TSP/TSP.1%20WBS%20Register/) | Keeps the backlog: every piece of work, its criteria, estimate and sprint | `wbs-manager` |
-| TSP.2 | [RAID Register](TSP/TSP.2%20RAID%20Register/) | Logs risks, actions, issues and decisions, each with an owner and a date to look again | `raid-manager` |
-| TSP.3 | [TSP Register](TSP/TSP.3%20TSP%20Register/) | Keeps the inventory of the tools the project runs on | `tsp-manager`, `td-author` |
-| TSP.4 | [Tool Installer](TSP/TSP.4%20Tool%20Installer/) | Nothing: a person installs and updates, and a lock records what was changed | *(none)* |
-| TSP.5 | [Artifact Register](TSP/TSP.5%20Artifact%20Register/) | Knows where every document lives, and checks the filing against the disk | `artifact-register` |
-| TSP.6 | [Content System](TSP/TSP.6%20Content%20System/) | Turns ideas into a strategy, plans and posts, each written to a contract | five `content-*` skills |
-| TSP.7 | [Notebook Manager](TSP/TSP.7%20Notebook%20Manager/) | Files notes and a diary in plain Markdown | `notebook-capture` |
-| TSP.8 | [Sprint Ceremonies](TSP/TSP.8%20Sprint%20Ceremonies/) | Runs grooming, planning, close-out and the retro with you, and writes each record | `sprint-facilitator`, `sprint-planning-precheck` |
-| TSP.9 | [Daily Loop](TSP/TSP.9%20Daily%20Loop/) | Plans your morning and closes your day, one record per day | `daily-loop-facilitator` |
-| TSP.10 | [Reporting](TSP/TSP.10%20Reporting/) | Drafts the status report and the sprint update from the records, for a person to rate | `reporting` |
-| TSP.11 | [Weekly Review](TSP/TSP.11%20Weekly%20Review/) | Checks the week: what falls due beyond the sprint, whether the sprint is on track, the week ahead | `weekly-review-facilitator` |
-| TSP.12 | [Action Tracker](TSP/TSP.12%20Action%20Tracker/) | Keeps the small actions a session agrees, each with its owner | `action-tracker-manager` |
-| TSP.13 | [Stakeholder Register](TSP/TSP.13%20Stakeholder%20Register/) | Knows who hears what and when, and says what is due to whom | `stakeholder-manager` |
-| TSP.14 | [Project Definition](TSP/TSP.14%20Project%20Definition/) | Writes the brief with whoever owns the outcome, and keeps it current | `project-definition-manager` |
-| TSP.15 | [Team Status Board](TSP/TSP.15%20Team%20Status%20Board/) | Sets up each sprint's board in Excel, and brings the team's updates into the backlog as proposals | `status-board-manager` |
-| TSP.16 | [Onboarding](TSP/TSP.16%20Onboarding/) | Generates the project's guide, and walks a new joiner through their first week | `onboarding-guide` |
+| TSP.1 | [WBS Register](https://esp1ngard4.github.io/akos/tools/wbs-register.html) | Keeps the backlog: every piece of work, its criteria, estimate and sprint | `wbs-manager` |
+| TSP.2 | [RAID Register](https://esp1ngard4.github.io/akos/tools/raid-register.html) | Logs risks, actions, issues and decisions, each with an owner and a date to look again | `raid-manager` |
+| TSP.3 | [TSP Register](https://esp1ngard4.github.io/akos/tools/tsp-register.html) | Keeps the inventory of the tools the project runs on | `tsp-manager`, `td-author` |
+| TSP.4 | [Tool Installer](https://esp1ngard4.github.io/akos/tools/tool-installer.html) | Nothing: a person installs and updates, and a lock records what was changed | *(none)* |
+| TSP.5 | [Artifact Register](https://esp1ngard4.github.io/akos/tools/artifact-register.html) | Knows where every document lives, and checks the filing against the disk | `artifact-register` |
+| TSP.6 | [Content System](https://esp1ngard4.github.io/akos/tools/content-system.html) | Turns ideas into a strategy, plans and posts, each written to a contract | five `content-*` skills |
+| TSP.7 | [Notebook Manager](https://esp1ngard4.github.io/akos/tools/notebook-manager.html) | Files notes and a diary in plain Markdown | `notebook-capture` |
+| TSP.8 | [Sprint Ceremonies](https://esp1ngard4.github.io/akos/tools/sprint-ceremonies.html) | Runs grooming, planning, close-out and the retro with you, and writes each record | `sprint-facilitator`, `sprint-planning-precheck` |
+| TSP.9 | [Daily Loop](https://esp1ngard4.github.io/akos/tools/daily-loop.html) | Plans your morning and closes your day, one record per day | `daily-loop-facilitator` |
+| TSP.10 | [Reporting](https://esp1ngard4.github.io/akos/tools/reporting.html) | Drafts the status report and the sprint update from the records, for a person to rate | `reporting` |
+| TSP.11 | [Weekly Review](https://esp1ngard4.github.io/akos/tools/weekly-review.html) | Checks the week: what falls due beyond the sprint, whether the sprint is on track, the week ahead | `weekly-review-facilitator` |
+| TSP.12 | [Action Tracker](https://esp1ngard4.github.io/akos/tools/action-tracker.html) | Keeps the small actions a session agrees, each with its owner | `action-tracker-manager` |
+| TSP.13 | [Stakeholder Register](https://esp1ngard4.github.io/akos/tools/stakeholder-register.html) | Knows who hears what and when, and says what is due to whom | `stakeholder-manager` |
+| TSP.14 | [Project Definition](https://esp1ngard4.github.io/akos/tools/project-definition.html) | Writes the brief with whoever owns the outcome, and keeps it current | `project-definition-manager` |
+| TSP.15 | [Team Status Board](https://esp1ngard4.github.io/akos/tools/team-status-board.html) | Sets up each sprint's board in Excel, and brings the team's updates into the backlog as proposals | `status-board-manager` |
+| TSP.16 | [Onboarding](https://esp1ngard4.github.io/akos/tools/onboarding.html) | Generates the project's guide, and walks a new joiner through their first week | `onboarding-guide` |
 
-The full list, generated from the catalogue's own register, is the [registry](registry/REGISTRY.md).
+Each tool's page says what it is for, what it works with and how to install it; [all of them](https://esp1ngard4.github.io/akos/tools/), and [your first hour](https://esp1ngard4.github.io/akos/first-hour.html) setting up Atlas with them. The list generated from the catalogue's own register is the [registry](registry/REGISTRY.md).
 
 ## Building on it
 

@@ -13,6 +13,8 @@ Thumbs.db
 !TSP/TSP.3 TSP Register/tsp-manager/templates/dashboard.html
 !TSP/TSP.7 Notebook Manager/notebook-capture/assets/post-template.html
 !TSP/TSP.13 Stakeholder Register/stakeholder-manager/templates/dashboard.html
+# The site on GitHub Pages: generated, but published, so it ships (site/build_site.py).
+!docs/**/*.html
 
 # Stakeholder contacts are other people's personal data: never in git (TD.13).
 Contacts *.csv
