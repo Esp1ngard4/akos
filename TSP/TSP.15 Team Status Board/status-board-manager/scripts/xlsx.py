@@ -41,6 +41,14 @@ def serial_to_date(v):
     return (EPOCH + timedelta(days=int(float(v)))).isoformat()
 
 
+def date_to_serial(iso):
+    """YYYY-MM-DD as an Excel date serial, or None when it is not one."""
+    try:
+        return (date.fromisoformat(iso) - EPOCH).days
+    except (TypeError, ValueError):
+        return None
+
+
 # ─── Reading ─────────────────────────────────────────────────────────────────
 
 def read(path):
@@ -134,35 +142,42 @@ def _cell_value(c, shared, date_styles):
 
 STYLES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="dd\-mmm\-yyyy"/></numFmts>
 <fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts>
 <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
 <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="4">
+<cellXfs count="5">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="left" vertical="top"/></xf>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>"""
-STYLE = {"wrap": 0, "bold": 1, "title": 2, "plain": 3}
+STYLE = {"wrap": 0, "bold": 1, "title": 2, "plain": 3, "date": 4}
 
 
 class Sheet(object):
     """rows: lists of values (str, int, float or None). styles: {row index:
     style name} for whole rows. widths: column widths in characters. table:
     (name, header row index) to make the block from that row a table.
-    validations: [(column index, [values], first row, last row)]."""
+    validations: [(column index, [values], first row, last row)]. dates:
+    column indexes shown as dates (29-Oct-2026), below a table's header; a
+    YYYY-MM-DD value there is written as a real date, and the column keeps the
+    format for whatever is typed into it later."""
 
-    def __init__(self, name, rows, widths=None, styles=None, table=None, validations=None, freeze=False):
+    def __init__(self, name, rows, widths=None, styles=None, table=None, validations=None, freeze=False, dates=()):
         self.name, self.rows = name, rows
-        self.widths, self.styles = widths or [], styles or {}
+        self.widths, self.styles, self.dates = widths or [], styles or {}, set(dates)
         self.table, self.validations, self.freeze = table, validations or [], freeze
 
 
 def _cell(ref, value, style):
     s = ' s="%d"' % STYLE[style]
+    if style == "date" and isinstance(value, str) and date_to_serial(value) is not None:
+        value = date_to_serial(value)
     if value is None or value == "":
         return '<c r="%s"%s/>' % (ref, s)
     if isinstance(value, bool):
@@ -186,12 +201,15 @@ def _sheet_xml(sh, table_rid):
         out.append('<sheetViews><sheetView workbookViewId="0"/></sheetViews>')
     out.append('<sheetFormatPr defaultRowHeight="15"/>')
     if sh.widths:
-        out.append("<cols>%s</cols>" % "".join('<col min="%d" max="%d" width="%s" customWidth="1"/>' % (i + 1, i + 1, w)
+        out.append("<cols>%s</cols>" % "".join('<col min="%d" max="%d" width="%s" customWidth="1"%s/>'
+                                              % (i + 1, i + 1, w, ' style="%d"' % STYLE["date"] if i in sh.dates else "")
                                               for i, w in enumerate(sh.widths)))
     out.append("<sheetData>")
     for ri, row in enumerate(sh.rows):
         style = sh.styles.get(ri, "wrap" if sh.table and ri > sh.table[1] else "plain")
-        cells = "".join(_cell("%s%d" % (col_letter(ci), ri + 1), v, style) for ci, v in enumerate(row))
+        body = sh.table and ri > sh.table[1]
+        cells = "".join(_cell("%s%d" % (col_letter(ci), ri + 1), v, "date" if body and ci in sh.dates else style)
+                        for ci, v in enumerate(row))
         out.append('<row r="%d">%s</row>' % (ri + 1, cells))
     out.append("</sheetData>")
     if sh.validations:

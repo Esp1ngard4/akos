@@ -306,6 +306,12 @@
       "Description": "TD.1 v1.17: create_wbs.py --execution declares the Execution folder at creation.",
       "ID": 51,
       "Tool": "WBS Register"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.15 v1.1: Updated on is a date column shown as 29-Oct-2026; a date typed as text is read too.",
+      "ID": 52,
+      "Tool": "Team Status Board"
     }
   ],
   "control_activities": [],
@@ -356,8 +362,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T21:23:45",
-    "values_hash": "sha256:c4a4cfac3150da82722a28ed13534d90515a8de81f652e81fd94ff3c5525a38c",
+    "updated": "2026-10-28T23:13:56",
+    "values_hash": "sha256:61221631ce010c7cbc0f9dac595c0fedda01b7bec9b6172cae93cc0685b5e116",
     "version": 1
   },
   "tools": [

@@ -102,6 +102,22 @@ def wbs_date(iso):
     return "%d-%s-%d" % (d.year, MONTHS[d.month - 1], d.day)
 
 
+MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+
+
+def as_iso(s):
+    """A board date as YYYY-MM-DD: Excel's real dates already read that way;
+    one typed as text, 29-Oct-2026 or 2026-10-29, is read too."""
+    s = (s or "").strip()
+    m = re.match(r"^(\d{1,2})[-/ ]([A-Za-z]{3})[A-Za-z]*[-/ ](\d{4})$", s)
+    if m and m.group(2).lower() in MONTHS:
+        try:
+            return date(int(m.group(3)), MONTHS.index(m.group(2).lower()) + 1, int(m.group(1))).isoformat()
+        except ValueError:
+            return s
+    return s
+
+
 def is_date(s):
     return bool(re.match(r"^\d{4}-\d{2}-\d{2}$", s or "")) and s <= date.today().isoformat()
 
@@ -164,7 +180,7 @@ HOW_TO = [
     ["Status", "To do, Doing, Done or Blocked. Cancelled is set by the product manager only. A WBS row is done when all its tasks are."],
     ["Notes", "A dated log, newest on top, one entry per line (Alt+Enter for a new line): 2026-10-28 · Your name: where it stands, or what is in the way. Add a line; never edit an older one."],
     ["AC verdict", "On a Done task: met, partly met or not met, against the WBS row's acceptance criteria it covers. A partly met says in Notes what is left."],
-    ["Updated on / by", "When, and who. A date as YYYY-MM-DD."],
+    ["Updated on / by", "When, and who. Type the date any way Excel reads one (29-Oct-2026, or Ctrl+; for today); it shows as 29-Oct-2026."],
     ["New work", "A task with no WBS ID is new work, or work whose WBS row you don't know. Give it a Task and a dated note; the product manager links it to a WBS row or brings it in as new work."],
     ["Don't", "Change a task's WBS ID once it is set, delete a row, or rename a column: the consolidation reads them."],
     [""],
@@ -190,6 +206,7 @@ def save(path, about, rows, extra, title, ids=None):
     if ids and len(",".join(ids)) < 250:                        # Excel's limit for a typed list
         validations.append((0, ids, 1, MAX_ROWS))
     board = xlsx.Sheet("Board", body, widths=WIDTHS + [18] * len(extra), styles={0: "bold"}, table=("Board", 0),
+                       dates=[COLUMNS.index("Updated on")],
                        validations=validations, freeze=True)
     how = xlsx.Sheet("How to update", [list(r) for r in HOW_TO], widths=[18, 110],
                      styles={0: "title", HOW_TO.index(["Asking Copilot in Excel"]): "bold"})
@@ -373,7 +390,7 @@ def cmd_link(args):
 def _task(row):
     return {"row": row["_row"], "task": row.get("Task", ""), "status": row.get("Status") or "To do",
             "verdict": row.get("AC verdict", ""), "owner": row.get("Owner", ""),
-            "updated": row.get("Updated on", ""), "by": row.get("Updated by", ""),
+            "updated": as_iso(row.get("Updated on", "")), "by": row.get("Updated by", ""),
             "notes": parse_notes(row.get("Notes", ""))}
 
 

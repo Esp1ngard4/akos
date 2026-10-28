@@ -92,6 +92,15 @@ def main():
         rows = xlsx.read(p)["Data"]
         ok(rows[0] == ["WBS ID", "Updated on"], "shared strings read", rows)
         ok(rows[1] == ["12", "2026-10-27"], "a number reads as text, a date serial as YYYY-MM-DD", rows)
+        dated = os.path.join(tmp, "dated.xlsx")
+        xlsx.write(dated, [xlsx.Sheet("Board", [["Task", "Updated on"], ["Form", "2026-10-29"]], widths=[20, 14], table=("Board", 0), dates=[1])])
+        with zipfile.ZipFile(dated) as z:
+            styles, sheet = z.read("xl/styles.xml").decode("utf-8"), z.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        ok('formatCode="dd\\-mmm\\-yyyy"' in styles and '<c r="B2" s="4"><v>46324</v></c>' in sheet and 'style="4"' in sheet,
+           "a date column is written as real dates shown 29-Oct-2026, and keeps the format for what is typed later", sheet[-400:])
+        ok(xlsx.read(dated)["Board"][1] == ["Form", "2026-10-29"], "and reads back as YYYY-MM-DD")
+        ok([B.as_iso(s) for s in ("29-Oct-2026", "5 Nov 2026", "2026-10-29", "")] == ["2026-10-29", "2026-11-05", "2026-10-29", ""],
+           "a date typed as text reads as one")
         ok(rows[2] == ["rich text", "TRUE"], "rich text and booleans", rows)
         legacy = os.path.join(tmp, "legacy.xlsx")
         xlsx.write(legacy, [xlsx.Sheet("Board", [["WBS ID", "Title", "Status", "Note"], [3, "Old", "Doing", "2026-10-01 %s Ann: x" % DOT]]),

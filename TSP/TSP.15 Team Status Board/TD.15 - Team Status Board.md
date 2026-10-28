@@ -54,7 +54,7 @@ Standard library only. Needs `wbs-manager` (TSP.1) installed beside it. The work
 - **Board statuses:** To do · Doing · Done · Blocked · Cancelled. **AC verdicts:** met · partly met · not met.
 - **Columns:** *WBS ID*, *WBS item*, *Task*, *Owner*, *Status*, *Notes*, *AC verdict*, *Updated on*, *Updated by*.
 - **Notes:** `YYYY-MM-DD · Name: text`, one entry per line, newest on top. On the WBS row a board note reads `On the team board, <date>, <name> (<task>): <text>`.
-- **Dates** on the board as `YYYY-MM-DD`; the WBS writes them its own way (`2026-Oct-27`), and the tool converts.
+- **Dates:** *Updated on* is a date column shown as `29-Oct-2026`, whatever the reader's regional settings; typed as text, `29-Oct-2026` or `2026-10-29` is read too. Notes keep `YYYY-MM-DD` at the start of each entry. The WBS writes dates its own way (`2026-Oct-27`), and the tool converts.
 
 ## Adapting it to your tools
 
@@ -123,4 +123,5 @@ What is **not** tested is how a team uses it: whether people keep the board curr
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-28 | **Updated on reads as 29-Oct-2026.** The column is a date column formatted `dd-mmm-yyyy`, so a date typed into it, or written by the tool, shows the same way whatever the reader's regional settings, where it had shown as Excel's default (`10/29/2026`). A date typed as text (`29-Oct-2026`) is read too. Asked for by the user in the Synaptica trial. |
 | v1.0 | 2026-10-28 | Published as TSP.15: the board's rows are the team's tasks, several to a WBS row, rolled up per row; Notes a dated log brought into the WBS entry by entry. One skill: the sprint's board set up from the WBS, updated when a commitment changes, and consolidated into the WBS through proposals a person confirms; `xlsx.py` reads and writes the workbook with the standard library. Steps in planning, the weekly review and the close-out where it is installed; the status report says how fresh the WBS is. |
