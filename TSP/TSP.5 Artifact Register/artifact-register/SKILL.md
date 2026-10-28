@@ -144,10 +144,10 @@ artifacts (filterable), containment trees, review queue, findings.
 
 ```
 python refresh_artifact_register.py "<register>.json" "Artifact Dashboard.html" \
-    --scope "Atlas" --root "<folder it describes>" --tsp-register "<tool register>.json"
+    --scope "Atlas" --root "<folder it describes>" --tool-register "<tool register>.json"
 ```
 
-`--root` and `--tsp-register` are optional and take the same values as `audit`.
+`--root` and `--tool-register` are optional and take the same values as `audit`.
 Pass them and the Findings tab carries the full audit; omit them and it says which
 checks were skipped rather than implying a clean bill. The tab label shows a
 count, so a register with problems announces them on open.
@@ -160,7 +160,7 @@ the field is empty — which is how you find artifacts still missing a `Type`.
 
 ```
 python audit_artifact_register.py "<register>.json" \
-    --root "<folder it describes>" --tsp-register "<tool register>.json"
+    --root "<folder it describes>" --tool-register "<tool register>.json"
 ```
 
 Exits non-zero on errors. Every finding is listed; `--summary` gives class names

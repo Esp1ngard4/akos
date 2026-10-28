@@ -351,7 +351,7 @@ document.getElementById('scope').innerHTML = [
   '<b>Register</b> &mdash; duplicate IDs, vocabulary, parents that point nowhere or at themselves, review age.',
   FINDINGS.checked.tsp
     ? '<b>Delegation</b> &mdash; every <code>Managed By</code> resolved against the TSP.3 tool register.'
-    : '<b>Delegation</b> &mdash; <i>not checked.</i> Re-run with <code>--tsp-register</code>.',
+    : '<b>Delegation</b> &mdash; <i>not checked.</i> Re-run with <code>--tool-register</code>.',
   FINDINGS.checked.disk
     ? '<b>Disk</b> &mdash; reconciled against <code>' + FINDINGS.checked.disk +
       '</code>. The scan stops where the register stops: at delegated artifacts, at tools, ' +

@@ -35,6 +35,7 @@ python install.py add <skill> --into <your-project>
 | TSP.13 | **Stakeholder Register** | In Progress | `stakeholder-manager` | [TD.13](../TSP/TSP.13%20Stakeholder%20Register/TD.13%20-%20Stakeholder%20Register.md) |
 | TSP.14 | **Project Definition** | In Progress | `project-definition-manager` | [TD.14](../TSP/TSP.14%20Project%20Definition/TD.14%20-%20Project%20Definition.md) |
 | TSP.15 | **Team Status Board** | In Progress | `status-board-manager` | [TD.15](../TSP/TSP.15%20Team%20Status%20Board/TD.15%20-%20Team%20Status%20Board.md) |
+| TSP.16 | **Onboarding** | In Progress | `onboarding-guide` | [TD.16](../TSP/TSP.16%20Onboarding/TD.16%20-%20Onboarding.md) |
 
 ## What each is for
 
@@ -67,6 +68,8 @@ python install.py add <skill> --into <your-project>
 **TSP.14 Project Definition** — The documents that define a project: above all the Project Brief every project has (why it exists, its outcome and done-when, Stop if, what it serves, and for a full brief its measures, appetite, scope, approach and who it is for), and further definition documents when a project needs one. Writes, grows, keeps current and revisits the brief; brief.py is the one reader of its format, used by the status report, the charter and the weekly review.
 
 **TSP.15 Team Status Board** — Where a team updates the status of its own work, one Excel board per sprint beside the WBS, edited by the team or through Copilot in Excel, and its consolidation into the WBS: set up at planning, updated when a commitment changes, consolidated at the weekly review and the close-out through proposals the product manager confirms. A step in those ceremonies only where it is installed; the WBS keeps one writer.
+
+**TSP.16 Onboarding** — How people come to work in a project run on these tools: the team guide and the executive overview generated from the project's own files, every step saying who acts, people and agents shown as one loop, fonts embedded; and the onboard me conversation that walks a newcomer through their first week.
 
 ## Status meanings
 

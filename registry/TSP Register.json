@@ -258,6 +258,12 @@
       "Description": "TD.10 v1.6: the status report says when the team's board was last consolidated (TSP.15).",
       "ID": 43,
       "Tool": "Reporting"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TSP.16 published: the project's onboarding guide in two editions and the onboard me conversation; first built inside Reporting and moved out before publishing.",
+      "ID": 44,
+      "Tool": "Onboarding"
     }
   ],
   "control_activities": [],
@@ -308,8 +314,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T13:08:27",
-    "values_hash": "sha256:4f70f7d214c667be33bd6835e85f4477a0472f76ebdd81350c1dc762ad08a434",
+    "updated": "2026-10-28T14:43:09",
+    "values_hash": "sha256:9e28bdb370aaf248660c17c149b41c41686c839c4122e93794a91b805a2b042f",
     "version": 1
   },
   "tools": [
@@ -519,6 +525,20 @@
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "status-board-manager",
+      "Status": "In Progress",
+      "Type": "Tool"
+    },
+    {
+      "Description": "How people come to work in a project run on these tools: the team guide and the executive overview generated from the project's own files, every step saying who acts, people and agents shown as one loop, fonts embedded; and the onboard me conversation that walks a newcomer through their first week.",
+      "Doc Aux": "Yes",
+      "ID": 16,
+      "Last Reviewed": "2026-10-28",
+      "Links": "TSP/TSP.16 Onboarding/TD.16 - Onboarding.md",
+      "Name": "Onboarding",
+      "Notes": "Not yet read by a newcomer: exercised by its smoke test with and without a team board. Fonts (Bricolage Grotesque, Geist, Geist Mono) under the SIL Open Font License, shipped with their licences.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "onboarding-guide",
       "Status": "In Progress",
       "Type": "Tool"
     }

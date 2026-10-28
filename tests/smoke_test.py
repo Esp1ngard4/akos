@@ -1040,6 +1040,33 @@ REPORT_TOOL = "TSP.10 Reporting"
 PD_TOOL = "TSP.14 Project Definition"
 
 
+ONBOARD_TOOL = "TSP.16 Onboarding"
+
+
+def test_onboarding(root, scratch):
+    """The onboarding guide: its own smoke test, and an install that carries its fonts."""
+    print("\nTSP.16 Onboarding")
+    tool = os.path.join(root, "TSP", ONBOARD_TOOL)
+    if not check("tool folder present", os.path.isdir(tool), tool):
+        return
+    check("TD.16 present", any(n.startswith("TD.16") for n in os.listdir(tool)))
+    check("links resolve in the catalogue", not broken_links(tool), str(broken_links(tool))[:200])
+    skill = os.path.join(tool, "onboarding-guide")
+    fonts = ("BricolageGrotesque-latin.woff2", "Geist-latin.woff2", "GeistMono-latin.woff2",
+             "OFL-bricolagegrotesque.txt", "OFL-geist.txt", "OFL-geistmono.txt")
+    for rel in ["SKILL.md"] + [os.path.join("scripts", f) for f in ("onboard.py", "render.py", "guide.css", "guide.js", "smoke_test.py")] \
+            + [os.path.join("assets", "fonts", f) for f in fonts]:
+        check("ships %s" % rel.replace(os.sep, "/"), os.path.isfile(os.path.join(skill, rel)))
+    ok, out = run([os.path.join(skill, "scripts", "smoke_test.py")], scratch)
+    check("its own smoke test passes", ok and "All checks passed." in out, out[-500:])
+    proj = os.path.join(scratch, "onboard-project")
+    os.makedirs(proj, exist_ok=True)
+    ok, out = run([os.path.join(root, "install.py"), "add", "onboarding-guide", "--into", proj, "--catalogue", root], scratch)
+    installed = os.path.join(proj, ".agents", "skills", "onboarding-guide", "assets", "fonts")
+    check("install.py add onboarding-guide carries the fonts and their licences",
+          ok and all(os.path.isfile(os.path.join(installed, f)) for f in fonts), out[-300:])
+
+
 BOARD_TOOL = "TSP.15 Team Status Board"
 
 
@@ -2270,6 +2297,7 @@ def main():
         test_stakeholder_register(root, scratch)
         test_project_definition(root, scratch)
         test_status_board(root, scratch)
+        test_onboarding(root, scratch)
         test_reporting(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
@@ -2287,7 +2315,7 @@ def main():
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
               "ceremonies, the daily loop, the weekly review, the action tracker, the "
-              "stakeholder register, project definition, the team status board and reporting)." % len(TOOLS))
+              "stakeholder register, project definition, the team status board, onboarding and reporting)." % len(TOOLS))
         return 0
     finally:
         if args.keep:
