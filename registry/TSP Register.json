@@ -258,6 +258,12 @@
       "Description": "TD.10 v1.6: the status report says when the team's board was last consolidated (TSP.15).",
       "ID": 43,
       "Tool": "Reporting"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.10 v1.7: the project guide, onboarding in two editions (team guide, executive overview) generated from the project's own files; paths follow the status tool installed.",
+      "ID": 44,
+      "Tool": "Reporting"
     }
   ],
   "control_activities": [],
@@ -308,8 +314,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T13:08:27",
-    "values_hash": "sha256:4f70f7d214c667be33bd6835e85f4477a0472f76ebdd81350c1dc762ad08a434",
+    "updated": "2026-10-28T14:15:42",
+    "values_hash": "sha256:9c0572443b6c9651bd75f75f61a44d5df72bcf2a40cdb5eea0f480f25f8d63e3",
     "version": 1
   },
   "tools": [
