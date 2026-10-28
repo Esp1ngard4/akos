@@ -17,9 +17,11 @@ Python 3, standard library only. `wbs-manager` installed beside this skill. `<sk
 
 | Sheet | Holds |
 |---|---|
-| **Board** | A table: *WBS ID*, *Title*, *Owner*, *Status* (To do · Doing · Done · Blocked · Cancelled), *Notes*, *AC verdict* (met · partly met · not met), *Updated on*, *Updated by*. The sprint's work only: its committed and pulled-in leaves, not the parents they make up |
+| **Board** | A table of the team's **tasks**: *WBS ID* (the WBS row the task helps deliver, from a list of the sprint's IDs), *WBS item* (its title, filled by the agent), *Task*, *Owner*, *Status* (To do · Doing · Done · Blocked · Cancelled), *Notes*, *AC verdict* (met · partly met · not met), *Updated on*, *Updated by*. The sprint's work only: its committed and pulled-in leaves, not the parents they make up |
 | **How to update** | For the team and for Copilot in Excel: what each column means, and prompts that work |
 | **About** | Scope, sprint, dates, the WBS it came from, *Set up on*, *Consolidated on*. Leave it as it is |
+
+**A WBS row may have several tasks.** Set-up gives each WBS row one task, named after it; the team splits the work by adding rows with the same WBS ID. A board row is never assumed to be a WBS row: the consolidation rolls the tasks up per WBS row.
 
 **Notes is a dated log**, one entry per line, newest on top: `2026-10-28 · Tom Becker: link works; expiry still to do`. The team adds a line and never edits an older one, so the cell shows how the work evolved and several comments on one row stay apart. A line with no date is kept and proposed like any other.
 
@@ -35,7 +37,7 @@ Each one re-reads the board immediately before writing, keeps every cell the tea
 python <skills>/status-board-manager/scripts/board.py setup "<wbs>" [--sprint <ID>]
 ```
 
-The rows planning committed, each with its title, owner and its WBS status as a board status. The closed sprint's board moves to `Archive/`; one not consolidated since its sprint ended stops the set-up (consolidate it first; `--force` archives it as it is, said out loud). Then the team is told the board is ready.
+One task per WBS row planning committed, named after the row, with its owner and its WBS status as a board status; the WBS ID list holds the sprint's IDs. The closed sprint's board moves to `Archive/`; one not consolidated since its sprint ended stops the set-up (consolidate it first; `--force` archives it as it is, said out loud). Then the team is told the board is ready.
 
 ### 2. Update the board (whenever the sprint's commitments change in the WBS)
 
@@ -45,7 +47,7 @@ After a pull-in agreed with the product manager, a split's rest carried in, or a
 python <skills>/status-board-manager/scripts/board.py sync "<wbs>" --ids <ID> [<ID> ...]
 ```
 
-A row committed and missing is added; a row cancelled in the WBS is marked *Cancelled*, with a dated note on top saying so. Nothing else changes.
+A committed WBS row with no task gets one; every task of a row cancelled in the WBS is marked *Cancelled*, with a dated note on top saying so; a task's blank *WBS item* is filled. Nothing else changes.
 
 ### 3. Consolidate (the weekly review, the close-out, or on request)
 
@@ -55,22 +57,22 @@ A row committed and missing is added; a row cancelled in the WBS is marked *Canc
    python <skills>/status-board-manager/scripts/board.py propose "<wbs>" [--json]
    ```
 
-   Row by row:
+   Per WBS row, from all its tasks:
 
    | Proposal | What the product manager decides | Through |
    |---|---|---|
-   | `start`: Doing on the board | Set it Implementing, with the board's date as `--actual-start` where given | `wbs.py set --status Implementing` |
-   | `close`: Done on the board | Close it. The closure note is drafted from the newest note and the AC verdict (the earlier entries reach the row as notes): **confirm each acceptance criterion with the product manager**, never take the board's verdict as the note | `wbs.py set --status Done --closure "…"` (`--actual-end` from the board's date) |
-   | `blocked` | A RAID issue, with an owner and a date to look again; Implementing if it had not started | `raid-manager` |
-   | `new`: a row with no WBS ID | A pull-in (ask what it displaces), work outside the sprint, or not now. Its parent is asked, never guessed | `wbs.py add`, then `wbs.py set --pulled-in` when it starts |
-   | `back`, `reopened` | Ask why. Nothing changes unasked | |
-   | `notes`: entries dated since the last consolidation | Each becomes a dated note on the WBS row, oldest first, saying it came from the board, its date and its author. One the row already holds is not proposed again | `wbs.py note` |
-   | `missing`: committed, not on the board | Added at step 3 | |
+   | `start`: a task moving on a row not started | Set it Implementing, with the earliest task date as `--actual-start` where given | `wbs.py set --status Implementing` |
+   | `close`: every live task Done | Close it. The closure note is drafted from each task's newest note, with the weakest task verdict as the row's (each task's verdict listed; the earlier entries reach the row as notes): **confirm each acceptance criterion with the product manager**, never take the board's verdict as the note | `wbs.py set --status Done --closure "…"` (`--actual-end` from the board's date) |
+   | `blocked`: a task Blocked | A RAID issue, with an owner and a date to look again; Implementing if it had not started | `raid-manager` |
+   | `unlinked`: a task with no WBS ID | Which WBS row it serves, linked; or new work: a pull-in (ask what it displaces), work outside the sprint, or not now. A new row's parent is asked, never guessed | `link`; or `wbs.py add`, then `wbs.py set --pulled-in` when it starts, then `link` |
+   | `back`: every task To do on an Implementing row; `reopened`: a task open on a Done row | Ask why. Nothing changes unasked | |
+   | `notes`: entries dated since the last consolidation, from every task of the row | Each becomes a dated note on the WBS row, oldest first, saying it came from the board, its date, its author and its task. One the row already holds is not proposed again | `wbs.py note` |
+   | `missing`: a committed WBS row with no task | Added at step 3 | |
    | `unknown`, `unreadable` | A WBS ID the register lacks, or a status off the list: ask the row's owner | |
 
    **Batch the decisions**: present them once, apply only the ones confirmed. Every write goes through `wbs.py`, so its gates hold: a pull-in states its effect, a close has its closure note, a moved date has its reason. Dates are never moved as tidying.
 
-2. **Write the IDs back** for new rows that became WBS rows:
+2. **Write the IDs back** for unlinked tasks, whether they serve an existing row or became a new one:
 
    ```
    python <skills>/status-board-manager/scripts/board.py link "<wbs>" --row <Excel row> --id <new ID>

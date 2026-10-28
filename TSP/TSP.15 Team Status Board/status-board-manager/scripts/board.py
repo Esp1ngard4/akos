@@ -10,11 +10,12 @@
     python board.py find    <folder>
 
 The board is an Excel workbook beside the WBS, one per sprint, which the team
-updates itself or through Copilot. The WBS keeps one writer: the product
-manager, through the agent. `propose` reads the board and says what would
-change in the WBS; every change is then made through wbs.py, confirmed. The
-board is written only by `setup`, `sync` and `link`, each re-reading it first
-and keeping every cell the team entered.
+updates itself or through Copilot. Each row is a task of the team's, and names
+the WBS row it helps deliver; one WBS row may have several tasks. The WBS keeps
+one writer: the product manager, through the agent. `propose` rolls the tasks
+up per WBS row and says what would change in the WBS; every change is then made
+through wbs.py, confirmed. The board is written only by `setup`, `sync` and
+`link`, each re-reading it first and keeping every cell the team entered.
 
 Standard library only; needs wbs-manager installed beside this skill.
 """
@@ -32,14 +33,16 @@ sys.path.insert(0, HERE)
 import xlsx                                                     # noqa: E402
 
 KIND = "akos-status-board"
-COLUMNS = ["WBS ID", "Title", "Owner", "Status", "Notes", "AC verdict", "Updated on", "Updated by"]
-# An older board named the column in the singular; it reads the same.
-RENAMED = {"Note": "Notes"}
+COLUMNS = ["WBS ID", "WBS item", "Task", "Owner", "Status", "Notes", "AC verdict", "Updated on", "Updated by"]
+WIDTHS = [9, 34, 40, 18, 12, 52, 13, 13, 16]
+# Older boards named two columns differently; they read the same.
+RENAMED = {"Note": "Notes", "Title": "Task"}
 # One entry per line, newest on top: "2026-10-28 · Tom Becker: link works".
-NOTE_LINE = re.compile(r"^\s*(\d{4}-\d{2}-\d{2})\s*(?:[\u00b7\-\u2013|]\s*([^:]+?))?\s*:\s*(.+?)\s*$")
-WIDTHS = [9, 48, 18, 12, 44, 14, 13, 16]
+NOTE_LINE = re.compile(r"^\s*(\d{4}-\d{2}-\d{2})\s*(?:[·\-–|]\s*([^:]+?))?\s*:\s*(.+?)\s*$")
 STATUSES = ["To do", "Doing", "Done", "Blocked", "Cancelled"]
 VERDICTS = ["met", "partly met", "not met"]
+OPEN = ("To do", "Doing", "Blocked")
+NOT_STARTED = ("Not Started", "Portfolio Backlog", "Funnel")
 ARCHIVE = "Archive"
 MAX_ROWS = 500
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -80,7 +83,7 @@ def the_sprint(data, given):
 
 
 def cards(data, sprint):
-    """The rows the team works on this sprint: committed or pulled in, and
+    """The WBS rows the team works on this sprint: committed or pulled in, and
     leaves among them. A committed parent with its children in the sprint is
     worked through those children; closing it stays the product manager's."""
     rows = R.rows(data, W.ITEMS)
@@ -97,6 +100,10 @@ def board_status(wbs_status):
 def wbs_date(iso):
     d = date.fromisoformat(iso)
     return "%d-%s-%d" % (d.year, MONTHS[d.month - 1], d.day)
+
+
+def is_date(s):
+    return bool(re.match(r"^\d{4}-\d{2}-\d{2}$", s or "")) and s <= date.today().isoformat()
 
 
 # ─── The board ───────────────────────────────────────────────────────────────
@@ -149,43 +156,48 @@ def load(path):
 HOW_TO = [
     ["How to update this board"],
     [""],
-    ["This is the team's board for one sprint. Update your own rows as the work moves; the product manager brings them into the project's WBS at the weekly review and at the sprint's close-out."],
+    ["This is the team's board for one sprint. Each row is a task. Update your own as the work moves; the product manager brings the board into the project's WBS at the weekly review and at the sprint's close-out."],
     [""],
-    ["Status", "To do, Doing, Done or Blocked. Cancelled is set by the product manager only."],
-    ["Notes", "A dated log, newest on top, one entry per line (Alt+Enter for a new line): 2026-10-28 \u00b7 Your name: where it stands, or what is in the way. Add a line; never edit an older one."],
-    ["AC verdict", "On a Done row: met, partly met or not met, against the row's acceptance criteria in the WBS. A partly met says in Notes what is left."],
+    ["WBS ID", "The WBS row the task helps deliver, picked from the list. Several tasks can name the same WBS row: add a row, pick its WBS ID, give it a Task."],
+    ["WBS item", "The WBS row's title. Filled in by the product manager's agent; leave it."],
+    ["Task", "What this piece of work is, in the team's words."],
+    ["Status", "To do, Doing, Done or Blocked. Cancelled is set by the product manager only. A WBS row is done when all its tasks are."],
+    ["Notes", "A dated log, newest on top, one entry per line (Alt+Enter for a new line): 2026-10-28 · Your name: where it stands, or what is in the way. Add a line; never edit an older one."],
+    ["AC verdict", "On a Done task: met, partly met or not met, against the WBS row's acceptance criteria it covers. A partly met says in Notes what is left."],
     ["Updated on / by", "When, and who. A date as YYYY-MM-DD."],
-    ["New work", "A row with no WBS ID is new work. Add a Title and a dated note; the product manager decides with you whether it comes into the sprint."],
-    ["Don't", "Change a WBS ID, delete a row, or rename a column: the consolidation reads them."],
+    ["New work", "A task with no WBS ID is new work, or work whose WBS row you don't know. Give it a Task and a dated note; the product manager links it to a WBS row or brings it in as new work."],
+    ["Don't", "Change a task's WBS ID once it is set, delete a row, or rename a column: the consolidation reads them."],
     [""],
     ["Asking Copilot in Excel"],
-    ["", "Mark WBS 12 as Doing, updated today by me."],
-    ["", "Add a note to WBS 12 on top of its Notes, dated today with my name: expiry after 24h still to do."],
-    ["", "Mark WBS 12 as Done, AC verdict met, and add a dated note on top: released to production."],
-    ["", "Set WBS 14 to Blocked and add a dated note on top: waiting for the test environment."],
-    ["", "Add a row with no WBS ID: title Fix the login timeout, status Doing, with a dated note: found in testing."],
+    ["", "Mark the task Login form as Doing, updated today by me."],
+    ["", "Add a task under WBS 12: Write the unit tests, owner me, status Doing."],
+    ["", "Add a note on top of the Notes of the task Login form, dated today with my name: expiry after 24h still to do."],
+    ["", "Mark the task Login form as Done, AC verdict met, and add a dated note on top: released to production."],
+    ["", "Set the task Password reset to Blocked and add a dated note on top: waiting for the test environment."],
+    ["", "Add a task with no WBS ID: Fix the login timeout, status Doing, with a dated note: found in testing."],
 ]
 
 
-def save(path, about, rows, extra, title):
+def save(path, about, rows, extra, title, ids=None):
+    """Write the board. ids: the sprint's WBS IDs, offered as the WBS ID list."""
     header = COLUMNS + extra
     body = [header]
     for r in rows:
-        line = []
-        for h in header:
-            v = r.get(h, "")
-            line.append(int(v) if h == "WBS ID" and str(v).isdigit() else v)
-        body.append(line)
-    n = max(len(body), 2)
+        body.append([int(r[h]) if h == "WBS ID" and str(r.get(h, "")).isdigit() else r.get(h, "") for h in header])
+    validations = [(COLUMNS.index("Status"), STATUSES, 1, MAX_ROWS),
+                   (COLUMNS.index("AC verdict"), VERDICTS, 1, MAX_ROWS)]
+    ids = sorted({str(i) for i in (ids or [])}, key=int)
+    if ids and len(",".join(ids)) < 250:                        # Excel's limit for a typed list
+        validations.append((0, ids, 1, MAX_ROWS))
     board = xlsx.Sheet("Board", body, widths=WIDTHS + [18] * len(extra), styles={0: "bold"}, table=("Board", 0),
-                       validations=[(3, STATUSES, 1, MAX_ROWS), (5, VERDICTS, 1, MAX_ROWS)], freeze=True)
-    how = xlsx.Sheet("How to update", [list(r) for r in HOW_TO], widths=[18, 110], styles={0: "title", 11: "bold"})
+                       validations=validations, freeze=True)
+    how = xlsx.Sheet("How to update", [list(r) for r in HOW_TO], widths=[18, 110],
+                     styles={0: "title", HOW_TO.index(["Asking Copilot in Excel"]): "bold"})
     order = ["Scope", "Sprint", "Starts", "Ends", "WBS", "Set up on", "Consolidated on"]
     about_rows = [[KIND, "Read by the status board tool: leave this sheet as it is."]]
     about_rows += [[k, about.get(k, "")] for k in order] + [[k, v] for k, v in about.items() if k not in order]
     meta = xlsx.Sheet("About", about_rows, widths=[18, 60], styles={0: "bold"})
     xlsx.write(path, [board, how, meta], title=title)
-    return n
 
 
 def parse_notes(cell):
@@ -205,20 +217,22 @@ def parse_notes(cell):
 
 def add_note(cell, text, by, day=None):
     """A new entry on top of the Notes cell."""
-    line = "%s \u00b7 %s: %s" % (day or date.today().isoformat(), by, text)
+    line = "%s · %s: %s" % (day or date.today().isoformat(), by, text)
     return line + ("\n" + cell if cell else "")
 
 
-def wbs_note(n):
+def wbs_note(n, task=None):
     """How a board note reads on the WBS row, so a later consolidation can tell
-    it is already there."""
-    return "On the team board, %s%s: %s" % (n["date"] or "undated", ", " + n["by"] if n["by"] else "", n["text"])
+    it is already there. The task is named where the row has several."""
+    who = ", " + n["by"] if n.get("by") else ""
+    return "On the team board, %s%s%s: %s" % (n.get("date") or "undated", who, " (%s)" % task if task else "", n["text"])
 
 
 def new_row(r):
-    return {"WBS ID": str(r.get("ID")), "Title": r.get("Title", ""), "Owner": r.get("Owner", ""),
-            "Status": board_status(r.get("Status")), "Notes": "", "AC verdict": "",
-            "Updated on": "", "Updated by": ""}
+    """The first task of a WBS row: named after it, until the team says otherwise."""
+    return {"WBS ID": str(r.get("ID")), "WBS item": r.get("Title", ""), "Task": r.get("Title", ""),
+            "Owner": r.get("Owner", ""), "Status": board_status(r.get("Status")), "Notes": "",
+            "AC verdict": "", "Updated on": "", "Updated by": ""}
 
 
 def live_board(wbs_path, sprint):
@@ -229,6 +243,23 @@ def live_board(wbs_path, sprint):
     if len(hits) > 1:
         sys.exit("Two boards for %s in %s: %s. Keep one." % (sprint, folder, ", ".join(os.path.basename(p) for p, _ in hits)))
     return hits[0][0]
+
+
+def fill_items(data, rows):
+    """Write each task's WBS item from the register, where it is blank."""
+    by_id = {str(r.get("ID")): r for r in R.rows(data, W.ITEMS)}
+    n = 0
+    for row in rows:
+        w = by_id.get(row.get("WBS ID", ""))
+        if w and not row.get("WBS item"):
+            row["WBS item"] = w.get("Title", "")
+            n += 1
+    return n
+
+
+def write_back(path, data, sprint, b):
+    save(path, b["about"], b["rows"], b["extra"], "%s %s status board" % (b["about"].get("Scope", ""), sprint),
+         ids=[r.get("ID") for r in cards(data, sprint)])
 
 
 # ─── Commands ────────────────────────────────────────────────────────────────
@@ -257,8 +288,9 @@ def cmd_setup(args):
     path = os.path.join(folder, board_name(scope, sprint))
     about = {"Scope": scope, "Sprint": sprint, "Starts": win.get("Starts", ""), "Ends": win.get("Ends", ""),
              "WBS": os.path.basename(args.register), "Set up on": date.today().isoformat(), "Consolidated on": ""}
-    save(path, about, rows, [], "%s %s status board" % (scope, sprint))
-    print("Set up %s: %d row(s) from the WBS." % (os.path.basename(path), len(rows)))
+    write_back(path, data, sprint, {"about": about, "rows": rows, "extra": []})
+    print("Set up %s: %d task(s), one per WBS row; the team adds more under a row as it splits the work."
+          % (os.path.basename(path), len(rows)))
     if moves:
         arch = os.path.join(folder, ARCHIVE)
         os.makedirs(arch, exist_ok=True)
@@ -281,9 +313,10 @@ def _open(args, data):
 
 
 def cmd_sync(args):
-    """Bring the board in line with the WBS: committed rows it lacks are added
-    (all, or only --ids), rows cancelled in the WBS are marked, and with
-    --consolidated the date is stamped. The team's cells are kept."""
+    """Bring the board in line with the WBS: a committed WBS row with no task
+    gets one (all, or only --ids), a WBS row cancelled marks its tasks, blank
+    WBS items are filled, and with --consolidated the date is stamped. The
+    team's cells are kept."""
     data = R.load(args.register)
     sprint, path, b = _open(args, data)
     on_board = {r.get("WBS ID") for r in b["rows"] if r.get("WBS ID")}
@@ -301,14 +334,17 @@ def cmd_sync(args):
                 and (not wanted or row.get("WBS ID") in wanted):
             row["Status"] = "Cancelled"
             row["Notes"] = add_note(row.get("Notes", ""), "cancelled in the WBS", "product manager")
-            changes.append("marked WBS %s cancelled" % row["WBS ID"])
+            changes.append("marked the task %s of WBS %s cancelled" % (row.get("Task", ""), row["WBS ID"]))
+    filled = fill_items(data, b["rows"])
+    if filled:
+        changes.append("filled %d WBS item(s)" % filled)
     if args.consolidated:
         b["about"]["Consolidated on"] = date.today().isoformat()
         changes.append("consolidated on %s" % b["about"]["Consolidated on"])
     if not changes:
         print("The board already matches the WBS for %s; nothing written." % sprint)
         return 0
-    save(path, b["about"], b["rows"], b["extra"], "%s %s status board" % (b["about"].get("Scope", ""), sprint))
+    write_back(path, data, sprint, b)
     print("%s:" % os.path.basename(path))
     for c in changes:
         print("  %s" % c)
@@ -316,85 +352,119 @@ def cmd_sync(args):
 
 
 def cmd_link(args):
-    """Write the WBS ID a new row was given into that row."""
+    """Write a WBS ID into a task that had none: an existing row it serves, or
+    the new row it became."""
     data = R.load(args.register)
     sprint, path, b = _open(args, data)
-    if not W.find(data, args.id):
+    w = W.find(data, args.id)
+    if not w:
         sys.exit("WBS %s is not in the register." % args.id)
     row = next((r for r in b["rows"] if r["_row"] == args.row), None)
     if not row:
         sys.exit("Row %d of the board is empty." % args.row)
     if row.get("WBS ID"):
         sys.exit("Row %d already names WBS %s." % (args.row, row["WBS ID"]))
-    row["WBS ID"] = str(args.id)
-    save(path, b["about"], b["rows"], b["extra"], "%s %s status board" % (b["about"].get("Scope", ""), sprint))
-    print("Row %d now names WBS %s." % (args.row, args.id))
+    row["WBS ID"], row["WBS item"] = str(args.id), w.get("Title", "")
+    write_back(path, data, sprint, b)
+    print("Row %d (%s) now names WBS %s %s." % (args.row, row.get("Task", ""), args.id, w.get("Title", "")))
     return 0
 
 
+def _task(row):
+    return {"row": row["_row"], "task": row.get("Task", ""), "status": row.get("Status") or "To do",
+            "verdict": row.get("AC verdict", ""), "owner": row.get("Owner", ""),
+            "updated": row.get("Updated on", ""), "by": row.get("Updated by", ""),
+            "notes": parse_notes(row.get("Notes", ""))}
+
+
+def _worst(verdicts):
+    """The weakest verdict among the done tasks; '' when any gave none."""
+    if any(not v for v in verdicts):
+        return ""
+    for v in ("not met", "partly met", "met"):
+        if v in verdicts:
+            return v
+    return ""
+
+
 def proposals(data, sprint, b):
-    """What the board says that the WBS does not, row by row. Read-only."""
+    """What the board says that the WBS does not, per WBS row, from all its
+    tasks. Read-only."""
     by_id = {str(r.get("ID")): r for r in R.rows(data, W.ITEMS)}
-    out = []
+    since = b["about"].get("Consolidated on") or ""
+    out, groups = [], {}
     for row in b["rows"]:
         rid, status = row.get("WBS ID", ""), row.get("Status", "")
-        who = " by %s" % row["Updated by"] if row.get("Updated by") else ""
-        when = row.get("Updated on", "")
-        base = {"row": row["_row"], "id": rid or None, "title": row.get("Title", ""), "board": status,
-                "notes": parse_notes(row.get("Notes", "")), "verdict": row.get("AC verdict", ""),
-                "updated": when + who}
+        t = _task(row)
+        if status and status not in STATUSES:
+            out.append({"row": t["row"], "id": rid or None, "title": t["task"], "kind": "unreadable",
+                        "say": "Status %r is not one of %s: ask its owner." % (status, ", ".join(STATUSES))})
+            continue
+        if not rid:
+            if t["task"]:
+                out.append({"row": t["row"], "id": None, "title": t["task"], "kind": "unlinked", "tasks": [t],
+                            "say": "A task with no WBS ID: link it to the WBS row it serves, or bring it in as new work "
+                                   "(a pull-in: ask what it displaces) or as work outside the sprint; then link the row."})
+            continue
+        if rid not in by_id:
+            out.append({"row": t["row"], "id": rid, "title": t["task"], "kind": "unknown",
+                        "say": "WBS %s is not in the register: ask the task's owner which row it serves." % rid})
+            continue
+        groups.setdefault(rid, []).append(t)
+
+    for rid in sorted(groups, key=int):
+        tasks, w = groups[rid], by_id[rid]
+        ws, live = w.get("Status"), [t for t in groups[rid] if t["status"] != "Cancelled"]
+        several = len(tasks) > 1
+        base = {"id": rid, "title": w.get("Title", ""), "wbs": ws, "tasks": tasks}
+        moving = [t for t in live if t["status"] in ("Doing", "Done", "Blocked")]
+        done = [t for t in live if t["status"] == "Done"]
+        if live and len(done) == len(live) and ws not in ("Done", "Cancelled"):
+            verdict = _worst([t["verdict"] for t in done])
+            ends = [t["updated"] for t in done if is_date(t["updated"])]
+            happened = "; ".join(("%s: %s" % (t["task"], t["notes"][0]["text"].rstrip(".")) if several else
+                                  t["notes"][0]["text"].rstrip(".")) for t in done if t["notes"])
+            by_task = ", ".join("%s %s" % (t["task"], t["verdict"] or "no verdict") for t in done) if several else ""
+            draft = "What happened: %s. AC: %s on the board%s; confirm each criterion. Follow-up: %s." % (
+                happened or "done on the team's board", verdict or "no verdict given",
+                " (%s)" % by_task if by_task else "",
+                "the rest, as the notes say" if verdict in ("partly met", "not met") else "none")
+            out.append(dict(base, kind="close", closure=draft, actual_end=wbs_date(max(ends)) if ends else None,
+                            say="All %d task(s) done on the board: close it in the WBS with a closure note confirmed per criterion."
+                            % len(done)))
+        elif moving and ws in NOT_STARTED:
+            starts = [t["updated"] for t in moving if is_date(t["updated"])]
+            out.append(dict(base, kind="start", actual_start=wbs_date(min(starts)) if starts else None,
+                            say="%d of %d task(s) moving on the board: set it Implementing." % (len(moving), len(live))))
+        elif ws == "Implementing" and live and all(t["status"] == "To do" for t in live):
+            out.append(dict(base, kind="back", say="Every task back to To do while the WBS says Implementing: ask why; change nothing unasked."))
+        elif ws == "Done" and any(t["status"] in OPEN for t in live):
+            out.append(dict(base, kind="reopened", say="A task open on the board, the WBS row Done: ask. Work found after a close is "
+                                                         "new work or a reopening, on purpose."))
+        blocked = [t for t in live if t["status"] == "Blocked"]
+        if blocked:
+            out.append(dict(base, kind="blocked", blocked=[t["task"] for t in blocked],
+                            say="Blocked on the board (%s): offer a RAID issue with an owner." % ", ".join(t["task"] for t in blocked)))
         # Notes dated on or after the last consolidation, less those the WBS
         # row already holds: a note written on a consolidation's own day is
         # neither missed nor brought in twice.
-        since = b["about"].get("Consolidated on") or ""
-        held = (by_id.get(rid) or {}).get("Comments") or ""
-        fresh = [n for n in base["notes"] if (not n["date"] or n["date"] >= since)
-                 and wbs_note(n) not in held]
-        if status and status not in STATUSES:
-            out.append(dict(base, kind="unreadable", say="Status %r is not one of %s." % (status, ", ".join(STATUSES))))
-            continue
-        if not rid:
-            if row.get("Title"):
-                out.append(dict(base, kind="new", say="New work on the board: bring it in as a pull-in (ask what it "
-                                "displaces) or as work outside the sprint, or leave it; then link the row to its ID."))
-            continue
-        w = by_id.get(rid)
-        if not w:
-            out.append(dict(base, kind="unknown", say="WBS %s is not in the register." % rid))
-            continue
-        ws = w.get("Status")
-        base["wbs"] = ws
-        date_ok = bool(re.match(r"^\d{4}-\d{2}-\d{2}$", when)) and when <= date.today().isoformat()
-        if status == "Done" and ws not in ("Done", "Cancelled"):
-            # What happened is where the work ended: the newest entry. The
-            # history reaches the WBS as dated notes of its own.
-            latest = (base["notes"][0]["text"].rstrip(".") if base["notes"] else "")
-            draft = "What happened: %s. AC: %s on the board; confirm each criterion. Follow-up: %s." % (
-                latest or "done on the team's board",
-                row.get("AC verdict") or "no verdict given",
-                "the rest, as the note says" if row.get("AC verdict") == "partly met" else "none")
-            out.append(dict(base, kind="close", closure=draft, actual_end=wbs_date(when) if date_ok else None,
-                            say="Done on the board: close it in the WBS with a closure note confirmed per criterion."))
-        elif status == "Doing" and ws in ("Not Started", "Portfolio Backlog", "Funnel"):
-            out.append(dict(base, kind="start", actual_start=wbs_date(when) if date_ok else None,
-                            say="Started on the board: set it Implementing."))
-        elif status == "Blocked":
-            out.append(dict(base, kind="blocked", say="Blocked on the board: offer a RAID issue with an owner%s."
-                            % ("; and set it Implementing" if ws in ("Not Started", "Portfolio Backlog", "Funnel") else "")))
-        elif status == "To do" and ws == "Implementing":
-            out.append(dict(base, kind="back", say="Back to To do on the board while the WBS says Implementing: ask why; change nothing unasked."))
-        elif status in ("To do", "Doing", "Blocked") and ws == "Done":
-            out.append(dict(base, kind="reopened", say="Open on the board, Done in the WBS: ask; a closed row is reopened only on purpose."))
-        if fresh and status != "Cancelled":
-            out.append(dict(base, kind="notes", entries=fresh, commands=[
-                "wbs.py note <wbs> --id %s \"%s\"" % (rid, wbs_note(n)) for n in reversed(fresh)],
-                say="%d note(s) since the last consolidation: each becomes a dated note on the WBS row, oldest first."
-                % len(fresh)))
-    on_board = {r.get("WBS ID") for r in b["rows"] if r.get("WBS ID")}
+        held = w.get("Comments") or ""
+        fresh = []
+        for t in tasks:
+            label = t["task"] if several or (t["task"] and t["task"] != w.get("Title")) else None
+            for n in t["notes"]:
+                if (not n["date"] or n["date"] >= since) and wbs_note(n, label) not in held:
+                    fresh.append((n, label))
+        if fresh and ws != "Cancelled":                         # a cancelled row's story ends in its closure
+            fresh.sort(key=lambda x: x[0]["date"] or "")
+            out.append(dict(base, kind="notes", entries=[dict(n, task=lab) for n, lab in fresh],
+                            commands=["wbs.py note <wbs> --id %s \"%s\"" % (rid, wbs_note(n, lab)) for n, lab in fresh],
+                            say="%d note(s) since the last consolidation: each becomes a dated note on the WBS row, oldest first."
+                            % len(fresh)))
     for r in cards(data, sprint):
-        if str(r.get("ID")) not in on_board:
+        if str(r.get("ID")) not in groups:
             out.append({"row": None, "id": str(r.get("ID")), "title": r.get("Title", ""), "kind": "missing",
-                        "say": "Committed in the WBS and not on the board: sync adds it."})
+                        "say": "Committed in the WBS with no task on the board: sync adds one."})
     return out
 
 
@@ -413,10 +483,14 @@ def cmd_propose(args):
         label = "WBS %s" % p["id"] if p.get("id") else "row %s" % p["row"]
         print("  %-9s %s %s" % (p["kind"], label, p.get("title", "")[:60]))
         print("            %s" % p["say"])
+        if p["kind"] in ("close", "start") and len(p.get("tasks", [])) > 1:
+            for t in p["tasks"]:
+                print("              task: %s · %s%s" % (t["task"], t["status"], " · " + t["verdict"] if t["verdict"] else ""))
         if p.get("closure"):
             print("            draft: %s" % p["closure"])
-        for n in p.get("entries", []) if p["kind"] == "notes" else []:
-            print("            %s%s: %s" % (n["date"] or "undated", " \u00b7 " + n["by"] if n["by"] else "", n["text"]))
+        for n in p.get("entries", []):
+            print("            %s%s%s: %s" % (n["date"] or "undated", " · " + n["by"] if n["by"] else "",
+                                             " (%s)" % n["task"] if n.get("task") else "", n["text"]))
     return 0
 
 
@@ -426,7 +500,9 @@ def cmd_show(args):
     counts = {}
     for r in b["rows"]:
         counts[r.get("Status") or "(none)"] = counts.get(r.get("Status") or "(none)", 0) + 1
-    print("%s: %s" % (os.path.basename(path), ", ".join("%s %d" % (k, v) for k, v in counts.items()) or "empty"))
+    rows = {r.get("WBS ID") for r in b["rows"] if r.get("WBS ID")}
+    print("%s: %d task(s) on %d WBS row(s): %s" % (os.path.basename(path), len(b["rows"]), len(rows),
+                                                   ", ".join("%s %d" % (k, v) for k, v in counts.items()) or "empty"))
     print("  set up %s, consolidated %s" % (b["about"].get("Set up on") or "?", b["about"].get("Consolidated on") or "never"))
     return 0
 
@@ -465,7 +541,7 @@ def main(argv=None):
     for name, fn, hlp in (("setup", cmd_setup, "write the sprint's board from the WBS; archive the closed sprint's"),
                           ("sync", cmd_sync, "bring the board in line with the WBS, keeping the team's cells"),
                           ("propose", cmd_propose, "what the board says that the WBS does not; read-only"),
-                          ("link", cmd_link, "write a new row's WBS ID into it"),
+                          ("link", cmd_link, "write a WBS ID into a task that had none"),
                           ("show", cmd_show, "the board in one line")):
         s = sub.add_parser(name, help=hlp)
         s.add_argument("register", help="the project's WBS register")
