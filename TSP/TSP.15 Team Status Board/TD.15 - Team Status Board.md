@@ -64,6 +64,14 @@ Standard library only. Needs `wbs-manager` (TSP.1) installed beside it. The work
 
 **Where it plugs in:** nowhere. Don't install the tool. Team members tell the agent what moved, and the agent writes the WBS through `wbs-manager`, one writer at a time. The ceremonies have no board step.
 
+### A Copilot agent that updates the board
+
+**Where it plugs in:** the team's side, before any of the tool's steps: how a team member's update reaches the board.
+
+**What it takes over:** a Microsoft 365 Copilot agent (or any chat agent with access to the file) can take an update in plain words, such as "the login form is done, all criteria met, released to test", and write it into the board the way the conventions say: the right task row, a dated note on top, a status and a verdict from the lists.
+
+**What to watch for:** its instructions are the board's *How to update* sheet, which the tool regenerates with every board; point the agent at that sheet, or copy it word for word, rather than writing a second set of rules that drifts. It writes the board only, never the WBS: the consolidation stays the product manager's. Build it once a team has run a few sprints and Copilot in Excel alone is not enough.
+
 ### Microsoft Planner
 
 **Where it plugs in:** *propose*'s reading, and the three writes.
@@ -109,6 +117,7 @@ What is **not** tested is how a team uses it: whether people keep the board curr
 |---|---|
 | Unused on real work | See *Status*. A team running a few sprints on the board moves it to `Implemented` |
 | Connectors | Planner, Lists, Jira and GitHub Projects are named above; none is built |
+| A Copilot agent | Named above; built after a trial shows the team uses Copilot to update the board |
 
 ## Version history
 
