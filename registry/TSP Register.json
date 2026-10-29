@@ -312,6 +312,12 @@
       "Description": "TD.15 v1.1: Updated on is a date column shown as 29-Oct-2026; a date typed as text is read too.",
       "ID": 52,
       "Tool": "Team Status Board"
+    },
+    {
+      "Changed On": "2026-10-28",
+      "Description": "TD.4 v1.6: status --upstream says which installed tools have a newer version.",
+      "ID": 53,
+      "Tool": "Tool Installer"
     }
   ],
   "control_activities": [],
@@ -362,8 +368,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T23:13:56",
-    "values_hash": "sha256:61221631ce010c7cbc0f9dac595c0fedda01b7bec9b6172cae93cc0685b5e116",
+    "updated": "2026-10-28T23:54:06",
+    "values_hash": "sha256:15de6410d640c17e0d44c7f698194e87efb0c5a5cb1639b436851136ba6e2a53",
     "version": 1
   },
   "tools": [

@@ -140,6 +140,7 @@ The lock is what makes the copy maintainable rather than a fork by accident:
 
 ```bash
 python akos/install.py status --check   # has our copy drifted? (offline; good for CI)
+python akos/install.py status --upstream --source akos   # which tools have a newer version?
 python akos/install.py update wbs-manager   # three-way merge upstream changes in
 ```
 

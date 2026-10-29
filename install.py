@@ -5,6 +5,7 @@
     python install.py init ../my-project --pack project --name "Atlas"
     python install.py add wbs-manager --into ../my-project
     python install.py status
+    python install.py status --upstream --source ../akos    # which tools have a newer version
     python install.py diff wbs-manager
     python install.py update wbs-manager
     python install.py accept wbs-manager -m "why we diverged"
@@ -615,6 +616,27 @@ def compare(recorded, root, only=None):
     return missing, added, modified
 
 
+def upstream_changes(clone, rec):
+    """The catalogue's commits after the one the lock records that touched this
+    entry, newest first, as [(sha, subject)]; None when the clone does not
+    have the lock's commit (it needs a pull)."""
+    known = subprocess.run(["git", "merge-base", "--is-ancestor", rec["commit"], "HEAD"], cwd=clone,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
+    if known != 0:
+        return None
+    out = git(["log", "--format=@@commit %h %s", "--name-only", "%s..HEAD" % rec["commit"], "--", rec["origin"]], cwd=clone)
+    changes = []
+    for block in out.split("@@commit ")[1:]:
+        lines = [l for l in block.strip().split("\n") if l.strip()]
+        sha, _, subject = lines[0].partition(" ")
+        files = [os.path.relpath(f, rec["origin"]).replace(os.sep, "/") for f in lines[1:]]
+        # A TD entry covers the TD alone: a change to the skill beside it is not its own.
+        if rec.get("only") and not any(is_td(f) for f in files):
+            continue
+        changes.append((sha, subject))
+    return changes
+
+
 def cmd_status(args):
     project = os.path.abspath(args.project)
     lock = load_lock(project)
@@ -622,8 +644,26 @@ def cmd_status(args):
         print("No tools installed (%s not found or empty)." % LOCK_NAME)
         return 0
 
-    dirty = 0
-    print("source: %s\n" % lock.get("source"))
+    clone = scratch = None
+    if args.upstream:
+        source = args.source or lock.get("source")
+        if source and os.path.isdir(source):
+            require_clone(source)
+            clone = source
+        else:
+            scratch = tempfile.mkdtemp(prefix="akos-upstream-")
+            clone = os.path.join(scratch, "akos")
+            git(["clone", "-q", source, clone])
+    try:
+        return _status(args, project, lock, clone)
+    finally:
+        if scratch:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _status(args, project, lock, clone):
+    dirty, behind, unknown = 0, [], []
+    print("source: %s%s\n" % (lock.get("source"), "  (compared with %s at %s)" % (clone, git(["rev-parse", "--short", "HEAD"], cwd=clone)) if clone else ""))
     for name in sorted(lock["tools"]):
         rec = lock["tools"][name]
         missing, added, modified = compare(rec["files"], local_root(project, rec), rec.get("only"))
@@ -637,7 +677,18 @@ def cmd_status(args):
             state = "MERGING"
             dirty += 1
 
-        print("%-18s %-9s %s @ %s" % (name, state, rec["tsp"], rec["commit"][:7]))
+        news = ""
+        if clone:
+            changes = upstream_changes(clone, rec)
+            if changes is None:
+                unknown.append(name)
+                news = "  ? not in the clone: pull it"
+            elif changes:
+                behind.append(name)
+                news = "  %d change(s) behind: %s %s" % (len(changes), changes[0][0], changes[0][1][:60])
+            else:
+                news = "  up to date"
+        print("%-18s %-9s %s @ %s%s" % (name, state, rec["tsp"], rec["commit"][:7], news))
         if rec.get("local_changes"):
             print("     declared: %s" % rec["local_changes"])
         if merging:
@@ -650,9 +701,21 @@ def cmd_status(args):
         for path in added:
             print("     added     %s" % path)
 
+    if clone:
+        if behind:
+            print("\n%d tool(s) have a newer version. To bring them in:" % len(behind))
+            for name in behind:
+                print('    python install.py update "%s" --project "%s"%s'
+                      % (name, args.project, ' --source "%s"' % args.source if args.source else ""))
+        elif not unknown:
+            print("\nEvery tool is up to date.")
+        if unknown:
+            print("\nThe clone does not have the commit %d tool(s) came from: git pull it, then run this again." % len(unknown))
     if args.check and dirty:
         print("\n%d tool(s) differ from the lock. If that is intended, run:\n"
               '    python install.py accept <tool> -m "<why>"' % dirty)
+        return 1
+    if args.check and behind:
         return 1
     if args.check:
         print("\nAll copies match the lock.")
@@ -929,7 +992,10 @@ def main():
 
     p = subs.add_parser("status", help="compare installed copies against the lock")
     p.add_argument("--check", action="store_true",
-                   help="exit 1 on any difference (for CI)")
+                   help="exit 1 on any difference (for CI); with --upstream, also when a tool is behind")
+    p.add_argument("--upstream", action="store_true",
+                   help="also say which tools the catalogue has changed since they were installed "
+                        "(reads --source, a local clone, or else the lock's URL)")
     project_args(p)
     p.set_defaults(func=cmd_status)
 

@@ -95,7 +95,8 @@ python akos/install.py add wbs-manager --into <your-repo>
 ```
 
 Either way, commit `.agents/skills/` and `tools.lock.json` together, so everyone who clones gets
-the same tools. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
+the same tools. Later, `git pull` the clone and `python akos/install.py status --upstream --project
+<your-repo> --source akos` says which of them have a newer version, with the `update` line for each. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
 `--dest .claude/skills`.
 
 ## The tools

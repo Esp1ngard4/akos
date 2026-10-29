@@ -258,6 +258,42 @@ def test_init(root, scratch):
     check("a ZIP download is told to clone, not shown a traceback", not ok and "git clone" in out and "Traceback" not in out, out[-300:])
 
 
+def test_upstream(root, scratch):
+    """status --upstream: which installed tools the catalogue has changed since."""
+    print("\ninstall.py status --upstream")
+    installer = os.path.join(root, "install.py")
+    cat = os.path.join(scratch, "upstream-cat")
+    subprocess.check_call(["git", "clone", "-q", root, cat])
+    project = os.path.join(scratch, "upstream-project")
+    ok, out = run([os.path.join(cat, "install.py"), "add", "status-board-manager", "--into", project, "--docs", "TSP"], cat)
+    if not check("a tool and its TD installed from a clone", ok, out[-300:]):
+        return
+    status = lambda *extra: run([installer, "status", "--project", project, "--upstream", "--source", cat] + list(extra), root)
+    ok, out = status()
+    check("just installed: every tool up to date", ok and "Every tool is up to date." in out and "behind" not in out, out[-400:])
+
+    def commit(rel, text, message):
+        with io.open(os.path.join(cat, rel), "a", encoding="utf-8") as fh:
+            fh.write(text)
+        subprocess.check_call(["git", "-c", "user.name=smoke", "-c", "user.email=smoke@example.com", "commit", "-qam", message], cwd=cat)
+
+    tool = "TSP/TSP.15 Team Status Board"
+    commit(tool + "/status-board-manager/scripts/board.py", "\n# a later change\n", "a change to the skill")
+    ok, out = status()
+    lines = {l.split()[0]: l for l in out.splitlines() if l.strip()}
+    check("a change to the skill: the skill is behind, its TD is not",
+          "1 change(s) behind: " in lines.get("status-board-manager", "") and "up to date" in lines.get("TSP.15", ""), out[-500:])
+    check("the hint names the tool to update", 'update "status-board-manager"' in out, out[-300:])
+    commit(tool + "/TD.15 - Team Status Board.md", "\nA later line.\n", "a change to the TD")
+    ok, out = status()
+    lines = {l.split()[0]: l for l in out.splitlines() if l.strip()}
+    check("a change to the TD: the TD entry is behind too", "1 change(s) behind: " in lines.get("TSP.15", ""), out[-500:])
+    ok, out = status("--check")
+    check("--check fails while a tool is behind", not ok, out[-300:])
+    ok, out = run([installer, "status", "--project", project, "--upstream", "--source", root], root)
+    check("compared with another clone holding the lock's commit, it still reads", ok and "source:" in out, out[-300:])
+
+
 def test_installer(root, scratch):
     """Vendor a tool into a throwaway project and drive the drift check.
 
@@ -2327,6 +2363,7 @@ def main():
             test_tool(tool, root, work)
         test_installer(root, scratch)
         test_init(root, scratch)
+        test_upstream(root, scratch)
         test_reconciliation(root, scratch)
         test_catalogue(root, scratch)
         test_tsp_fields(root, scratch)
@@ -2359,7 +2396,7 @@ def main():
             for f in failures:
                 print("  - %s" % f)
             return 1
-        print("All checks passed (%d tools, plus the installer and init, the "
+        print("All checks passed (%d tools, plus the installer, init and status --upstream, the "
               "reconciliation case, the catalogue, the shared modules, effort "
               "and splits, the "
               "concurrent-save check, the Execution layout, the "

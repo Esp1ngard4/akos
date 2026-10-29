@@ -68,12 +68,14 @@ the exact content the copy was taken from, and a tag can be moved.
 | `add <skill> --into <project> --docs <folder>` | Also place the tool's TD in `<folder>/<tool folder>/`, locked as its own entry (`TSP.n docs`) |
 | `add TSP.n --into <project> --docs <folder>` | The TD alone, for a tool with no skill (or a TD wanted without its skill) |
 | `status [--check]` | Compare copies against the lock. Offline; `--check` exits non-zero on any difference |
+| `status --upstream [--source <clone>]` | Also say, per tool, whether the catalogue has changed it since the commit the lock records: up to date, or how many changes behind and the newest one, with the `update` line for each. A TD entry counts changes to its TD only. Reads a local clone (offline once pulled) or the lock's URL; with `--check`, exits non-zero while any tool is behind |
 | `diff <skill>` | Ours against upstream |
 | `update <skill>` | Three-way merge. Exits non-zero and leaves the lock alone if anything conflicts |
 | `accept <skill> [-m why]` | Record the copy on disk as intended, completing any merge |
 
 `status` is deliberately offline — it compares against hashes in the lock rather
-than fetching. That makes it cheap enough to run on every pull request, which is
+than fetching. That is also why *clean* means "as installed", not "the latest":
+`--upstream` is the question asked separately, of a clone the user has pulled. That makes it cheap enough to run on every pull request, which is
 what turns "drift is detectable" into "drift is detected".
 
 ## Conventions
@@ -151,8 +153,8 @@ copy, and `accept`, so the drift detection is itself under test.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.6 | 2026-10-28 | **`status --upstream` says which tools have a newer version.** `status` compares a copy with its lock, so *clean* never meant *latest*, and `diff` answers one tool at a time. With `--upstream`, every entry is checked against the catalogue's history since the commit its lock records, a TD entry against its TD alone; a clone that lacks that commit is told to pull. Asked for to keep the Synaptica copy aligned with AKOS. |
 | v1.5 | 2026-10-28 | **The artifact register describes the whole project.** `init` numbers the planning folder 00 and the execution folder 01, then the planning folder's contents from 02, the register's own folder first, so the sequence reads as Synaptica's does; the audit runs over the project root. The WBS is created declaring `01. Execution` (TD.1 v1.17). Asked for by the user on trying v1.4. |
 | v1.4 | 2026-10-28 | **A catalogue that is not a clone says so.** `add` and `init` read the commit a tool comes from; a ZIP download has none, and one unpacked inside another repository would quietly take that repository's. Both now stop with a plain message to clone instead of a traceback. `init` keeps the artifact register in `00. Artifact Register/` (TD.5 v1.5). |
-| v1.3 | 2026-10-28 | **`init` starts a new project from a pack.** `packs/project.json` names the project pack's tools and its structure; `init` adds the tools, has the artifact register number the planning folder (itself as 00), creates each register through its own installed script, starts the brief, generates the onboarding guide, and prints what to say first. The site's Atlas is built with it, so CI runs the pack on every push. Raised by the user after the site: a team starting fresh was installing tools one by one and building the structure by hand. |
 
 Earlier versions are in this file's git history.
