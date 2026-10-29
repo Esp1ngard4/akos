@@ -111,6 +111,7 @@ If goals are kept outside the registers, step 5 reminds the user to update it. K
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.5 | 2026-10-29 | **The open change requests join the review's batch**, where a project takes them (`change-request`, TSP.18): each proposed as a RAID entry or a WBS change, or declined with its reason, decided with the board's consolidation, and closed with its outcome. |
 | v1.4 | 2026-10-28 | *Beyond the sprint* consolidates the team's board where a project keeps one (TSP.15): its proposals join the week's batch, decided with the product manager. |
 | v1.3 | 2026-10-28 | *Beyond the sprint* names the project briefs due a revisit (TSP.14): `brief.py check` per project, the *revisit due* line only, silent when none is. The revisit runs through Project Definition. A brief carries its own clock because this review, not a monthly one, is where it can be seen. |
 | v1.2 | 2026-10-27 | **The sprint check reads the stakeholder registers** (TSP.13): communications overdue and stakeholders below the engagement wanted with no action, three lines at most, silent when there are none. Read only; sending stays with the close-out. It replaces the *A stakeholder register* adaptation, now that one ships. |

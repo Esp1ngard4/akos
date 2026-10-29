@@ -93,6 +93,7 @@ Pull both, then present once.
 - **Waiting on someone, in the action trackers:** every active tracker (`action-tracker-manager`; files opening with an `action-tracker-meta` block, `status: Active`). Open rows whose `Owner` is not the tracker's `owner` and whose due date has passed, or whose `TBD` has no checkpoint or a passed one (`TBD · checkpoint YYYY-MM-DD`, in the Due date cell). **Three at most**: a `TBD` with no checkpoint first, then the most overdue, with the count of the rest. A chase is the row's `Latest update`, through `action-tracker-manager`, on a yes.
 
 - **The team's board**, where a project keeps one (`status-board-manager`): run its *Consolidate*. Its proposals join this step's batch, decided with the product manager, and the board is stamped once they are applied. Without a board there is no step.
+- **The open change requests**, where a project takes them (`change-request`): list them, and propose for each what it becomes, a RAID entry or a WBS change, or declined with its reason. They join the same batch; once decided, each accepted one is applied through the skill that keeps its register, and every request is closed with its outcome, so the requester sees what came of it. Without the skill there is no step.
 - **Briefs due a revisit**, where projects keep one (`project-definition-manager`), read only:
 
   ```bash

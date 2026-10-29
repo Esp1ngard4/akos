@@ -131,8 +131,8 @@ def paths(rec):
         dev = [
             ("Find your tasks", "Open the team board and filter Owner to your name. Each row is a task, and names the backlog row it helps deliver.",
              "person", "person", "The team board", "Filter the Owner column to your name.", ""),
-            ("Start from its folder", "Each backlog row has a folder in %s with its discovery, spec and plan. The agent drafts what is missing; once you approve the plan, it takes the steps it can." % ex,
-             "both", "agent", "Your agent", "Open the folder for WBS 12 and draft the plan.", "It drafts it there for you to approve, and starts on its steps only once you have."),
+            ("Start from its folder", "Each backlog row you work on gets a folder in %s. The agent proposes how much the work needs (small, medium or large), you decide, and it sets up the documents that size calls for; once you approve the plan, it takes the steps it can." % ex,
+             "both", "agent", "Your agent", "Start work on WBS 12.", "It proposes a size, then creates the folder and its documents; ask what's next on WP.12 at any time."),
             ("Move a task", "Set its status as the work moves, with a dated note on top. A backlog row can carry several tasks, each naming its WBS ID.",
              "agent", "agent", "Copilot in Excel", "Mark the task Login form as Doing, with a note on top dated today: started.",
              "It updates the row the way the board's How to update sheet says."),
@@ -318,17 +318,34 @@ def work_loop(rec, exec_=False):
     note = ('<div class="loopnote">%s<p><b>Back a stop when the work shows the spec or the plan was wrong:</b> the agent revises, %s approve%s again. '
             'A small fix goes straight from committed to done; the bigger or less certain the work, the more stops it makes.</p></div>'
             % (icon("loop"), "a person" if exec_ else "you", "s" if exec_ else ""))
-    return '<ol class="loop">%s</ol>%s' % ("".join(cards), note)
+    sizes = ""
+    if rec.get("sizes"):
+        # From Work Management's guidelines, as this project has them.
+        sizes = ('<div class="table sizes" data-search="size small medium large how much"><table><thead><tr><th>Size</th><th>Typical work</th>'
+                 '<th>What to expect</th></tr></thead><tbody>%s</tbody></table></div><p class="src">How much of this a piece of work needs: '
+                 'the agent proposes a size, %s decide%s. From the work guidelines.</p>'
+                 % ("".join("<tr><td><b>%s</b></td><td>%s</td><td>%s</td></tr>" % (e(a), e(b), e(c)) for a, b, c in rec["sizes"]),
+                    "a person" if exec_ else "you", "s" if exec_ else ""))
+    return '<ol class="loop">%s</ol>%s%s' % ("".join(cards), note, sizes)
 
 
 def work_tree(rec):
     ex = rec.get("execution") or {}
-    rows = [("WP12 Login form - Discovery.md", "what was found"), ("WP12 Login form - Specification.md", "what will be built, and its criteria"),
+    rows = [("WP12 Login form - Discovery.md", "what was found"),
+            ("WP12 Login form - Discovery - Interviews.md", "a stage holds as many documents as it needs, each named by its subject"),
+            ("WP12 Login form - Specification.md", "what will be built, and its criteria"),
             ("WP12 Login form - Plan.md", "the steps, approved before work starts"), ("WP12 Login form - Notes.md", "decisions as they happened, dated"),
             ((ex.get("inputs") or "Inputs") + "/", "what came from outside, kept as received"), ((ex.get("deliverables") or "Deliverables") + "/", "what was handed over, frozen as sent")]
     src = ("Declared in the backlog register" if ex.get("declared") else ("The project's own folder" if ex.get("found") else "The standard layout; the folder is created with the first piece of work"))
-    return ('<div class="panel tree" data-search="execution folder spec plan discovery"><ul><li>%s<span>one folder per backlog row, named by its ID</span><ul><li>WP.12 Login form/<span>an example</span><ul>%s</ul></li></ul></li></ul></div><p class="src">%s.</p>'
-            % (e(ex.get("folder") or "1. Execution"), "".join("<li>%s<span>%s</span></li>" % (e(n), e(a)) for n, a in rows), src))
+    tree = ('<div class="panel tree" data-search="execution folder spec plan discovery"><ul><li>%s<span>one folder per deliverable or feature, '
+            "named by its ID; a story's documents sit in its parent's folder until it has a few of its own</span>"
+            '<ul><li>WP.12 Login form/<span>an example</span><ul>%s</ul></li></ul></li></ul></div>'
+            % (e(ex.get("folder") or "1. Execution"), "".join("<li>%s<span>%s</span></li>" % (e(n), e(a)) for n, a in rows)))
+    ask = ('<div class="loopnote" data-search="ask agent start work file next">%s<p><b>Ask your agent:</b> <q>Start work on WBS 12.</q> '
+           "<q>Add a discovery document on the interviews to WP.12.</q> <q>File this as an input to WP.12.</q> <q>What's next on WP.12?</q> "
+           "Each document starts with a line naming its row and the date it was written, never its status; a stage with many documents keeps "
+           "them in a subfolder of its own; a replaced document goes to <code>PreviousV/</code>.</p></div>" % icon("spark"))
+    return tree + ask + '<p class="src">%s.</p>' % e(src)
 
 
 # ─── The page frame ──────────────────────────────────────────────────────────
@@ -507,7 +524,7 @@ def render_team(rec, exec_name=None):
 
     out.append(section("work", "How work gets done", "How", work_loop(rec) + work_tree(rec), "How · 2 of 3",
                        "From committed to done: researched, specified and planned, then built",
-                       "Every piece of work the sprint commits to gets a folder of its own. Agents draft what it needs at each stop and do the steps they can; you review, and nothing is built before you approve the plan."))
+                       "Every piece of work the sprint commits to keeps its documents in the Execution folder. Agents draft what it needs at each stop and do the steps they can; you review, and nothing is built before you approve the plan."))
 
     ps = paths(rec)
     out.append(section("first-week", "Your first week", "How",

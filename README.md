@@ -83,7 +83,7 @@ python akos/install.py init my-project --name "My project"
 ```
 
 It installs the project pack's skills into the project-management folder, where only the product
-manager's agent loads them, and sets the project up the way the conventions say: the numbered
+manager's agent loads them (the team's own two, for work items and change requests, go at the root), and sets the project up the way the conventions say: the numbered
 folders, each register created empty by its own tool, a tool register with each tool's design
 document, the stakeholder register in a confidential folder kept out of git, a sprint calendar (two
 weeks from next Monday, unless you say otherwise), the brief's template, a first onboarding guide and
@@ -92,7 +92,6 @@ a workspace per profile. Commit it, open the *Product manager* workspace with yo
 [Your first hour](https://esp1ngard4.github.io/akos/first-hour.html) walks through what follows.
 
 **A project already running** adds the tools it needs, one at a time:
-
 ```bash
 python akos/install.py add wbs-manager --into <your-repo>
 ```
@@ -122,6 +121,8 @@ the same tools. Later, `git pull` the clone and `python akos/install.py status -
 | TSP.14 | [Project Definition](https://esp1ngard4.github.io/akos/tools/project-definition.html) | Writes the brief with whoever owns the outcome, and keeps it current | `project-definition-manager` |
 | TSP.15 | [Team Status Board](https://esp1ngard4.github.io/akos/tools/team-status-board.html) | Sets up each sprint's board in Excel, and brings the team's updates into the backlog as proposals | `status-board-manager` |
 | TSP.16 | [Onboarding](https://esp1ngard4.github.io/akos/tools/onboarding.html) | Generates the project's guide, and walks a new joiner through their first week | `onboarding-guide` |
+| TSP.17 | [Work Management](https://esp1ngard4.github.io/akos/tools/work-management.html) | Starts a work item from its WBS row, keeps its documents, and says what its size calls for next | `work-manager` |
+| TSP.18 | [Change Requests](https://esp1ngard4.github.io/akos/tools/change-requests.html) | Drafts a team member's request to change the WBS or the RAID, for the product manager to decide | `change-request` |
 
 Each tool's page says what it is for, what it works with and how to install it; [all of them](https://esp1ngard4.github.io/akos/tools/), and [your first hour](https://esp1ngard4.github.io/akos/first-hour.html) setting up Atlas with them. The list generated from the catalogue's own register is the [registry](registry/REGISTRY.md).
 

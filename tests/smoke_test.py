@@ -228,8 +228,11 @@ def test_init(root, scratch):
           all(os.path.isdir(p) for p in (plan, os.path.join(project, "01. Execution"),
                                          os.path.join(project, "02. General Ref Materials", "03. Workspaces"))),
           sorted(os.listdir(project)))
-    check("nothing installed at the root", not os.path.exists(os.path.join(project, ".agents"))
-          and not os.path.exists(os.path.join(project, "tools.lock.json")), sorted(os.listdir(project)))
+    with io.open(os.path.join(project, "tools.lock.json"), encoding="utf-8") as fh:
+        root_lock = json.load(fh)
+    check("at the root, the team's tools only, with their own lock",
+          sorted(root_lock["tools"]) == sorted(pack["team_skills"]) and not os.path.exists(os.path.join(project, ".agents", "skills", "wbs-manager")),
+          sorted(root_lock["tools"]))
     with io.open(os.path.join(plan, "tools.lock.json"), encoding="utf-8") as fh:
         lock = json.load(fh)
     check("every skill in the pack installed and locked in the project-management folder",
@@ -237,7 +240,7 @@ def test_init(root, scratch):
           sorted(set(pack["skills"]) - set(lock["tools"])))
     top = sorted(os.listdir(plan))
     want = ["04. Artifact Register", "05. TSP", "06. WBS", "07. RAID", "08. Sprints", "09. Comms", "10. Reports",
-            "11. Onboarding", "12. Confidential", "14. Project Brief.md"]
+            "11. Onboarding", "12. Confidential", "14. Change Requests", "15. Project Brief.md"]
     check("the project-management folder continues the sequence", all(w in top for w in want), top)
     tsp = os.path.join(plan, "05. TSP", "TSP Register Greenfield.json")
     with io.open(tsp, encoding="utf-8") as fh:
@@ -266,6 +269,7 @@ def test_init(root, scratch):
     check("the team's workspace opens the project; the product manager's adds the project-management folder, where the skills load",
           team == ["../.."] and pm == ["../..", "../../00. PrjMgm"], (pm, team))
     check("the onboarding guide", os.path.isfile(os.path.join(plan, "11. Onboarding", "Guide.html")))
+    check("the tool register holds the team's tools too", {"AKOS TSP.17", "AKOS TSP.18"} <= {t.get("Upstream") for t in tools})
     skills = os.path.join(plan, ".agents", "skills")
     reg = os.path.join(plan, "04. Artifact Register", "Artifact Register Greenfield.json")
     ok, out = run([os.path.join(skills, "artifact-register", "scripts", "audit_artifact_register.py"), reg, "--root", project], root)
@@ -1148,6 +1152,26 @@ REPORT_TOOL = "TSP.10 Reporting"
 
 
 PD_TOOL = "TSP.14 Project Definition"
+
+
+TEAM_TOOLS = [("TSP.17 Work Management", "work-manager", ["work.py", "smoke_test.py"], ["references/sizes.md", "references/stages/discovery.md", "references/stages/implement.md", "templates/Specification.md"]),
+              ("TSP.18 Change Requests", "change-request", ["cr.py", "smoke_test.py"], [])]
+
+
+def test_team_tools(root, scratch):
+    """Work Management and Change Requests: what they ship, and their own smoke tests."""
+    for folder, skill, scripts, extra in TEAM_TOOLS:
+        print("\n%s" % folder)
+        tool = os.path.join(root, "TSP", folder)
+        if not check("tool folder present", os.path.isdir(tool), tool):
+            continue
+        check("TD present", any(n.startswith("TD.") for n in os.listdir(tool)))
+        check("links resolve in the catalogue", not broken_links(tool), str(broken_links(tool))[:200])
+        base = os.path.join(tool, skill)
+        for rel in ["SKILL.md"] + ["scripts/" + s for s in scripts] + extra:
+            check("ships %s" % rel, os.path.isfile(os.path.join(base, rel.replace("/", os.sep))))
+        ok, out = run([os.path.join(base, "scripts", "smoke_test.py")], scratch)
+        check("its own smoke test passes", ok and "All checks passed." in out, out[-500:])
 
 
 ONBOARD_TOOL = "TSP.16 Onboarding"
@@ -2410,6 +2434,7 @@ def main():
         test_project_definition(root, scratch)
         test_status_board(root, scratch)
         test_onboarding(root, scratch)
+        test_team_tools(root, scratch)
         test_reporting(root, scratch)
         test_shared_modules(root, scratch)
         test_docs_match_code(root, scratch)
@@ -2427,7 +2452,7 @@ def main():
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
               "ceremonies, the daily loop, the weekly review, the action tracker, the "
-              "stakeholder register, project definition, the team status board, onboarding and reporting)." % len(TOOLS))
+              "stakeholder register, project definition, the team status board, onboarding, work management, change requests and reporting)." % len(TOOLS))
         return 0
     finally:
         if args.keep:

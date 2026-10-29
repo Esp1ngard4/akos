@@ -330,6 +330,42 @@
       "Description": "TD.3 v1.9: the Upstream field, set by register --upstream; --doc-aux.",
       "ID": 55,
       "Tool": "TSP Register"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TSP.17 published: the Execution folder's conventions moved from the WBS skill, with the stages as guidelines scaled by size; raised trying the starter pack as a team member.",
+      "ID": 56,
+      "Tool": "Work Management"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TSP.18 published: drafting, lookup, list and close; processed at the weekly review; raised trying the starter pack as a team member.",
+      "ID": 57,
+      "Tool": "Change Requests"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.11 v1.5: the open change requests are processed in the review's batch, where change-request is installed.",
+      "ID": 58,
+      "Tool": "Weekly Review"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.1 v1.18: the Execution folder's conventions move to Work Management (TSP.17); the skill keeps what it reads.",
+      "ID": 59,
+      "Tool": "WBS Register"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.16 v1.1: the guide shows Work Management's sizes, and the developer's path starts a work item with it.",
+      "ID": 60,
+      "Tool": "Onboarding"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.4 v1.8: the project pack's team part: work-manager and change-request at the root, a Change Requests folder, the Execution README.",
+      "ID": 61,
+      "Tool": "Tool Installer"
     }
   ],
   "control_activities": [],
@@ -380,8 +416,8 @@
         ]
       }
     },
-    "updated": "2026-10-29T09:28:07",
-    "values_hash": "sha256:88258a845ab80b5b9b04c59b4e775ecbdd492a5b4ca7a5a14ea77a97c5be5f41",
+    "updated": "2026-10-29T11:04:24",
+    "values_hash": "sha256:90ed174f21054669e42b498c4f45573930d3c3e1c239f2b47da0d57c1696e6de",
     "version": 1
   },
   "tools": [
@@ -605,6 +641,34 @@
       "Primary Area": "Project management",
       "Relevancy": "Often",
       "Skill": "onboarding-guide",
+      "Status": "In Progress",
+      "Type": "Tool"
+    },
+    {
+      "Description": "A project's work items: the Execution folder where each piece of work keeps its documents, and the stages it goes through (discovery, specification, plan, implement) as guidelines scaled small, medium and large. The team's agent starts a work item from its WBS row, files what came in and went out, and says what is next.",
+      "Doc Aux": "Yes",
+      "ID": 17,
+      "Last Reviewed": "2026-10-29",
+      "Links": "TSP/TSP.17 Work Management/TD.17 - Work Management.md",
+      "Name": "Work Management",
+      "Notes": "Not yet used by a team: exercised by its smoke test on a scratch project. Installed at the project root by init, for the team.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "work-manager",
+      "Status": "In Progress",
+      "Type": "Tool"
+    },
+    {
+      "Description": "The team's channel for asking that the registers change: anyone drafts a request with what it affects by WBS or RAID ID; the product manager processes the open ones at the weekly review, each becoming a RAID entry or a WBS change, or declined with a reason, and closes it with its outcome.",
+      "Doc Aux": "Yes",
+      "ID": 18,
+      "Last Reviewed": "2026-10-29",
+      "Links": "TSP/TSP.18 Change Requests/TD.18 - Change Requests.md",
+      "Name": "Change Requests",
+      "Notes": "Not yet used by a team: exercised by its smoke test on a scratch project. Installed at the project root by init, for the team.",
+      "Primary Area": "Project management",
+      "Relevancy": "Often",
+      "Skill": "change-request",
       "Status": "In Progress",
       "Type": "Tool"
     }

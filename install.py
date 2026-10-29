@@ -537,7 +537,8 @@ def cmd_init(args):
                  "  python install.py add <skill> --into %s" % (project, ", ".join(extra[:4]), args.project))
     first = dt.date.fromisoformat(args.first_day) if args.first_day else next_monday()
     cat = read_catalogue(args.catalogue)
-    missing = [s for s in pack["skills"] if s not in cat]
+    team = pack.get("team_skills", [])
+    missing = [s for s in pack["skills"] + team if s not in cat]
     if missing:
         sys.exit("The pack names skills the catalogue lacks: %s" % ", ".join(missing))
 
@@ -549,15 +550,24 @@ def cmd_init(args):
         os.makedirs(where[name])
     planning = where[pack["planning"]]
 
-    # Every skill is the product manager's: installed into the planning folder,
-    # with its lock beside it, never at the root.
+    # The product manager's skills go into the planning folder, with its lock;
+    # the team's at the root, with theirs. An agent loads the skills of the
+    # folders its workspace opens: the team's opens the root, the product
+    # manager's the root and the planning folder.
     for skill in pack["skills"]:
         quiet(cmd_add, argparse.Namespace(skill=skill, into=planning, dest=args.dest, catalogue=args.catalogue,
                                           source=args.source, force=False, docs=None))
     print("  installed %d skills into %s/" % (len(pack["skills"]), pack["planning"]))
+    for skill in team:
+        quiet(cmd_add, argparse.Namespace(skill=skill, into=project, dest=args.dest, catalogue=args.catalogue,
+                                          source=args.source, force=False, docs=None))
+    if team:
+        print("  installed %d team skills at the root: %s" % (len(team), ", ".join(team)))
 
-    def skills():
-        return os.path.join(planning, args.dest.replace("/", os.sep))
+    def skills(skill="artifact-register"):
+        pm = os.path.join(planning, args.dest.replace("/", os.sep))
+        root = os.path.join(project, args.dest.replace("/", os.sep))
+        return pm if os.path.isdir(os.path.join(pm, skill)) else root
 
     # The artifact register describes the whole project: the top folders first
     # (00 onwards, as the pack lists them), then the planning folder's contents,
@@ -605,7 +615,7 @@ def cmd_init(args):
     with io.open(os.path.join(args.catalogue, "registry", "TSP Register.json"), encoding="utf-8") as fh:
         catalogue_rows = {"TSP.%s" % r["ID"]: r for r in json.load(fh).get("tools", [])}
     by_tool = {}
-    for skill in pack["skills"]:
+    for skill in pack["skills"] + team:
         by_tool.setdefault(cat[skill]["tsp"], []).append(skill)
     register = os.path.join(tsp_dir, tools["file"].format(name=args.name))
     run_skill(skills(), "tsp-manager", "create_tsp.py", [register, "--scope", args.name], project)
@@ -630,7 +640,7 @@ def cmd_init(args):
                   year=str(first.year), days=str(args.sprint_days))
     for step in pack["steps"]:
         skill, script, argv = step[:3]
-        run_skill(skills(), skill, script, [a.format(**values) for a in argv], project)
+        run_skill(skills(skill), skill, script, [a.format(**values) for a in argv], project)
         print("  %s: %s" % (skill, step[3] if len(step) > 3 else script))
 
     for filename, name, about in pack.get("documents", []):
@@ -661,8 +671,9 @@ def cmd_init(args):
             json.dump({"folders": folders, "settings": {}}, fh, indent=2)
             fh.write("\n")
 
-    print("\n%s is set up: %d skills (%d tools) in %s, sprints of %d days from %s, and its guide in %s."
-          % (args.name, len(pack["skills"]), len(by_tool), os.path.basename(planning), args.sprint_days, first.isoformat(),
+    print("\n%s is set up: %d tools, %d skills in %s%s, sprints of %d days from %s, and its guide in %s."
+          % (args.name, len(by_tool), len(pack["skills"]), os.path.basename(planning),
+             " and %d at the root, for the team" % len(team) if team else "", args.sprint_days, first.isoformat(),
              os.path.relpath(found.get("Onboarding", planning), project)))
     if ws_dir:
         print("Open %s with your agent, so the skills load." %

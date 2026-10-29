@@ -134,6 +134,25 @@ def execution(project, wbs_path, wbs):
             "inputs": ex.get("inputs") or "Inputs", "deliverables": ex.get("deliverables") or "Deliverables", "declared": bool(ex)}
 
 
+def work_sizes(project):
+    """The size table from Work Management's sizes guideline, where it is installed
+    (at the project root for the team, or beside this skill): [[size, typical
+    work, what to expect]]. The guide shows it; the guidelines own it."""
+    candidates = [os.path.join(base, ".agents", "skills", "work-manager") for base in
+                  (os.path.abspath(project), os.path.dirname(os.path.abspath(project)))]
+    candidates.append(optional_sibling("work-manager"))
+    for skill in candidates:
+        path = os.path.join(skill, "references", "sizes.md") if skill else None
+        if path and os.path.isfile(path):
+            rows = []
+            for line in io.open(path, encoding="utf-8"):
+                cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                if line.startswith("|") and len(cells) == 3 and cells[0] in ("Small", "Medium", "Large"):
+                    rows.append(cells)
+            return rows
+    return []
+
+
 def find_records(folder):
     for root, dirs, files in os.walk(folder):
         dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP]
@@ -281,6 +300,7 @@ def gather(project, as_of, records=None):
                                            "weekly": "weekly-review-facilitator" in skills, "daily": "daily-loop-facilitator" in skills},
             "tools": tools, "folders": folders, "folders_from": "artifact-register" if art else None,
             "people": people, "comms": comms, "registers": registers, "execution": execution(project, wbs_path, wbs),
+            "sizes": work_sizes(project),
             "now": [n for n, have in (("this sprint's board", board_where), ("the sprint record", records),
                                       ("the latest status report", "reporting" in skills)) if have]}
 

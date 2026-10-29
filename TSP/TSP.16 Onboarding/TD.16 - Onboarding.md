@@ -117,4 +117,5 @@ What is **not** tested is whether a newcomer understands it. That is the first p
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-29 | **The guide shows how much of the loop a piece of work needs.** Where Work Management (TSP.17) is installed, its size table is read from the project's own guidelines and shown under *How work gets done*; the developer's path starts a work item with it. |
 | v1.0 | 2026-10-28 | Published as TSP.16: the team guide and the executive overview generated from a project's own files into an onboarding folder, every step saying who acts, people and agents drawn as one loop doing the work, how a piece of work gets done (discover, specify, plan and approve, do, close), nothing that changes each sprint, fonts embedded; the *onboard me* conversation. First built inside Reporting the same day, showing the running sprint, and moved out before it was published. |

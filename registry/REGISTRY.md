@@ -36,6 +36,8 @@ python install.py add <skill> --into <your-project>
 | TSP.14 | **Project Definition** | In Progress | `project-definition-manager` | [TD.14](../TSP/TSP.14%20Project%20Definition/TD.14%20-%20Project%20Definition.md) |
 | TSP.15 | **Team Status Board** | In Progress | `status-board-manager` | [TD.15](../TSP/TSP.15%20Team%20Status%20Board/TD.15%20-%20Team%20Status%20Board.md) |
 | TSP.16 | **Onboarding** | In Progress | `onboarding-guide` | [TD.16](../TSP/TSP.16%20Onboarding/TD.16%20-%20Onboarding.md) |
+| TSP.17 | **Work Management** | In Progress | `work-manager` | [TD.17](../TSP/TSP.17%20Work%20Management/TD.17%20-%20Work%20Management.md) |
+| TSP.18 | **Change Requests** | In Progress | `change-request` | [TD.18](../TSP/TSP.18%20Change%20Requests/TD.18%20-%20Change%20Requests.md) |
 
 ## What each is for
 
@@ -70,6 +72,10 @@ python install.py add <skill> --into <your-project>
 **TSP.15 Team Status Board** — Where a team updates the status of its own work, one Excel board per sprint beside the WBS, edited by the team or through Copilot in Excel, and its consolidation into the WBS: set up at planning, updated when a commitment changes, consolidated at the weekly review and the close-out through proposals the product manager confirms. A step in those ceremonies only where it is installed; the WBS keeps one writer.
 
 **TSP.16 Onboarding** — How people come to work in a project run on these tools: the team guide and the executive overview generated from the project's own files, every step saying who acts, people and agents shown as one loop, fonts embedded; and the onboard me conversation that walks a newcomer through their first week.
+
+**TSP.17 Work Management** — A project's work items: the Execution folder where each piece of work keeps its documents, and the stages it goes through (discovery, specification, plan, implement) as guidelines scaled small, medium and large. The team's agent starts a work item from its WBS row, files what came in and went out, and says what is next.
+
+**TSP.18 Change Requests** — The team's channel for asking that the registers change: anyone drafts a request with what it affects by WBS or RAID ID; the product manager processes the open ones at the weekly review, each becoming a RAID entry or a WBS change, or declined with a reason, and closes it with its outcome.
 
 ## Status meanings
 

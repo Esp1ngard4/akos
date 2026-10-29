@@ -4,6 +4,7 @@
   "skills": ["project-definition-manager", "wbs-manager", "raid-manager", "sprint-facilitator", "sprint-planning-precheck",
              "weekly-review-facilitator", "reporting", "status-board-manager", "stakeholder-manager",
              "artifact-register", "tsp-manager", "td-author", "onboarding-guide"],
+  "team_skills": ["work-manager", "change-request"],
   "top": [
     ["PrjMgm", "Project management: the registers, the records, the reports and the brief; every skill, for the product manager", null],
     ["Execution", "The work itself: one folder per WBS row, WP.<WBS ID> <Title>, with its discovery, specification, plan and notes", null],
@@ -22,7 +23,8 @@
     ["Reports", "The status reports and sprint updates, generated from the records", null],
     ["Onboarding", "The project's guide for its team and for outsiders, generated from its own files", null],
     ["Confidential", "Restricted to the product manager and whoever they name, in SharePoint; kept out of git", null],
-    ["Stakeholder Mgm", "The stakeholder register, the communications plan and the contacts", "Confidential"]
+    ["Stakeholder Mgm", "The stakeholder register, the communications plan and the contacts", "Confidential"],
+    ["Change Requests", "Requests to change the WBS or the RAID, drafted by anyone, processed by the product manager; the one folder here the team writes to", null]
   ],
   "tools": {"folder": "TSP", "file": "TSP Register {name}.json", "upstream": "AKOS"},
   "steps": [

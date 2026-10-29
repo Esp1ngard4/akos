@@ -77,7 +77,7 @@ FIRST_HOUR = [
      "agent": "Asks you why the project exists, what done looks like and what would make you stop, and writes each part into the brief for you to confirm.",
      "get": "The statement the whole team reads first.",
      "link": ("Atlas's brief", REPO + "/blob/main/site/atlas/Project%20Brief.md"),
-     "fixture": ("Project Brief.md", PLAN + "/14. Project Brief.md"),
+     "fixture": ("Project Brief.md", PLAN + "/15. Project Brief.md"),
      "run": [("project-definition-manager", "brief.py", ["check", PLAN])]},
     {"title": "Break the work down",
      "say": "Add the self-service sign-up as a key deliverable, with four features: the form, email verification, the identity check and the welcome.",
@@ -107,6 +107,21 @@ FIRST_HOUR = [
                                ("Ines Okafor", "Validation and quality", "G.1"), ("Ruth Calder", "Sponsor", "G.2"), ("Tom Reyes", "Head of support", "G.2"))]
             + [("stakeholder-manager", "stk.py", ["add-comm", STK, "Status report", "--mode", "push", "--audience", "G.2", "--cadence", "per sprint", "--channel", "email"]),
                ("stakeholder-manager", "stk.py", ["add-comm", STK, "Sprint review", "--mode", "push", "--audience", "G.1,G.2", "--cadence", "per sprint", "--channel", "meeting"])]},
+    {"title": "Start a piece of work",
+     "say": "Start work on the sign-up form.",
+     "agent": "A team member's agent, with the team's own tool. It reads the WBS row, proposes a size (medium: a clear problem, one unknown about the provider) and, once the person agrees, "
+              "creates the work item's folder and a specification with the plan as a checklist, the header naming the row.",
+     "get": "WP.2 Sign-up form, with a specification to write; ask what's next at any time.",
+     "run": [("work-manager", "work.py", ["start", PLAN, "--id", "2", "--size", "medium", "--on", AS_OF.isoformat()])]},
+    {"title": "Raise a change request",
+     "say": "Raise a change request: the welcome step should also offer to import contacts. Product asked for it in the review.",
+     "agent": "Looks up what it affects in the WBS and the RAID, read-only, and drafts the request in the Change Requests folder. The product manager decides it at the weekly review; "
+              "the outcome is written on the request.",
+     "get": "A request waiting for the product manager, with the rows it affects named.",
+     "run": [("change-request", "cr.py", ["lookup", PLAN, "welcome"]),
+             ("change-request", "cr.py", ["draft", PLAN, "--type", "change", "--what", "Offer to import contacts in the welcome step.",
+                                          "--why", "Product asked for it in the sprint review.", "--impact", "About a day, in the welcome feature.",
+                                          "--affects", "WBS 5", "--by", "Leo Brandt", "--on", AS_OF.isoformat()])]},
     {"title": "Bring the team in",
      "say": "Regenerate the onboarding guide.",
      "agent": "Reads the brief, the registers and the tools installed, and writes the team guide and the executive overview from them. Nothing in either is typed by hand.",
@@ -131,7 +146,9 @@ def build_atlas(where):
                 cmd = [os.path.join(ROOT, "install.py")] + args + ["--source", REPO + ".git"]
                 cwd = where
             else:
-                cmd, cwd = [os.path.join(skills, skill, "scripts", name)] + args, atlas
+                # The product manager's skills sit in the planning folder, the team's at the root.
+                where = skills if os.path.isdir(os.path.join(skills, skill)) else os.path.join(atlas, ".agents", "skills")
+                cmd, cwd = [os.path.join(where, skill, "scripts", name)] + args, atlas
             p = subprocess.run([sys.executable] + cmd, capture_output=True, text=True, encoding="utf-8", env=ENV, cwd=cwd)
             if p.returncode != 0:
                 sys.exit("First hour, %s: %s failed\n%s" % (step["title"], name, (p.stdout + p.stderr)[-1500:]))
@@ -253,7 +270,7 @@ def markdown(text, fix):
 
 # ─── The pages ───────────────────────────────────────────────────────────────
 
-GROUPS = [("Running the project", ["TSP.14", "TSP.1", "TSP.8", "TSP.15", "TSP.11", "TSP.10", "TSP.2", "TSP.13", "TSP.12", "TSP.16"]),
+GROUPS = [("Running the project", ["TSP.14", "TSP.1", "TSP.8", "TSP.15", "TSP.17", "TSP.18", "TSP.11", "TSP.10", "TSP.2", "TSP.13", "TSP.12", "TSP.16"]),
           ("Your own day", ["TSP.9", "TSP.7", "TSP.6"]),
           ("Keeping the system", ["TSP.3", "TSP.5", "TSP.4"])]
 
