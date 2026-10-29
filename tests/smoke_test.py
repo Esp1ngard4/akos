@@ -210,8 +210,10 @@ def test_tool(tool, root, work):
 
 
 def test_init(root, scratch):
-    """A new project from the project pack: its tools, its structure, its
-    registers made by their own tools, a guide; and a second init refused."""
+    """A new project from the project pack: every skill in the project-management
+    folder, a tool register with each tool's TD, the registers made by their own
+    tools, stakeholders in a confidential folder out of git, a workspace per
+    profile; and a second init refused."""
     print("\ninstall.py init")
     installer = os.path.join(root, "install.py")
     with io.open(os.path.join(root, "packs", "project.json"), encoding="utf-8") as fh:
@@ -221,34 +223,56 @@ def test_init(root, scratch):
                    "--catalogue", root, "--source", root], root)
     if not check("init runs on an empty folder", ok, out[-600:]):
         return
-    with io.open(os.path.join(project, "tools.lock.json"), encoding="utf-8") as fh:
+    plan = os.path.join(project, "00. PrjMgm")
+    check("the top folders numbered 00 to 03: PrjMgm, Execution, General Ref Materials and its Workspaces",
+          all(os.path.isdir(p) for p in (plan, os.path.join(project, "01. Execution"),
+                                         os.path.join(project, "02. General Ref Materials", "03. Workspaces"))),
+          sorted(os.listdir(project)))
+    check("nothing installed at the root", not os.path.exists(os.path.join(project, ".agents"))
+          and not os.path.exists(os.path.join(project, "tools.lock.json")), sorted(os.listdir(project)))
+    with io.open(os.path.join(plan, "tools.lock.json"), encoding="utf-8") as fh:
         lock = json.load(fh)
-    check("every tool in the pack installed and locked", all(s in lock["tools"] for s in pack["skills"]),
+    check("every skill in the pack installed and locked in the project-management folder",
+          all(s in lock["tools"] for s in pack["skills"]) and "action-tracker-manager" not in lock["tools"],
           sorted(set(pack["skills"]) - set(lock["tools"])))
-    plan = os.path.join(project, "00. " + pack["planning"][0])
-    check("the planning folder is 00 and the execution folder 01, numbered by the artifact register",
-          os.path.isdir(plan) and os.path.isdir(os.path.join(project, "01. " + pack["execution"][0])), sorted(os.listdir(project)))
-    top = sorted(os.listdir(plan)) if os.path.isdir(plan) else []
-    want = ["02. Artifact Register"] + ["%02d. %s" % (i, f[0]) for i, f in enumerate(pack["folders"], 3)]
-    check("the planning folder's contents continue the sequence", all(w in top for w in want)
-          and "%02d. Project Brief.md" % (len(want) + 2) in top, top)
-    wbs = os.path.join(plan, "03. WBS", "WBS Greenfield.json")
+    top = sorted(os.listdir(plan))
+    want = ["04. Artifact Register", "05. TSP", "06. WBS", "07. RAID", "08. Sprints", "09. Comms", "10. Reports",
+            "11. Onboarding", "12. Confidential", "14. Project Brief.md"]
+    check("the project-management folder continues the sequence", all(w in top for w in want), top)
+    tsp = os.path.join(plan, "05. TSP", "TSP Register Greenfield.json")
+    with io.open(tsp, encoding="utf-8") as fh:
+        tools = json.load(fh)["tools"]
+    check("the tool register numbers the tools itself and names each one's AKOS tool",
+          [t["ID"] for t in tools] == list(range(1, len(tools) + 1)) and all(t.get("Upstream", "").startswith("AKOS TSP.") for t in tools)
+          and any(t["Upstream"] == "AKOS TSP.15" and t["Skill"] == "status-board-manager" for t in tools), tools[:2])
+    check("each tool's TD in the register's folder, and locked",
+          all(t.get("Doc Aux") == "Yes" and os.path.isfile(os.path.join(plan, "05. TSP", t["Links"])) for t in tools)
+          and all(("%s docs" % t["Upstream"].split()[1]) in lock["tools"] for t in tools), [t.get("Links") for t in tools][:2])
+    wbs = os.path.join(plan, "06. WBS", "WBS Greenfield.json")
     with io.open(wbs, encoding="utf-8") as fh:
-        sprints = json.load(fh).get("sprints") or []
+        data = json.load(fh)
+    sprints = data.get("sprints") or []
     check("a WBS with a sprint calendar from the first day", sprints and sprints[0]["Starts"] <= "2026-11-02" <= sprints[-1]["Ends"], len(sprints))
-    with io.open(wbs, encoding="utf-8") as fh:
-        check("the WBS declares the execution folder", (json.load(fh)["meta"].get("execution") or {}).get("folder") == "../../01. Execution")
-    check("the RAID and the stakeholder register", os.path.isfile(os.path.join(plan, "04. RAID", "RAID Greenfield.json"))
-          and os.path.isfile(os.path.join(plan, "06. Comms", "Stakeholders Greenfield.json")))
-    check("the onboarding guide", os.path.isfile(os.path.join(plan, "08. Onboarding", "Guide.html")))
+    check("the WBS declares the execution folder", (data["meta"].get("execution") or {}).get("folder") == "../../01. Execution")
+    check("the stakeholder register in Confidential/Stakeholder Mgm",
+          os.path.isfile(os.path.join(plan, "12. Confidential", "13. Stakeholder Mgm", "Stakeholders Greenfield.json")))
     with io.open(os.path.join(project, ".gitignore"), encoding="utf-8") as fh:
-        check("contacts kept out of git", "Contacts *.csv" in fh.read())
-    reg = os.path.join(plan, "02. Artifact Register", "Artifact Register Greenfield.json")
-    check("the artifact register in a folder of its own", os.path.isfile(reg), top)
-    ok, out = run([os.path.join(project, ".agents", "skills", "artifact-register", "scripts", "audit_artifact_register.py"),
-                   reg, "--root", project], root)
+        check("the confidential folder kept out of git", "00. PrjMgm/12. Confidential/" in fh.read().split("\n"))
+    ws = os.path.join(project, "02. General Ref Materials", "03. Workspaces")
+    with io.open(os.path.join(ws, "Product manager.code-workspace"), encoding="utf-8") as fh:
+        pm = [f["path"] for f in json.load(fh)["folders"]]
+    with io.open(os.path.join(ws, "Team.code-workspace"), encoding="utf-8") as fh:
+        team = [f["path"] for f in json.load(fh)["folders"]]
+    check("the team's workspace opens the project; the product manager's adds the project-management folder, where the skills load",
+          team == ["../.."] and pm == ["../..", "../../00. PrjMgm"], (pm, team))
+    check("the onboarding guide", os.path.isfile(os.path.join(plan, "11. Onboarding", "Guide.html")))
+    skills = os.path.join(plan, ".agents", "skills")
+    reg = os.path.join(plan, "04. Artifact Register", "Artifact Register Greenfield.json")
+    ok, out = run([os.path.join(skills, "artifact-register", "scripts", "audit_artifact_register.py"), reg, "--root", project], root)
     check("the artifact register audits the whole project clean", "0 error(s), 0 warning(s)" in out, out[-400:])
-    ok, out = run([installer, "status", "--project", project, "--check"], root)
+    ok, out = run([os.path.join(skills, "tsp-manager", "scripts", "audit_tsp.py"), tsp], root)
+    check("the tool register audits clean", "0 error(s), 0 warning(s)" in out, out[-400:])
+    ok, out = run([installer, "status", "--project", plan, "--check"], root)
     check("status --check clean", ok, out[-300:])
     ok, out = run([installer, "init", project, "--name", "Again", "--catalogue", root], root)
     check("init refuses a folder that already holds a project", not ok and "already holds a project" in out, out[-300:])

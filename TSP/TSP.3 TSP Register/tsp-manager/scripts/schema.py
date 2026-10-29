@@ -19,7 +19,7 @@ CHANGES = "change_log"
 FIELDS = {
     TOOLS: ["ID", "Name", "Description", "Type", "Status",
             "Relevancy", "Primary Area", "Other Areas", "Doc Aux", "Links",
-            "Notes", "Last Reviewed", "Skill"],
+            "Notes", "Last Reviewed", "Skill", "Upstream"],
     CONTROLS: ["ID", "Activity Name", "Frequency", "Duration (min)",
                "Importance", "Commitment", "Linked Tool", "Description",
                "Last Done", "Next Due"],

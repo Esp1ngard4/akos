@@ -56,7 +56,8 @@ def e(text):
 PACK = json.load(io.open(os.path.join(ROOT, "packs", "project.json"), encoding="utf-8"))
 INIT = ["init", "Atlas", "--pack", "project", "--name", "Atlas", "--first-day", "2026-07-06"]
 PLAN = "00. PrjMgm"
-WBS, RAID, STK = PLAN + "/03. WBS/WBS Atlas.json", PLAN + "/04. RAID/RAID Atlas.json", PLAN + "/06. Comms/Stakeholders Atlas.json"
+WBS, RAID, STK = (PLAN + "/06. WBS/WBS Atlas.json", PLAN + "/07. RAID/RAID Atlas.json",
+                  PLAN + "/12. Confidential/13. Stakeholder Mgm/Stakeholders Atlas.json")
 
 # Each step: what you say, what the agent does, what you get, and the commands
 # that run, from the Atlas folder: (skill, script, args). The first step is the
@@ -64,17 +65,19 @@ WBS, RAID, STK = PLAN + "/03. WBS/WBS Atlas.json", PLAN + "/04. RAID/RAID Atlas.
 FIRST_HOUR = [
     {"title": "Start the project",
      "run_by": "you",
-     "agent": "Run the installer once, with the project pack. It installs the pack's %d tools and sets the project up the way the conventions say: "
-              "the planning folder with its numbered folders, each register created empty by its own tool, a sprint calendar, the brief's template, "
-              "and a first onboarding guide. Starting a project is a person's decision, so no agent does it." % len(PACK["skills"]),
-     "get": "A project an agent can work in from the first message. Commit it.",
+     "agent": "Run the installer once, with the project pack. It installs the pack's %d skills into the project-management folder, where only the "
+              "product manager's agent loads them, and sets the project up the way the conventions say: the numbered folders, each register created "
+              "empty by its own tool, a tool register with each tool's TD, the stakeholder register in a confidential folder kept out of git, a sprint "
+              "calendar, the brief's template, a first onboarding guide, and a workspace per profile. Starting a project is a person's decision, so no "
+              "agent does it." % len(PACK["skills"]),
+     "get": "A project an agent can work in from the first message. Commit it, and open the Product manager workspace.",
      "run": [("install", "install.py", INIT)]},
     {"title": "Write the brief",
      "say": "Let's write the project brief for Atlas.",
      "agent": "Asks you why the project exists, what done looks like and what would make you stop, and writes each part into the brief for you to confirm.",
      "get": "The statement the whole team reads first.",
      "link": ("Atlas's brief", REPO + "/blob/main/site/atlas/Project%20Brief.md"),
-     "fixture": ("Project Brief.md", PLAN + "/09. Project Brief.md"),
+     "fixture": ("Project Brief.md", PLAN + "/14. Project Brief.md"),
      "run": [("project-definition-manager", "brief.py", ["check", PLAN])]},
     {"title": "Break the work down",
      "say": "Add the self-service sign-up as a key deliverable, with four features: the form, email verification, the identity check and the welcome.",
@@ -96,7 +99,7 @@ FIRST_HOUR = [
     {"title": "Say who's who",
      "say": "Set up who's who: the product team, and the steering group with Ruth as sponsor. Steering gets the status report every sprint.",
      "agent": "Adds the groups and the people, and a communications plan saying who receives what, and when.",
-     "get": "Who's who in the guide, and what each audience receives. Contacts stay in a file beside it, out of git.",
+     "get": "Who's who in the guide, and what each audience receives. The analysis and the contacts stay in the confidential folder.",
      "run": [("stakeholder-manager", "stk.py", ["add-group", STK, "Product team", "--purpose", "Builds and verifies the product"]),
              ("stakeholder-manager", "stk.py", ["add-group", STK, "Steering", "--purpose", "Owns the outcome and the budget"])]
             + [("stakeholder-manager", "stk.py", ["add", STK, n, "--role", r, "--groups", g])
@@ -118,7 +121,7 @@ NEXT = ("Let's run sprint planning.", "Capacity first, then the sprint's goals, 
 def build_atlas(where):
     """Set Atlas up under `where` by running the first hour; return its planning folder."""
     atlas = os.path.join(where, "Atlas")
-    skills = os.path.join(atlas, PACK.get("dest", ".agents/skills").replace("/", os.sep))
+    skills = os.path.join(atlas, PLAN, ".agents", "skills")
     for step in FIRST_HOUR:
         if step.get("fixture"):
             # The conversation writes the brief; here, Atlas's finished brief stands in for it.

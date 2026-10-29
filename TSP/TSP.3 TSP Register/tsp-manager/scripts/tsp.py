@@ -75,11 +75,11 @@ def cmd_register(args):
     new_id = max([int(S.clean(r.get("ID"))) for r in tools
                   if S.clean(r.get("ID")).isdigit()] or [0]) + 1
     row = {"ID": new_id, "Name": args.name,
-           "Status": args.status, "Doc Aux": "No",
+           "Status": args.status, "Doc Aux": args.doc_aux,
            "Last Reviewed": today_iso(args.on)}
     for key, value in (("Description", args.description), ("Type", args.type),
                        ("Relevancy", args.relevancy), ("Primary Area", args.area),
-                       ("Skill", args.skill), ("Links", args.links)):
+                       ("Skill", args.skill), ("Links", args.links), ("Upstream", args.upstream)):
         if value:
             row[key] = value
     tools.append(row)
@@ -269,6 +269,8 @@ def main():
     s.add_argument("--area", help="Primary Area")
     s.add_argument("--skill")
     s.add_argument("--links")
+    s.add_argument("--upstream", help="the catalogue tool this one was installed from, e.g. \"AKOS TSP.15\"")
+    s.add_argument("--doc-aux", choices=["Yes", "No"], default="No", help="whether its TD is in the project (default: No)")
     s.add_argument("--reason", help="change log entry")
     s.set_defaults(func=cmd_register)
 

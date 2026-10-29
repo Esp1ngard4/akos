@@ -82,10 +82,13 @@ git clone https://github.com/Esp1ngard4/akos.git
 python akos/install.py init my-project --name "My project"
 ```
 
-It installs the project pack's tools and sets the project up the way the conventions say: the
-planning folder and its numbered folders, each register created empty by its own tool, a sprint
-calendar (two weeks from next Monday, unless you say otherwise), the brief's template and a first
-onboarding guide. Commit it, open it with your agent and say *"let's write the project brief"*.
+It installs the project pack's skills into the project-management folder, where only the product
+manager's agent loads them, and sets the project up the way the conventions say: the numbered
+folders, each register created empty by its own tool, a tool register with each tool's design
+document, the stakeholder register in a confidential folder kept out of git, a sprint calendar (two
+weeks from next Monday, unless you say otherwise), the brief's template, a first onboarding guide and
+a workspace per profile. Commit it, open the *Product manager* workspace with your agent and say
+*"let's write the project brief"*.
 [Your first hour](https://esp1ngard4.github.io/akos/first-hour.html) walks through what follows.
 
 **A project already running** adds the tools it needs, one at a time:
@@ -96,7 +99,7 @@ python akos/install.py add wbs-manager --into <your-repo>
 
 Either way, commit `.agents/skills/` and `tools.lock.json` together, so everyone who clones gets
 the same tools. Later, `git pull` the clone and `python akos/install.py status --upstream --project
-<your-repo> --source akos` says which of them have a newer version, with the `update` line for each. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
+<the folder with tools.lock.json> --source akos` says which of them have a newer version, with the `update` line for each. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
 `--dest .claude/skills`.
 
 ## The tools

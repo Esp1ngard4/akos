@@ -1,34 +1,49 @@
 {
   "pack": "project",
-  "description": "A team project run on AKOS: the brief, the backlog and its sprints, the RAID, who's who, the ceremonies and the weekly review, the team board, reporting, action trackers, the artifact register and the onboarding guide.",
+  "description": "A team project run on AKOS: the brief, the backlog and its sprints, the RAID, who's who, the ceremonies and the weekly review, the team board, reporting, the tool and artifact registers and the onboarding guide. Every skill is the product manager's, in the project-management folder; the team updates its status on the board in Excel.",
   "skills": ["project-definition-manager", "wbs-manager", "raid-manager", "sprint-facilitator", "sprint-planning-precheck",
-             "weekly-review-facilitator", "reporting", "status-board-manager", "stakeholder-manager", "action-tracker-manager",
-             "artifact-register", "onboarding-guide"],
-  "planning": ["PrjMgm", "Project management: the registers, the records, the reports and the brief"],
-  "execution": ["Execution", "The work itself: one folder per WBS row, WP.<WBS ID> <Title>, with its discovery, specification, plan and notes"],
+             "weekly-review-facilitator", "reporting", "status-board-manager", "stakeholder-manager",
+             "artifact-register", "tsp-manager", "td-author", "onboarding-guide"],
+  "top": [
+    ["PrjMgm", "Project management: the registers, the records, the reports and the brief; every skill, for the product manager", null],
+    ["Execution", "The work itself: one folder per WBS row, WP.<WBS ID> <Title>, with its discovery, specification, plan and notes", null],
+    ["General Ref Materials", "Reference material for the whole team", null],
+    ["Workspaces", "Editor workspaces, one per profile: the team's opens the project; the product manager's adds the project-management folder, where the skills load", "General Ref Materials"]
+  ],
+  "planning": "PrjMgm",
+  "execution": "Execution",
   "register": {"folder": "Artifact Register", "file": "Artifact Register {name}.json"},
   "folders": [
-    ["WBS", "The backlog: every piece of work, the sprint calendar, and each sprint's team board"],
-    ["RAID", "Risks, actions, issues and decisions, each with an owner and a date to look again"],
-    ["Sprints", "The sprint records the ceremonies write"],
-    ["Comms", "The stakeholder register and the communications plan; contacts stay out of git"],
-    ["Reports", "The status reports and sprint updates, generated from the records"],
-    ["Onboarding", "The project's guide for its team and for outsiders, generated from its own files"]
+    ["TSP", "The tool register: every tool the project runs on, and each tool's TD", null],
+    ["WBS", "The backlog: every piece of work, the sprint calendar, and each sprint's team board", null],
+    ["RAID", "Risks, actions, issues and decisions, each with an owner and a date to look again", null],
+    ["Sprints", "The sprint records the ceremonies write", null],
+    ["Comms", "What is sent: status reports as sent, announcements, minutes", null],
+    ["Reports", "The status reports and sprint updates, generated from the records", null],
+    ["Onboarding", "The project's guide for its team and for outsiders, generated from its own files", null],
+    ["Confidential", "Restricted to the product manager and whoever they name, in SharePoint; kept out of git", null],
+    ["Stakeholder Mgm", "The stakeholder register, the communications plan and the contacts", "Confidential"]
   ],
+  "tools": {"folder": "TSP", "file": "TSP Register {name}.json", "upstream": "AKOS"},
   "steps": [
     ["wbs-manager", "create_wbs.py", ["{WBS}/WBS {name}.json", "{name}", "--execution", "../../{execution}"], "the backlog"],
     ["wbs-manager", "wbs.py", ["sprints", "seed", "{WBS}/Agile Conventions {name}.json", "--scope", "{name}", "--year", "{year}",
                                "--anchor", "{first_day}", "--length", "{days}"], "the sprint calendar"],
     ["wbs-manager", "wbs.py", ["sprints", "import", "{WBS}/WBS {name}.json", "--from", "{WBS}/Agile Conventions {name}.json"], "the calendar, into the backlog"],
     ["raid-manager", "create_raid.py", ["{RAID}/RAID {name}.json", "{name}"], "the RAID"],
-    ["stakeholder-manager", "create_stk.py", ["{Comms}", "--scope", "{name}"], "the stakeholder register, and its contacts file"],
+    ["stakeholder-manager", "create_stk.py", ["{Stakeholder Mgm}", "--scope", "{name}"], "the stakeholder register, in the confidential folder"],
     ["project-definition-manager", "brief.py", ["new", "{planning}", "--title", "{name}"], "the brief, from its template"],
     ["onboarding-guide", "onboard.py", ["guide", "{planning}"], "the onboarding guide"]
   ],
   "documents": [
     ["Project Brief.md", "Project Brief", "Why the project exists, its outcome and done-when, what would make it stop, and how it is measured"]
   ],
+  "confidential": ["Confidential"],
   "gitignore": ["Contacts *.csv"],
+  "workspaces": {
+    "Product manager": ["@root", "PrjMgm"],
+    "Team": ["@root"]
+  },
   "next": [
     "Let's write the project brief.",
     "Set up who's who, and who receives what.",

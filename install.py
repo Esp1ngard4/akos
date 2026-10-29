@@ -496,14 +496,31 @@ def next_monday(today=None):
     return today + dt.timedelta(days=(7 - today.weekday()) % 7 or 7)
 
 
-def run_skill(project, dest, skill, script, args):
-    path = os.path.join(project, dest.replace("/", os.sep), skill, "scripts", script)
+def run_skill(skills, skill, script, args, cwd):
+    path = os.path.join(skills, skill, "scripts", script)
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
-    p = subprocess.run([sys.executable, path] + args, cwd=project, capture_output=True, text=True,
+    p = subprocess.run([sys.executable, path] + args, cwd=cwd, capture_output=True, text=True,
                        encoding="utf-8", env=env)
     if p.returncode != 0:
         sys.exit("init stopped at %s %s:\n%s" % (skill, script, (p.stdout + p.stderr)[-1500:]))
     return p.stdout
+
+
+def numbered_child(parent, name):
+    """The entry under `parent` named `name`, numbered or not."""
+    for n in os.listdir(parent):
+        if n == name or re.match(r"^\d+\.\s*%s$" % re.escape(name), n):
+            return os.path.join(parent, n)
+    return None
+
+
+def quiet(fn, ns):
+    out, stdout = io.StringIO(), sys.stdout
+    sys.stdout = out
+    try:
+        return fn(ns)
+    finally:
+        sys.stdout = stdout
 
 
 def cmd_init(args):
@@ -525,70 +542,131 @@ def cmd_init(args):
         sys.exit("The pack names skills the catalogue lacks: %s" % ", ".join(missing))
 
     print("Starting %s from the '%s' pack.\n" % (args.name, args.pack))
+    # The top-level folders, as yet unnumbered; a child names its parent.
+    where = {}
+    for name, _, parent in pack["top"]:
+        where[name] = os.path.join(where[parent] if parent else project, name)
+        os.makedirs(where[name])
+    planning = where[pack["planning"]]
+
+    # Every skill is the product manager's: installed into the planning folder,
+    # with its lock beside it, never at the root.
     for skill in pack["skills"]:
-        a = argparse.Namespace(skill=skill, into=project, dest=args.dest, catalogue=args.catalogue,
-                               source=args.source, force=False, docs=None)
-        out = io.StringIO()
-        stdout, sys.stdout = sys.stdout, out
-        try:
-            cmd_add(a)
-        finally:
-            sys.stdout = stdout
-        print("  installed %s" % skill)
+        quiet(cmd_add, argparse.Namespace(skill=skill, into=planning, dest=args.dest, catalogue=args.catalogue,
+                                          source=args.source, force=False, docs=None))
+    print("  installed %d skills into %s/" % (len(pack["skills"]), pack["planning"]))
 
-    # The artifact register describes the whole project: the planning folder is
-    # 00, the execution folder 01, and the planning folder's contents follow,
+    def skills():
+        return os.path.join(planning, args.dest.replace("/", os.sep))
+
+    # The artifact register describes the whole project: the top folders first
+    # (00 onwards, as the pack lists them), then the planning folder's contents,
     # the register's own folder first.
-    plan_name, plan_about = pack["planning"]
-    exec_name, exec_about = pack["execution"]
     reg = pack["register"]
-    os.makedirs(os.path.join(project, exec_name))
-    art = os.path.join(project, plan_name, "02. " + reg["folder"], reg["file"].format(name=args.name))
-    run_skill(project, args.dest, "artifact-register", "create_artifact_register.py", [art, args.name, "--folder"])
-    art_rel = os.path.relpath(art, os.path.join(project, plan_name))
+    first_id = len(pack["top"])
+    art = os.path.join(planning, "%02d. %s" % (first_id, reg["folder"]), reg["file"].format(name=args.name))
+    run_skill(skills(), "artifact-register", "create_artifact_register.py", [art, args.name, "--folder"], project)
+    ids = {}
 
-    def artifact(path, *extra):
-        run_skill(project, args.dest, "artifact-register", "artifact.py", ["add", art, path, "--root", project] + list(extra))
+    def artifact(path, name, about, parent, kind="Folder", new_id=None):
+        nonlocal art, planning
+        argv = ["add", art, path, "--root", project, "--name", name, "--type", kind, "--description", about,
+                "--parent-digital", str(ids[parent]) if parent is not None else "Main"]
+        if new_id is not None:
+            argv += ["--new-id", str(new_id)]
+        run_skill(skills(), "artifact-register", "artifact.py", argv, project)
+        # Re-find what moved: the register may sit inside what was renamed.
+        planning = numbered_child(project, pack["planning"])
+        art = next(os.path.join(dp, f) for dp, _, fs in os.walk(planning) for f in fs if f == os.path.basename(art))
+        ids[name] = new_id if new_id is not None else max(ids.values()) + 1
 
-    artifact(os.path.join(project, plan_name), "--new-id", "0", "--name", plan_name, "--type", "Folder", "--description", plan_about, "--parent-digital", "Main")
-    planning = next(os.path.join(project, n) for n in os.listdir(project) if re.match(r"^\d+\.\s*%s$" % re.escape(plan_name), n))
-    art = os.path.join(planning, art_rel)
-    artifact(os.path.join(project, exec_name), "--new-id", "1", "--name", exec_name, "--type", "Folder", "--description", exec_about, "--parent-digital", "Main")
-    run_skill(project, args.dest, "artifact-register", "artifact.py", ["move", art, "--id", "2", "--parent-digital", "0"])
-    for name, about in pack["folders"]:
-        os.makedirs(os.path.join(planning, name))
-        artifact(os.path.join(planning, name), "--name", name, "--type", "Folder", "--description", about, "--parent-digital", "0")
-    numbered = {}
-    for n in os.listdir(planning):
-        m = re.match(r"^\d+\.\s*(.+)$", n)
-        if m:
-            numbered[m.group(1)] = os.path.join(planning, n)
-    print("  structure: %s/ (%s), %s/" % (os.path.basename(planning), ", ".join(sorted(os.path.basename(p) for p in numbered.values())),
-                                         next(n for n in os.listdir(project) if n.endswith(exec_name))))
+    for i, (name, about, parent) in enumerate(pack["top"]):
+        holder = numbered_child(project, parent) if parent else project
+        artifact(numbered_child(holder, name), name, about, parent, new_id=i)
+    ids[reg["folder"]] = first_id
+    run_skill(skills(), "artifact-register", "artifact.py", ["move", art, "--id", str(first_id), "--parent-digital", str(ids[pack["planning"]])], project)
+    for name, about, parent in pack["folders"]:
+        holder = numbered_child(planning, parent) if parent else planning
+        os.makedirs(os.path.join(holder, name))
+        artifact(os.path.join(holder, name), name, about, parent if parent else pack["planning"])
 
-    execution = next(n for n in os.listdir(project) if re.match(r"^\d+\.\s*%s$" % re.escape(exec_name), n))
-    values = dict(numbered, name=args.name, planning=planning, execution=execution, first_day=first.isoformat(), year=str(first.year), days=str(args.sprint_days))
+    found = {}
+    for dp, dirs, _ in os.walk(project):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for d in dirs:
+            m = re.match(r"^\d+\.\s*(.+)$", d)
+            if m and m.group(1) not in found:
+                found[m.group(1)] = os.path.join(dp, d)
+    print("  structure: %s" % ", ".join(sorted(os.path.relpath(p, project).replace(os.sep, "/") for p in found.values())))
+
+    # The tool register, and each tool's TD beside it: the project owns them.
+    tools = pack["tools"]
+    tsp_dir = found[tools["folder"]]
+    with io.open(os.path.join(args.catalogue, "registry", "TSP Register.json"), encoding="utf-8") as fh:
+        catalogue_rows = {"TSP.%s" % r["ID"]: r for r in json.load(fh).get("tools", [])}
+    by_tool = {}
+    for skill in pack["skills"]:
+        by_tool.setdefault(cat[skill]["tsp"], []).append(skill)
+    register = os.path.join(tsp_dir, tools["file"].format(name=args.name))
+    run_skill(skills(), "tsp-manager", "create_tsp.py", [register, "--scope", args.name], project)
+    for tsp in sorted(by_tool, key=lambda t: int(t.split(".")[1])):
+        quiet(cmd_add, argparse.Namespace(skill=tsp, into=planning, dest=args.dest, catalogue=args.catalogue,
+                                          source=args.source, force=False, docs=os.path.relpath(tsp_dir, planning)))
+        row = catalogue_rows.get(tsp, {})
+        argv = ["register", register, row.get("Name") or tsp, "--upstream", "%s %s" % (tools["upstream"], tsp), "--doc-aux", "Yes",
+                "--skill", ", ".join(by_tool[tsp]), "--reason", "Installed from %s %s by install.py init." % (tools["upstream"], tsp)]
+        for flag, field in (("--description", "Description"), ("--type", "Type"), ("--relevancy", "Relevancy"),
+                            ("--area", "Primary Area"), ("--status", "Status")):
+            if row.get(field):
+                argv += [flag, str(row[field])]
+        td = next((f for f in os.listdir(os.path.join(tsp_dir, cat[by_tool[tsp][0]]["tool"])) if f.startswith("TD.")), None)
+        if td:
+            argv += ["--links", "%s/%s" % (cat[by_tool[tsp][0]]["tool"], td)]
+        run_skill(skills(), "tsp-manager", "tsp.py", argv, project)
+    print("  tool register: %d tools, each with its TD and its %s number" % (len(by_tool), tools["upstream"]))
+
+    execution = os.path.basename(found[pack["execution"]])
+    values = dict(found, name=args.name, planning=planning, execution=execution, first_day=first.isoformat(),
+                  year=str(first.year), days=str(args.sprint_days))
     for step in pack["steps"]:
         skill, script, argv = step[:3]
-        run_skill(project, args.dest, skill, script, [a.format(**values) for a in argv])
+        run_skill(skills(), skill, script, [a.format(**values) for a in argv], project)
         print("  %s: %s" % (skill, step[3] if len(step) > 3 else script))
 
     for filename, name, about in pack.get("documents", []):
         path = os.path.join(planning, filename)
         if os.path.exists(path):
-            artifact(path, "--name", name, "--type", "Document", "--description", about, "--parent-digital", "0")
+            artifact(path, name, about, pack["planning"], kind="Document")
             print("  artifact-register: %s numbered" % filename)
 
-    if pack.get("gitignore"):
+    lines = list(pack.get("gitignore", []))
+    for name in pack.get("confidential", []):
+        lines.append(os.path.relpath(found[name], project).replace(os.sep, "/") + "/")
+    if lines:
         gi = os.path.join(project, ".gitignore")
         have = io.open(gi, encoding="utf-8").read().split("\n") if os.path.exists(gi) else []
-        add = [line for line in pack["gitignore"] if line not in have]
+        add = [line for line in lines if line not in have]
         if add:
             with io.open(gi, "a", encoding="utf-8") as fh:
                 fh.write(("\n" if have and have[-1] else "") + "\n".join(add) + "\n")
 
-    print("\n%s is set up: %d tools, sprints of %d days from %s, and its guide in %s."
-          % (args.name, len(pack["skills"]), args.sprint_days, first.isoformat(), os.path.relpath(numbered.get("Onboarding", planning), project)))
+    ws_dir = found.get("Workspaces")
+    for profile, names in (pack.get("workspaces") or {}).items():
+        # "@root" is the project itself. An editor loads the skills of each
+        # folder a workspace opens, not of folders nested inside one, so the
+        # project-management folder is opened as a folder of its own.
+        paths = [project if n == "@root" else found[n] for n in names]
+        folders = [{"name": os.path.basename(p), "path": os.path.relpath(p, ws_dir).replace(os.sep, "/")} for p in paths]
+        with io.open(os.path.join(ws_dir, "%s.code-workspace" % profile), "w", encoding="utf-8", newline="\n") as fh:
+            json.dump({"folders": folders, "settings": {}}, fh, indent=2)
+            fh.write("\n")
+
+    print("\n%s is set up: %d skills (%d tools) in %s, sprints of %d days from %s, and its guide in %s."
+          % (args.name, len(pack["skills"]), len(by_tool), os.path.basename(planning), args.sprint_days, first.isoformat(),
+             os.path.relpath(found.get("Onboarding", planning), project)))
+    if ws_dir:
+        print("Open %s with your agent, so the skills load." %
+              os.path.relpath(os.path.join(ws_dir, "Product manager.code-workspace"), project))
     print("Commit everything, then say to your agent:")
     for line in pack.get("next", []):
         print("  \"%s\"" % line)

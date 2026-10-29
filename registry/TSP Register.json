@@ -318,6 +318,18 @@
       "Description": "TD.4 v1.6: status --upstream says which installed tools have a newer version.",
       "ID": 53,
       "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.4 v1.7: the project pack laid out by who uses what: skills in the PM folder, a tool register with the TDs, stakeholders in Confidential out of git, a workspace per profile.",
+      "ID": 54,
+      "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.3 v1.9: the Upstream field, set by register --upstream; --doc-aux.",
+      "ID": 55,
+      "Tool": "TSP Register"
     }
   ],
   "control_activities": [],
@@ -368,8 +380,8 @@
         ]
       }
     },
-    "updated": "2026-10-28T23:54:06",
-    "values_hash": "sha256:15de6410d640c17e0d44c7f698194e87efb0c5a5cb1639b436851136ba6e2a53",
+    "updated": "2026-10-29T09:28:07",
+    "values_hash": "sha256:88258a845ab80b5b9b04c59b4e775ecbdd492a5b4ca7a5a14ea77a97c5be5f41",
     "version": 1
   },
   "tools": [

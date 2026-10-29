@@ -48,6 +48,7 @@ Governance, history and the reasoning behind the review cadence live in `<your t
 | K | Notes | Free text |
 | L | Last Reviewed | Date. Set by the annual review, not by ordinary edits. |
 | M | Skill | Comma-separated names of the skills that automate this tool; blank means none. Naming a skill here **is** the expectation that it exists — `audit_tsp.py` reconciles the column against what is installed, in both directions. |
+| N | Upstream | The catalogue tool this one was installed from (`AKOS TSP.15`); blank for a tool the project built itself. The project numbers its tools in its own order, so this is how a row maps to the catalogue's number. `tsp.py register --upstream`. |
 
 **Control Activities** — recurring upkeep each tool needs: `ID`, `Activity Name`, `Frequency`, `Duration (min)`, `Importance`, `Commitment`, `Linked Tool`, `Description`, `Last Done`, `Next Due`. `Linked Tool` matches a Tools Register **name**, not an ID. `Next Due` is `Last Done` plus the Frequency's `Days` value from Lookups.
 
