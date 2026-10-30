@@ -114,6 +114,17 @@ def main():
         good, out = run(WORK, "start", proj, "--id", "2", "--size", "medium", "--own-folder")
         ok(good and os.path.isdir(os.path.join(execution, "WP.2 Forgotten password")), "--own-folder gives it a folder of its own", out)
 
+        print("\nanother layout")
+        site = os.path.join(tmp, "Site")
+        os.makedirs(os.path.join(site, "General", "0.PrjMgm"))
+        os.makedirs(os.path.join(site, "General", "1.Execution"))
+        reg2 = os.path.join(site, "General", "0.PrjMgm", "WBS Site.json")
+        run(os.path.join(wbs_scripts(), "create_wbs.py"), reg2, "Site")
+        run(os.path.join(wbs_scripts(), "wbs.py"), "add", reg2, "Report", "--type", "Feature")
+        good, out = run(WORK, "start", site, "--id", "1", "--size", "small")
+        ok(good and os.path.isdir(os.path.join(site, "General", "1.Execution", "WP.1 Report")),
+           "with nothing declared and the folders a level deeper, Execution is found by name", out)
+
         print("\nthe rest")
         good, out = run(WORK, "next", proj, "--id", "99")
         ok(not good and "No row 99" in out, "an unknown row says so", out)

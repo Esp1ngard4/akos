@@ -366,6 +366,30 @@
       "Description": "TD.4 v1.8: the project pack's team part: work-manager and change-request at the root, a Change Requests folder, the Execution README.",
       "ID": 61,
       "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.4 v1.9: the basic convention a project is expected to follow, stated; tools find what departs from it through the project's records.",
+      "ID": 62,
+      "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.16 v1.2: Work Management found through the lock files where it is not in the default place.",
+      "ID": 63,
+      "Tool": "Onboarding"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.17 v1.1: the Execution folder found by the WBS's declaration, the convention, the artifact register's Managed By, then by name.",
+      "ID": 64,
+      "Tool": "Work Management"
+    },
+    {
+      "Changed On": "2026-10-29",
+      "Description": "TD.18 v1.1: the Change Requests folder found by the convention, the artifact register's Managed By, then by name.",
+      "ID": 65,
+      "Tool": "Change Requests"
     }
   ],
   "control_activities": [],
@@ -416,8 +440,8 @@
         ]
       }
     },
-    "updated": "2026-10-29T11:04:24",
-    "values_hash": "sha256:90ed174f21054669e42b498c4f45573930d3c3e1c239f2b47da0d57c1696e6de",
+    "updated": "2026-10-29T23:13:31",
+    "values_hash": "sha256:7538d8e3e639564745a331676d18974a21ec7b6c20b72c5183f01fda016e0176",
     "version": 1
   },
   "tools": [

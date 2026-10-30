@@ -138,8 +138,27 @@ def work_sizes(project):
     """The size table from Work Management's sizes guideline, where it is installed
     (at the project root for the team, or beside this skill): [[size, typical
     work, what to expect]]. The guide shows it; the guidelines own it."""
-    candidates = [os.path.join(base, ".agents", "skills", "work-manager") for base in
-                  (os.path.abspath(project), os.path.dirname(os.path.abspath(project)))]
+    # The default places first; then wherever a lock file says it is installed
+    # (looking up from the planning folder and down through the project); then
+    # beside this skill.
+    here = os.path.abspath(project)
+    candidates = [os.path.join(base, ".agents", "skills", "work-manager") for base in (here, os.path.dirname(here))]
+    locks, cur = [], here
+    for _ in range(4):
+        if os.path.isfile(os.path.join(cur, LOCK_NAME)):
+            locks.append(os.path.join(cur, LOCK_NAME))
+        cur = os.path.dirname(cur)
+    # Down through the project only: from above the planning folder when given it,
+    # else from the folder given. Never the folder that holds the project.
+    top = os.path.dirname(here) if re.search(r"PrjMgm$", os.path.basename(here), re.I) else here
+    for root, dirs, files in os.walk(top):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP]
+        if LOCK_NAME in files:
+            locks.append(os.path.join(root, LOCK_NAME))
+    for lock in locks:
+        rec = ((load_json(lock) or {}).get("tools") or {}).get("work-manager") or {}
+        if rec.get("path"):
+            candidates.append(os.path.join(os.path.dirname(lock), rec["path"].replace("/", os.sep)))
     candidates.append(optional_sibling("work-manager"))
     for skill in candidates:
         path = os.path.join(skill, "references", "sizes.md") if skill else None

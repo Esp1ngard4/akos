@@ -9,7 +9,7 @@ The registers are the product manager's to keep. The team sees what should chang
 
 ## Requirements
 
-Python 3, standard library only. `<skills>` is the folder this skill is installed in. Requests live in the planning folder's `Change Requests` folder (the project pack sets it up; the team needs write access to it, and only to it). The WBS and the RAID are read, never written.
+Python 3, standard library only. `<skills>` is the folder this skill is installed in. Requests live in the planning folder's `Change Requests` folder (the project pack sets it up; the team needs write access to it, and only to it). A project that keeps it elsewhere, or names it otherwise, says so in its artifact register: the folder whose *Managed By* is this tool. The WBS and the RAID are read, never written.
 
 ## Raise a request (anyone)
 

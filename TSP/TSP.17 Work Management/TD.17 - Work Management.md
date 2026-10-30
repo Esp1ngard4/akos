@@ -94,4 +94,5 @@ What is **not** tested is whether the guidelines help: that is the first team's 
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-29 | **The Execution folder found by what the project records.** What the WBS declares; else the default convention; else the folder the artifact register says this tool governs (*Managed By*); else one named Execution anywhere in the project. |
 | v1.0 | 2026-10-29 | Published as TSP.17: the Execution folder's conventions, moved from the WBS skill; four stages, each its own guideline and as many documents as the work needs, scaled small, medium and large; *start*, *add*, *file*, *next*, *where*. A newcomer learns the conventions from the onboarding guide, not from a page in the folder. Raised trying the starter pack as a team member. |

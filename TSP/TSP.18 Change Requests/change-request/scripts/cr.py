@@ -30,45 +30,84 @@ TYPES = ["risk", "issue", "decision", "change", "new work", "idea"]
 SKIP = {".git", ".agents", ".claude", ".github", "PreviousV", "Archive", "__pycache__", "Processed"}
 
 
-def planning_folder(project):
+# ─── Finding things: the default convention first, then what the project
+#     records (the artifact register says which tool governs which folder),
+#     then a search by name. Never by assuming how deep a folder sits.
+
+def project_root(project):
+    """The project: the folder given, or the one above it when given the planning folder."""
     project = os.path.abspath(project)
-    if PLANNING.match(os.path.basename(project)):
-        return project
-    for name in sorted(os.listdir(project)):
-        if PLANNING.match(name) and os.path.isdir(os.path.join(project, name)):
-            return os.path.join(project, name)
-    sys.exit("No project-management folder (PrjMgm) in %s." % project)
+    return os.path.dirname(project) if PLANNING.match(os.path.basename(project)) else project
+
+
+def walk(root):
+    for dirpath, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP and not d.startswith("."))
+        yield dirpath, dirs, files
+
+
+def registers(root, kinds):
+    """{kind: [(path, data)]} for the registers of these kinds anywhere in the project."""
+    out = {}
+    for dirpath, _, files in walk(root):
+        for name in sorted(files):
+            if name.endswith(".json"):
+                try:
+                    with io.open(os.path.join(dirpath, name), encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except (OSError, ValueError):
+                    continue
+                kind = (data.get("meta") or {}).get("kind") if isinstance(data, dict) else None
+                if kind in kinds:
+                    out.setdefault(kind, []).append((os.path.join(dirpath, name), data))
+    return out
+
+
+def delegated_folder(root, skill):
+    """The folder the artifact register says this skill's tool governs (Managed By),
+    the tool found in the project's tool register by its Skill column."""
+    regs = registers(root, {"tsp-register", "artifact-register"})
+    tool_ids = set()
+    for _, data in regs.get("tsp-register", []):
+        for r in data.get("tools", []):
+            if skill in [s.strip() for s in str(r.get("Skill") or "").split(",")]:
+                tool_ids.add(str(r.get("ID")))
+    folder_ids = set()
+    for _, data in regs.get("artifact-register", []):
+        for r in data.get("artifacts", []):
+            m = re.match(r"^[A-Z]+\.(\d+)$", str(r.get("Managed By") or "").strip())
+            if m and m.group(1) in tool_ids and r.get("Type") == "Folder" and r.get("Status") != "Retired":
+                folder_ids.add(str(r.get("ID")))
+    for dirpath, dirs, _ in walk(root):
+        for d in dirs:
+            m = re.match(r"^(\d+)\.", d)
+            if m and str(int(m.group(1))) in folder_ids:
+                return os.path.join(dirpath, d)
+    return None
 
 
 def requests_folder(project):
-    plan = planning_folder(project)
-    for name in sorted(os.listdir(plan)):
-        if FOLDER.match(name) and os.path.isdir(os.path.join(plan, name)):
-            return os.path.join(plan, name)
-    sys.exit("No Change Requests folder in %s: the product manager sets one up (the project pack does)." % plan)
+    root = project_root(project)
+    plans = [root] if PLANNING.match(os.path.basename(root)) else \
+        [os.path.join(root, n) for n in sorted(os.listdir(root)) if PLANNING.match(n) and os.path.isdir(os.path.join(root, n))]
+    for plan in plans:                                     # 1. the default convention
+        for name in sorted(os.listdir(plan)):
+            if FOLDER.match(name) and os.path.isdir(os.path.join(plan, name)):
+                return os.path.join(plan, name)
+    found = delegated_folder(root, "change-request")       # 2. what the project records
+    if found:
+        return found
+    for dirpath, dirs, _ in walk(root):                    # 3. by name, anywhere
+        for d in dirs:
+            if FOLDER.match(d):
+                return os.path.join(dirpath, d)
+    sys.exit("No Change Requests folder in %s. The convention: a 'Change Requests' folder in the project-management folder "
+             "(the project pack sets one up); or one the artifact register says this tool manages." % root)
 
 
 def slug(text):
     words = re.findall(r"[A-Za-z0-9]+", text or "")[:6]
     return " ".join(words) or "request"
-
-
-def registers(project):
-    """{kind: [(path, data)]} for the WBS and RAID registers under the planning folder."""
-    out = {}
-    for root, dirs, files in os.walk(planning_folder(project)):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP and not d.startswith("."))
-        for name in sorted(files):
-            if name.endswith(".json"):
-                try:
-                    with io.open(os.path.join(root, name), encoding="utf-8") as fh:
-                        data = json.load(fh)
-                except (OSError, ValueError):
-                    continue
-                kind = (data.get("meta") or {}).get("kind") if isinstance(data, dict) else None
-                if kind in ("wbs-register", "raid-register"):
-                    out.setdefault(kind, []).append((os.path.join(root, name), data))
-    return out
 
 
 def parse(path):
@@ -97,7 +136,7 @@ def cmd_draft(args):
             "## Impact", "", args.impact or "Not said.", "", "## Affects", "", args.affects or "Nothing named.", ""]
     with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(body))
-    print("Drafted %s" % os.path.relpath(path, os.path.dirname(planning_folder(args.project))))
+    print("Drafted %s" % os.path.relpath(path, project_root(args.project)))
     print("The product manager picks it up at the weekly review.")
     return 0
 
@@ -105,7 +144,7 @@ def cmd_draft(args):
 def cmd_lookup(args):
     words = [w.lower() for w in args.words]
     hits = []
-    for kind, regs in registers(args.project).items():
+    for kind, regs in registers(project_root(args.project), {"wbs-register", "raid-register"}).items():
         for path, data in regs:
             rows = data.get("items") if kind == "wbs-register" else data.get("entries")
             for r in rows or []:

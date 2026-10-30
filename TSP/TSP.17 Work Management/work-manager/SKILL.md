@@ -67,7 +67,7 @@ Support material for a piece of work always lives in the project's Execution fol
 - **`Inputs/`**: material received from outside, kept as received. **`Deliverables/`**: what was handed over, frozen as sent. Created when there is something to put in them.
 - **A header names the row, the date and the size, never the status:** `**Feature:** ID 12 · **Written:** 2026-10-29 · **Size:** medium`. The status lives in the WBS; a status copied into a document goes stale. The WBS skill finds a row's specification by the `ID <n>` in its first lines.
 - **A replaced document goes to a `PreviousV/` beside it,** never deleted. **Existing folders are not retrofitted.**
-- **A project's own layout** is declared once, in the WBS register's `meta.execution` (`folder`, relative to the register's folder; `inputs`; `deliverables`), and read here.
+- **A project's own layout** is declared once, in the WBS register's `meta.execution` (`folder`, relative to the register's folder; `inputs`; `deliverables`), and read here. Without it, the Execution folder is the one beside the planning folder, else the one the artifact register says this tool governs (*Managed By*), else one named Execution anywhere in the project.
 
 ## Never
 

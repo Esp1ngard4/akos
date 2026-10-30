@@ -59,17 +59,65 @@ def find_wbs(project):
     sys.exit("No WBS register under %s." % project)
 
 
+def walk(root):
+    for dirpath, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP and not d.startswith("."))
+        yield dirpath, dirs, files
+
+
+def delegated_folder(root, skill):
+    """The folder the artifact register says this skill's tool governs (Managed By),
+    the tool found in the project's tool register by its Skill column."""
+    regs = {}
+    for dirpath, _, files in walk(root):
+        for name in files:
+            if name.endswith(".json"):
+                try:
+                    with io.open(os.path.join(dirpath, name), encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except (OSError, ValueError):
+                    continue
+                kind = (data.get("meta") or {}).get("kind") if isinstance(data, dict) else None
+                regs.setdefault(kind, []).append(data)
+    tool_ids = {str(r.get("ID")) for d in regs.get("tsp-register", []) for r in d.get("tools", [])
+                if skill in [s.strip() for s in str(r.get("Skill") or "").split(",")]}
+    folder_ids = set()
+    for d in regs.get("artifact-register", []):
+        for r in d.get("artifacts", []):
+            m = re.match(r"^[A-Z]+\.(\d+)$", str(r.get("Managed By") or "").strip())
+            if m and m.group(1) in tool_ids and r.get("Type") == "Folder" and r.get("Status") != "Retired":
+                folder_ids.add(str(r.get("ID")))
+    for dirpath, dirs, _ in walk(root):
+        for d in dirs:
+            m = re.match(r"^(\d+)\.", d)
+            if m and str(int(m.group(1))) in folder_ids:
+                return os.path.join(dirpath, d)
+    return None
+
+
 def execution_folder(project, wbs_path, wbs):
+    """What the WBS declares; else the default convention (Execution beside the
+    planning folder); else the folder the artifact register gives this tool; else
+    one named Execution anywhere in the project. Never by assuming a depth."""
     declared = ((wbs.get("meta") or {}).get("execution") or {}).get("folder")
     if declared:
         path = os.path.normpath(os.path.join(os.path.dirname(wbs_path), declared))
         if os.path.isdir(path):
             return path
-    for base in (project, os.path.dirname(os.path.abspath(project))):
+    project = os.path.abspath(project)
+    for base in (project, os.path.dirname(project)):
         for name in sorted(os.listdir(base)):
             if EXECUTION.match(name) and os.path.isdir(os.path.join(base, name)):
                 return os.path.join(base, name)
-    sys.exit("No Execution folder found: declare it in the WBS (meta.execution.folder) or create one.")
+    found = delegated_folder(project, "work-manager")
+    if found:
+        return found
+    for dirpath, dirs, _ in walk(project):
+        for d in dirs:
+            if EXECUTION.match(d):
+                return os.path.join(dirpath, d)
+    sys.exit("No Execution folder found. The convention: 'Execution' beside the project-management folder; "
+             "or declared in the WBS (meta.execution.folder); or one the artifact register says this tool manages.")
 
 
 def row(wbs, rid):

@@ -116,6 +116,21 @@ def main():
         ok(execu.count('class="pnum"') == 6 and "WORKING TOGETHER" in execu and "Steering group" in execu,
            "it carries the principles, the people-and-agents loop and what each audience receives")
 
+        print("\nfinding Work Management")
+        site = os.path.join(tmp, "Site")
+        plan = os.path.join(site, "General", "0.PrjMgm")
+        os.makedirs(plan)
+        wm = O.optional_sibling("work-manager")
+        if wm:
+            shutil.copytree(wm, os.path.join(site, "tools", "skills", "work-manager"))
+            with io.open(os.path.join(site, O.LOCK_NAME), "w", encoding="utf-8") as fh:
+                json.dump({"tools": {"work-manager": {"path": "tools/skills/work-manager"}}}, fh)
+            saved, O.optional_sibling = O.optional_sibling, (lambda s: None)
+            try:
+                ok(len(O.work_sizes(plan)) == 3, "installed in a non-default place, it is found through the lock file")
+            finally:
+                O.optional_sibling = saved
+
         print("\nwithout a board")
         lock(proj, [s for s in SKILLS if s != "status-board-manager"])
         rec = O.gather(proj, date.today())

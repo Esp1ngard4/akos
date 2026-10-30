@@ -8,6 +8,7 @@ folder, never touching a real one. One line per check; exits 1 on the first fail
 """
 import glob
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -86,6 +87,25 @@ def main():
         good, out = run(CR, "close", proj, "(2)", "--declined", "the same as the other", "--by", "Maya")
         good2, out2 = run(CR, "list", proj, "--all")
         ok(good and "0 open request(s)" in out2 and "2 processed" in out2, "declined with a reason, it is processed too", out + out2)
+
+        print("\nfinding the folder in other layouts")
+        nested = os.path.join(tmp, "Site")
+        os.makedirs(os.path.join(nested, "General", "0.PrjMgm", "16. Change Requests"))
+        good, out = run(CR, "draft", nested, "--type", "idea", "--what", "Nested.", "--why", "y", "--by", "Leo")
+        ok(good and os.listdir(os.path.join(nested, "General", "0.PrjMgm", "16. Change Requests")),
+           "a planning folder a level deeper: found by name, wherever it sits", out)
+        other = os.path.join(tmp, "Other")
+        os.makedirs(os.path.join(other, "Admin", "21. Inbox for changes"))
+        os.makedirs(os.path.join(other, "Admin", "21. Change Requests old"), exist_ok=True)
+        json.dump({"meta": {"kind": "tsp-register"}, "tools": [{"ID": 19, "Name": "Change Requests", "Skill": "change-request"}]},
+                  io.open(os.path.join(other, "Admin", "tools.json"), "w", encoding="utf-8"))
+        json.dump({"meta": {"kind": "artifact-register"}, "artifacts": [{"ID": 21, "Name": "Inbox for changes", "Type": "Folder",
+                                                                      "Managed By": "TSP.19", "Status": "Active"}]},
+                  io.open(os.path.join(other, "Admin", "artifacts.json"), "w", encoding="utf-8"))
+        shutil.rmtree(os.path.join(other, "Admin", "21. Change Requests old"))
+        good, out = run(CR, "draft", other, "--type", "idea", "--what", "Elsewhere.", "--why", "y", "--by", "Leo")
+        ok(good and os.listdir(os.path.join(other, "Admin", "21. Inbox for changes")),
+           "a folder named otherwise: found through the artifact register's Managed By", out)
 
         print("\nno folder")
         shutil.rmtree(folder)

@@ -79,4 +79,5 @@ The team's channel for asking that the project's registers change. The WBS and t
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.1 | 2026-10-29 | **The Change Requests folder found by what the project records:** the default convention first, then the folder the artifact register says this tool governs (*Managed By*), then one named Change Requests anywhere in the project; the registers a request may affect, by their kind, anywhere in it. |
 | v1.0 | 2026-10-29 | Published as TSP.18: drafting with what a request affects by ID, listing, closing with the outcome; processed at the weekly review. Raised trying the starter pack as a team member. |
