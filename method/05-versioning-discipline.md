@@ -2,7 +2,7 @@
 
 **Keep the history without letting the history swallow the document.**
 
-A governance document accumulates version entries. Each one is worth writing — the
+A [governance document](02-governance-docs.md) accumulates version entries. Each one is worth writing — the
 reasoning behind a change is exactly what stops it being undone later. But after a
 couple of years the version table is longer than the document, and the thing people
 actually came to read is below the fold.
@@ -63,6 +63,11 @@ but it assumes the document is committed (folders sit untracked for longer than
 anyone expects), that retention outlives your interest in it, and that whoever
 wants the history knows to go looking in a tool rather than the folder. Version
 control is the safety net, not the record.
+
+A team's copy of a tool is the opposite case: it is versioned by the commit it was
+taken from, not by this table, because a merge needs the exact content and a table
+only names it ([sharing with a team](06-sharing-with-a-team.md),
+*Bring vs. keep*).
 
 ## What belongs in an entry
 

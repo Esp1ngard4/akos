@@ -25,8 +25,8 @@ accident.
 | **Name** | Matching the folder, where there is one |
 | **Status** | Planned / In Progress / Implemented / Obsolete |
 | **Relevancy** | How much it actually gets used — a *separate axis* from status |
-| **Skill** | Which automations serve it, if any |
-| **Doc** | Whether a governance doc exists |
+| **Skill** | Which automations serve it, if any. A skill serves a tool; it is not the tool ([the unit is the tool](00-the-unit-is-the-tool.md)) |
+| **Doc** | Whether a [governance doc](02-governance-docs.md) exists |
 | **Last Reviewed** | Blank means never, and that is worth seeing |
 
 **Status and Relevancy must be separate.** A tool can be fully `Implemented` and
@@ -45,7 +45,15 @@ register into folder names, document cross-references, and years of notes. Reusi
 references to something unrelated, and nothing errors.
 
 If IDs also name folders — `<prefix>.<id> <name>/` — then the register row is what
-gives the folder meaning, and the folder is just storage.
+gives the folder meaning, and the folder is just storage ([source of
+truth](03-source-of-truth.md)).
+
+**An ID belongs to the register that issued it.** A tool taken from somewhere else —
+a shared catalogue, another team's estate — takes the next free ID in yours,
+whatever it was numbered where it came from. Where it came from is recorded in a
+field of its own ([sharing with a team](06-sharing-with-a-team.md)), never by
+borrowing the number: two registers numbering independently will collide, and a
+borrowed number ties your folder names to someone else's sequence.
 
 ## Reconcile against reality, in both directions
 

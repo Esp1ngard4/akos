@@ -2276,6 +2276,88 @@ def test_installer_docs(root, scratch):
     check("docs: the TSP audit finds the project's .agents/skills by itself", ok and ".agents/skills" in out, out[:200])
 
 
+def test_installer_update(root, scratch):
+    """update on a skill: a clean three-way merge, then a conflict that stays
+    retryable until it is resolved by hand and accepted.
+
+    Upstream moves in a clone of the catalogue, so each update has a real base
+    (the commit in the lock), theirs (the clone's new commit) and mine (the copy).
+    """
+    import json
+    import re
+    print("\nInstaller: update and a conflicting update")
+    installer = os.path.join(root, "install.py")
+    project = os.path.join(scratch, "update-project")
+    os.makedirs(project, exist_ok=True)
+    lock_path = os.path.join(project, "tools.lock.json")
+    skill = os.path.join(project, ".agents", "skills", "wbs-manager", "SKILL.md")
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+
+    ok, out = run_raw([installer, "add", "wbs-manager", "--into", project, "--catalogue", root], root)
+    if not check("update: wbs-manager installed", ok and os.path.isfile(skill), out[:300]):
+        return
+
+    upstream = os.path.join(scratch, "update-upstream")
+    subprocess.check_call(["git", "clone", "-q", root, upstream], **quiet)
+    up_skill = os.path.join(upstream, "TSP", "TSP.1 WBS Register", "wbs-manager", "SKILL.md")
+
+    def edit(path, change):
+        lines = io.open(path, encoding="utf-8").read().split("\n")
+        at = next(i for i, line in enumerate(lines) if line.startswith("# "))
+        lines[at] = change(lines[at])
+        io.open(path, "w", encoding="utf-8", newline="\n").write("\n".join(lines))
+
+    def move_upstream(change, message):
+        edit(up_skill, change)
+        subprocess.check_call(["git", "-c", "user.email=smoke@test", "-c", "user.name=smoke", "commit", "-qam",
+                               message], cwd=upstream, **quiet)
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=upstream).decode().strip()
+
+    def lock():
+        return json.load(io.open(lock_path, encoding="utf-8"))["tools"]["wbs-manager"]
+
+    # Clean: upstream revises the title, the project adds a section at the end.
+    move_upstream(lambda line: line + " (upstream revision)", "upstream SKILL change")
+    with io.open(skill, "a", encoding="utf-8") as fh:
+        fh.write("\n## Our adaptation\n\nThe team's own step.\n")
+    ok, out = run_raw([installer, "update", "wbs-manager", "--project", project, "--source", upstream], root)
+    merged = io.open(skill, encoding="utf-8").read()
+    check("update: a skill takes the upstream change and keeps the local edit",
+          ok and "(upstream revision)" in merged and "## Our adaptation" in merged, out[-300:])
+    ok, out = run_raw([installer, "accept", "wbs-manager", "--project", project, "-m", "our own step"], root)
+    ok2, out2 = run_raw([installer, "status", "--project", project, "--check"], root)
+    check("update: accept, and status is clean", ok and ok2, out2[-300:])
+
+    # Conflict: both sides rewrite the same title line.
+    before = lock()["commit"]
+    theirs = move_upstream(lambda line: line + " (second revision)", "upstream SKILL title again")
+    edit(skill, lambda line: "# Our WBS Manager")
+    ok, out = run_raw([installer, "update", "wbs-manager", "--project", project, "--source", upstream], root)
+    rec = lock()
+    text = io.open(skill, encoding="utf-8").read()
+    check("update: a conflict exits non-zero and names the file",
+          not ok and "SKILL.md" in out and "retryable" in out, out[-300:])
+    check("update: the lock keeps its commit and records the merge",
+          rec["commit"] == before and (rec.get("merging") or {}).get("commit") == theirs, str(rec.get("merging"))[:200])
+    check("update: the file holds the conflict for a person to resolve", "<<<<<<< ours" in text, text[:300])
+    ok, out = run_raw([installer, "status", "--project", project], root)
+    check("update: status shows the merge open", "MERGING" in out, out[-300:])
+    ok, out = run_raw([installer, "update", "wbs-manager", "--project", project, "--source", upstream], root)
+    check("update: a second update is refused while the merge is open",
+          not ok and "already in progress" in out, out[-300:])
+    ok, out = run_raw([installer, "accept", "wbs-manager", "--project", project], root)
+    check("update: accept is refused while conflict markers remain", not ok and "Unresolved" in out, out[-300:])
+
+    resolved = re.sub(r"<{7} ours\n.*?\n>{7} upstream\n", "# Our WBS Manager (second revision)\n", text, flags=re.S)
+    io.open(skill, "w", encoding="utf-8", newline="").write(resolved)
+    ok, out = run_raw([installer, "accept", "wbs-manager", "--project", project, "-m", "our title, kept"], root)
+    rec = lock()
+    ok2, out2 = run_raw([installer, "status", "--project", project, "--check"], root)
+    check("update: once resolved, accept completes the merge at the new commit",
+          ok and rec["commit"] == theirs and "merging" not in rec, out[-300:])
+    check("update: and status is clean again", ok2, out2[-300:])
+
+
 def test_effort_and_splits(root, scratch):
     """Effort that rolls up, requirements that say whether they were verified,
     and partly done work split so its hours count where they were done.
@@ -2421,6 +2503,7 @@ def main():
         test_migrate_vocabulary(root, scratch)
         test_numbered_layout(root, scratch)
         test_installer_docs(root, scratch)
+        test_installer_update(root, scratch)
         test_raid_lessons(root, scratch)
         test_concurrent_save(root, scratch)
         test_execution_layout(root, scratch)

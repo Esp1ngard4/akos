@@ -23,17 +23,32 @@ it is still fit for purpose. It carries [control
 activities](01-registering-your-tools.md) — a standing commitment to review.
 
 A **manifest** is a much smaller thing: which tools *this project* uses, from
-where, at which version.
+where, at which version. In this repository it is the installer's lock
+(`tools.lock.json`): the registry says what each tool is to the team, the lock
+proves what is on disk.
 
-Projects need a manifest. They do not need a registry, and giving them one is a
-mistake with a delay on it: projects end, tools outlive them, and a register that
-lives inside a project either dies with it or quietly becomes a fourth authority
-nobody reconciles.
+Every project needs a manifest, and every project that installs tools needs a
+registry too. Installing a tool takes on its upkeep: whether it is up to date,
+whether it still runs, whether it needs adapting to how this team works. Those are
+control activities, and the catalogue the tool came from cannot run them — it does
+not know the project exists. Whoever installs a tool keeps it, adapted or not.
 
 **Scope the registry to the smallest group that will actually run the control
-activities.** Not the organisation, not the project — whoever is accountable for
-the quarterly review. An org-wide register that nobody grooms is a stale
-spreadsheet with governance theatre attached.
+activities.** Not the organisation, not the catalogue — whoever is accountable for
+the review. Normally that is the project team, and its registry lives with the
+project: its tools numbered in its own sequence ([registering your
+tools](01-registering-your-tools.md)), each recording where it came from (below).
+The exception is a portfolio team that manages the tools for several projects: the
+registry is then the portfolio's, and each project keeps the lock alone. The upkeep
+can be delegated up to a group that runs the reviews; it is never handed back to
+the catalogue. An org-wide register that nobody grooms is a stale spreadsheet with
+governance theatre attached.
+
+The risk is real all the same: projects end and tools outlive them. So a project's
+registry needs an exit. When the project closes, what it improved in a tool goes
+back upstream by the return path, and each tool moves to whichever registry keeps
+it next or retires with the project. What must not happen is a register that outlives its project and
+quietly becomes a fourth authority nobody reconciles.
 
 ## The copy is not the problem
 
@@ -123,15 +138,18 @@ In a one-person estate this looks like over-engineering, because editing the
 script directly costs nothing. At team scale it is the difference between updates
 that fast-forward and updates that need a meeting.
 
-## One column the solo register does not need
+## Two columns the solo register does not need
 
 Add an **owner** to the registry. Solo, the owner is always you, so the column is
 noise. Shared, an unowned tool rots and nobody notices, because "someone should
 update that" is not addressed to anyone.
 
-The second thing to write down is the **return path**: how an improvement made
-inside a project gets back upstream. Without one, every project's copy silently
-becomes owned by that project, and you have as many forks as you have teams.
+Add **upstream**: the tool this one was taken from, by its ID there (`AKOS TSP.15`),
+blank for a tool that started here. It is the start of the **return path** — how an
+improvement made inside a project gets back upstream. Without it, every project's
+copy silently becomes owned by that project, and you have as many forks as you have
+teams. It is also what lets the ID be the project's own: the number says where the
+tool sits here, the upstream says where it came from.
 
 ---
 

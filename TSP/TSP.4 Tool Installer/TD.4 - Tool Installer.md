@@ -126,12 +126,19 @@ what turns "drift is detectable" into "drift is detected".
 
 **[TSP Register](../TSP.3%20TSP%20Register/TD.3%20-%20TSP%20Register.md)** — the
 registry says which tools exist and who keeps them alive. The lock says what one
-project uses. Registry and manifest are different jobs: a project that grows its
-own registry either dies with its tools or becomes an authority nobody
-reconciles.
+project uses. Registry and manifest are different jobs, and a project keeps both:
+installing a tool takes on its upkeep (up to date, running, fit for how the team
+works), which the catalogue cannot do for it. The pack's tool register is that
+registry, each row naming its catalogue tool in `Upstream`. Only a portfolio team
+that manages the tools for its projects keeps the registry instead, the projects
+keeping the lock alone. When the project closes, what it improved goes back
+upstream, and each tool moves on or retires with it ([sharing with a team](../../method/06-sharing-with-a-team.md)).
 
 **The smoke test** exercises `add`, `status --check` on a clean and on an edited
-copy, and `accept`, so the drift detection is itself under test.
+copy, and `accept`, so the drift detection is itself under test; and `update` on a
+skill and on a TD, cleanly and with a conflict: the conflicting update exits
+non-zero, keeps the lock at its commit, refuses a second `update` and an `accept`
+while conflict markers remain, and completes with `accept` once they are resolved.
 
 ## Maintenance
 
@@ -155,8 +162,8 @@ copy, and `accept`, so the drift detection is itself under test.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.10 | 2026-11-01 | **A project that installs tools keeps their registry.** This document and method 06 said a project needs the lock and never a registry, while the pack gives every project a tool register. Installing a tool takes on its upkeep, which the catalogue cannot run, so the project keeps the registry, adapted tools or not; only a portfolio team managing its projects' tools takes it over. A first draft made the registry depend on adapting a tool; rejected by the user, since the upkeep comes with installing. `update` tested on a skill and through a conflict that stays retryable. |
 | v1.9 | 2026-10-29 | **The basic convention, stated, and how tools find what departs from it.** A project is expected to keep `PrjMgm` and `Execution`; one that departs says so in its records (the WBS's `meta.execution`, the artifact register's *Managed By*, the locks), and tools look at the convention first, then the records, then by name. Raised aligning a running project whose folders sat a level deeper. |
 | v1.8 | 2026-10-29 | **The project pack's team part.** `work-manager` and `change-request` (TSP.17, TSP.18) installed at the project root with their own lock, since the team works there with its agent; a Change Requests folder, the one in the project-management folder the team writes to. The tool register holds all thirteen tools. |
-| v1.7 | 2026-10-29 | **The project pack, laid out by who uses what.** Every skill in the project-management folder with its lock, nothing at the root; the action tracker out of the pack. A tool register in the pack, each tool registered with its catalogue number in `Upstream` (TD.3 v1.9) and its TD placed beside it. Stakeholders in `Confidential/Stakeholder Mgm`, Confidential out of git. `General Ref Materials/Workspaces` with a workspace per profile: the team's opens the project, the product manager's adds the project-management folder. Numbering: 00 to 03 for PrjMgm, Execution, General Ref Materials and Workspaces, then the project-management folder from 04. Asked for by the user reviewing v1.6. |
 
 Earlier versions are in this file's git history.
