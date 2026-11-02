@@ -112,10 +112,10 @@ available, because it reads as safe.
 ### The rule applies to the disk scan too
 
 **A file a tool owns and names itself can be ignored.** An installer's lock
-(`tools.lock.json`) sits in the project folder under a name the installer
-fixes, so it cannot carry an ID. `meta.settings.ignore` lists such names, and
-the disk scan skips them wherever they sit; a new register lists
-`tools.lock.json`. It is for names a tool fixes, never a way to hide a document.
+(`tool.lock.json`, one in each installed tool's folder) carries a name the
+installer fixes, so it cannot carry an ID. `meta.settings.ignore` lists such
+names, and the disk scan skips them wherever they sit; a new register lists
+`tool.lock.json`. It is for names a tool fixes, never a way to hide a document.
 A folder a tool governs (its register, its reports) is not ignored: it is
 registered with its ID and `Managed By`, and the scan stops at it, as below.
 
@@ -207,8 +207,8 @@ and leave rows pointing at nothing.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.7 | 2026-11-02 | **The ignore default follows the installer's lock:** `tool.lock.json`, one in each installed tool's folder (TD.4 v1.11), where it was `tools.lock.json`, one per folder installed into. A register made before keeps its own list; it needs the new name only where a tool's folder is scanned. |
 | v1.6 | 2026-10-28 | **`add --new-id N` claims a planned number.** IDs come from the highest plus one, so a register whose own row is 02 could not number the folders above it 00 and 01. `--new-id` registers under a number no row holds; a retired row stays in the register, so such a number was never used, and claiming it reuses nothing. |
 | v1.5 | 2026-10-28 | **A register can live in a folder of its own.** `create_artifact_register.py --folder` makes the folder the register's row, so a project keeps it as `00. Artifact Register/` like any other register, and the audit stays clean without looking inside. Asked for by the user on the first `install.py init`, which had left the register as a bare file at the top. |
-| v1.4 | 2026-10-28 | **The register follows its own rename.** `add` and `rename` re-prefix the folder or file they are given; when that is the register itself, or the folder it sits in, the register moved under the command and the save failed after the rename, leaving the disk numbered and the row unwritten. They now save to where the register went. Found setting up a project with `install.py init`, which numbers the register as 00. |
 
 Earlier versions are in this file's git history.

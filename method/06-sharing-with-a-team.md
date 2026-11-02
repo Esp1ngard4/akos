@@ -23,9 +23,9 @@ it is still fit for purpose. It carries [control
 activities](01-registering-your-tools.md) — a standing commitment to review.
 
 A **manifest** is a much smaller thing: which tools *this project* uses, from
-where, at which version. In this repository it is the installer's lock
-(`tools.lock.json`): the registry says what each tool is to the team, the lock
-proves what is on disk.
+where, at which version. In this repository it is the installer's lock, one per
+tool in the tool's folder (`tool.lock.json`): the registry says what each tool is
+to the team, the lock proves what is on disk.
 
 Every project needs a manifest, and every project that installs tools needs a
 registry too. Installing a tool takes on its upkeep: whether it is up to date,

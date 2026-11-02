@@ -1,0 +1,10 @@
+{
+  "pack": "foundation",
+  "description": "The two registers every project's tools rest on: the artifact register, which says what each folder is and which tool manages it, and the tool register, which says which tools the project runs on and keeps them up to date, running and fit. Set up in an empty folder or a running project: only what is missing is created, and none of the team's own folders is renamed. Every tool already installed is then registered, its folder named by its row. The project pack includes it.",
+  "adopt": true,
+  "planning": "PrjMgm",
+  "skills": ["artifact-register", "tsp-manager"],
+  "tool_docs": ["TSP.4"],
+  "register": {"folder": "Artifact Register", "file": "Artifact Register {name}.json"},
+  "tools": {"folder": "TSP", "file": "TSP Register {name}.json", "upstream": "AKOS"}
+}

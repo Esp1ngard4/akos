@@ -385,7 +385,7 @@ def tool_page(t, pages):
     if t["skills"]:
         cmds = "\n".join("python akos/install.py add %s --into <your-repo>" % s for s in t["skills"])
     else:
-        cmds = "python akos/install.py add %s --into <your-repo> --docs TSP   # no skill: its design document alone" % t["id"]
+        cmds = "python akos/install.py add %s --into <your-repo>   # no skill: its design document alone" % t["id"]
     links = ('<p class="src"><a href="%s/blob/main/%s">The full design document</a> · <a href="%s/tree/main/%s">The tool\'s folder</a></p>'
              % (REPO, quote("TSP/%s/%s" % (folder, td_name)), REPO, quote("TSP/" + folder)))
     out.append(G.section("install", "Install it", "How", '<div class="card cmd"><pre>git clone %s.git\n%s</pre></div>%s' % (REPO, e(cmds), links),

@@ -35,7 +35,7 @@ Standard library only, no dependencies. It reads the brief (TSP.14) and how team
 
 **Only what changes slowly.** The guide holds what changes when a tool, the brief or the team changes, and nothing that changes each sprint: the rhythm is the sprint's pattern, not this sprint's dates; the board is how boards are named, not this sprint's file. What is current it points to: this sprint's board, the sprint record, the latest status report. A guide carrying the running sprint is wrong two weeks after it is posted, and a guide found wrong once is not trusted again.
 
-**Generated from the project, never written.** Everything comes from the project as it is set up: the brief's statement and outcome, the tools in the project's lock, the folders the artifact register describes, the stakeholder register, the sprint calendar. What it teaches follows what is installed: a team on the board is told to update the board, a team without one to tell the agent; a ceremony not installed is not on the rhythm. A guide written by hand would describe the project as someone remembered it.
+**Generated from the project, never written.** Everything comes from the project as it is set up: the brief's statement and outcome, the tools installed, from each tool's lock, the folders the artifact register describes, the stakeholder register, the sprint calendar. What it teaches follows what is installed: a team on the board is told to update the board, a team without one to tell the agent; a ceremony not installed is not on the rhythm. A guide written by hand would describe the project as someone remembered it.
 
 **People and agents, shown at every step.** Both do the work; what separates them is that a person decides and owns the outcome. The collaboration is the point of the way of working, so it is not a paragraph: every step of every path says who acts (*You*, *Agent does it with you*, *You decide, agent prepares*) and who you say it to; the rhythm marks people and agents in their own colours; the executive overview draws people and agents as one loop between the records and what the reader receives.
 
@@ -117,6 +117,8 @@ What is **not** tested is whether a newcomer understands it. That is the first p
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.3 | 2026-11-02 | **The installed tools read from each tool's lock** (`tool.lock.json`, TD.4 v1.11), found walking down from the project's top only, each skill where its lock's path says. The walk up four folders goes: a fixed depth is an assumption the project's records make unnecessary. |
 | v1.2 | 2026-10-29 | **Work Management found wherever it is installed:** the default places, then the lock files, which record where each skill is, then beside the skill. |
 | v1.1 | 2026-10-29 | **The guide shows how much of the loop a piece of work needs.** Where Work Management (TSP.17) is installed, its size table is read from the project's own guidelines and shown under *How work gets done*; the developer's path starts a work item with it. |
-| v1.0 | 2026-10-28 | Published as TSP.16: the team guide and the executive overview generated from a project's own files into an onboarding folder, every step saying who acts, people and agents drawn as one loop doing the work, how a piece of work gets done (discover, specify, plan and approve, do, close), nothing that changes each sprint, fonts embedded; the *onboard me* conversation. First built inside Reporting the same day, showing the running sprint, and moved out before it was published. |
+
+Earlier versions are in this file's git history.

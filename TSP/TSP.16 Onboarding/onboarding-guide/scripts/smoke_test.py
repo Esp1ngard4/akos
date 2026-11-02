@@ -38,8 +38,11 @@ def run(*args):
 
 
 def lock(project, skills):
-    with io.open(os.path.join(project, O.LOCK_NAME), "w", encoding="utf-8") as fh:
-        json.dump({"source": "test", "tools": {s: {} for s in skills}}, fh)
+    """One tool's lock in the project's TSP folder, naming the skills as its parts."""
+    folder = os.path.join(project, "TSP", "TSP.0 Test")
+    os.makedirs(folder, exist_ok=True)
+    with io.open(os.path.join(folder, O.LOCK_NAME), "w", encoding="utf-8") as fh:
+        json.dump({"tsp": "TSP.0", "parts": dict([("TD", {"path": "."})] + [(s, {"path": "../../.agents/skills/" + s}) for s in skills])}, fh)
 
 
 def main():
@@ -123,8 +126,11 @@ def main():
         wm = O.optional_sibling("work-manager")
         if wm:
             shutil.copytree(wm, os.path.join(site, "tools", "skills", "work-manager"))
-            with io.open(os.path.join(site, O.LOCK_NAME), "w", encoding="utf-8") as fh:
-                json.dump({"tools": {"work-manager": {"path": "tools/skills/work-manager"}}}, fh)
+            # Its tool's lock in the planning folder's TSP folder, the skill well outside it.
+            tool = os.path.join(plan, "TSP", "TSP.17 Work Management")
+            os.makedirs(tool)
+            with io.open(os.path.join(tool, O.LOCK_NAME), "w", encoding="utf-8") as fh:
+                json.dump({"tsp": "TSP.17", "parts": {"work-manager": {"path": "../../../../tools/skills/work-manager"}}}, fh)
             saved, O.optional_sibling = O.optional_sibling, (lambda s: None)
             try:
                 ok(len(O.work_sizes(plan)) == 3, "installed in a non-default place, it is found through the lock file")

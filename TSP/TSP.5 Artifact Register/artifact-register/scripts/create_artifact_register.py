@@ -47,7 +47,7 @@ def build(path, scope, locations, areas, width, folder=False):
         "locations": [{"ID": i, "Location": n, "Kind": k, "Active": "Yes"}
                       for i, (k, n) in enumerate(locations, start=1)],
         "areas_of_focus": [{"ID": a, "Name": n} for a, n in areas],
-    }, settings={"id_width": width, "ignore": ["tools.lock.json"]})
+    }, settings={"id_width": width, "ignore": ["tool.lock.json"]})
     R.save(path, data)
     return seed
 

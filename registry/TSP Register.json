@@ -390,6 +390,24 @@
       "Description": "TD.18 v1.1: the Change Requests folder found by the convention, the artifact register's Managed By, then by name.",
       "ID": 65,
       "Tool": "Change Requests"
+    },
+    {
+      "Changed On": "2026-11-02",
+      "Description": "TD.4 v1.11: a lock per tool (tool.lock.json) in its folder beside its TD, parts recorded by their path from the lock; the TD always placed (--docs gone); a tool folder named by the register's row once registered; the foundation pack (artifact and tool registers) for a running project; accept --path for a moved part.",
+      "ID": 66,
+      "Tool": "Tool Installer"
+    },
+    {
+      "Changed On": "2026-11-02",
+      "Description": "TD.5 v1.7: a new register ignores tool.lock.json, the installer's per-tool lock.",
+      "ID": 67,
+      "Tool": "Artifact Register"
+    },
+    {
+      "Changed On": "2026-11-02",
+      "Description": "TD.16 v1.3: installed tools read from each tool's lock, walking down from the project only.",
+      "ID": 68,
+      "Tool": "Onboarding"
     }
   ],
   "control_activities": [],
@@ -440,8 +458,8 @@
         ]
       }
     },
-    "updated": "2026-10-29T23:13:31",
-    "values_hash": "sha256:7538d8e3e639564745a331676d18974a21ec7b6c20b72c5183f01fda016e0176",
+    "updated": "2026-11-02T10:05:24",
+    "values_hash": "sha256:c7d9c8c77976f1da127ba5cd1c751c274c3113c1c4018bf769543b0e0ba292c5",
     "version": 1
   },
   "tools": [

@@ -129,8 +129,11 @@ python akos/install.py list
 python akos/install.py add wbs-manager --into <your-repo>
 ```
 
-That copies the skill into `<your-repo>/.agents/skills/` and writes
-`tools.lock.json` recording where it came from and at which commit. **Commit both.**
+That copies the skill into `<your-repo>/.agents/skills/`, and gives its tool a
+folder in the project's `TSP` folder holding its definition document and
+`tool.lock.json`, which records where each part came from and at which commit.
+**Commit both.** A project with a tool register gets the tool registered too; one
+without gets the two registers it rests on with `init <your-repo> --pack foundation`.
 `.agents/skills/` is read by GitHub Copilot, Codex, Cursor and others; Claude Code
 reads only `.claude/skills/`, so for Claude Code add `--dest .claude/skills`.
 Everyone who clones your repo then has the tool — no setup step, and a later change
@@ -146,12 +149,12 @@ python akos/install.py update wbs-manager   # three-way merge upstream changes i
 
 `update` applies upstream changes, keeps yours, and asks about the overlap only.
 
-A project that will own and evolve its tools can take their definition documents
-too, into its own TSP folder, locked the same way:
+A tool's definition document always comes with it, so the project can evolve it
+and still see where the catalogue's has moved. A tool with no skill is installed by
+its ID:
 
 ```bash
-python akos/install.py add wbs-manager --into <your-repo> --docs TSP
-python akos/install.py add TSP.4 --into <your-repo> --docs TSP   # a tool with no skill: its TD alone
+python akos/install.py add TSP.4 --into <your-repo>   # a tool with no skill: its TD alone
 ```
 [6. Sharing with a team](06-sharing-with-a-team.md) explains why it works this
 way; [TD.4](../TSP/TSP.4%20Tool%20Installer/TD.4%20-%20Tool%20Installer.md) is the

@@ -5,7 +5,7 @@
     python onboard.py show  <project folder>          # the record it would write, as JSON
 
 Gathers a record from the project's own files - its brief, its registers (found
-by meta.kind), the tools installed (tools.lock.json), the artifact register's
+by meta.kind), the tools installed (each tool's tool.lock.json), the artifact register's
 folder descriptions, the stakeholder register and the sprint calendar - and
 renders the team guide and the executive overview from it, into the project's
 onboarding folder. Generated, never written: regenerating is how the guide
@@ -32,7 +32,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import render as G                                              # noqa: E402
 
-LOCK_NAME = "tools.lock.json"
+LOCK_NAME = "tool.lock.json"
 REPORTS_DIR = re.compile(r"^(\d+[.\s]\s*)?Reports$")
 ONBOARDING_DIR = re.compile(r"^(\d+[.\s]\s*)?Onboarding$")
 EXECUTION_DIR = re.compile(r"^(\d+[.\s]\s*)?Execution$")
@@ -87,19 +87,6 @@ def kinds(folder):
     return out
 
 
-def find_up(folder, name, levels=4):
-    cur = os.path.abspath(folder)
-    for _ in range(levels):
-        cand = os.path.join(cur, name)
-        if os.path.isfile(cand):
-            return cand
-        up = os.path.dirname(cur)
-        if up == cur:
-            break
-        cur = up
-    return None
-
-
 def reports_root(folder):
     for name in sorted(os.listdir(folder)):
         if REPORTS_DIR.match(name) and os.path.isdir(os.path.join(folder, name)):
@@ -138,27 +125,14 @@ def work_sizes(project):
     """The size table from Work Management's sizes guideline, where it is installed
     (at the project root for the team, or beside this skill): [[size, typical
     work, what to expect]]. The guide shows it; the guidelines own it."""
-    # The default places first; then wherever a lock file says it is installed
-    # (looking up from the planning folder and down through the project); then
+    # The default places first; then wherever its tool's lock says it is; then
     # beside this skill.
     here = os.path.abspath(project)
     candidates = [os.path.join(base, ".agents", "skills", "work-manager") for base in (here, os.path.dirname(here))]
-    locks, cur = [], here
-    for _ in range(4):
-        if os.path.isfile(os.path.join(cur, LOCK_NAME)):
-            locks.append(os.path.join(cur, LOCK_NAME))
-        cur = os.path.dirname(cur)
-    # Down through the project only: from above the planning folder when given it,
-    # else from the folder given. Never the folder that holds the project.
-    top = os.path.dirname(here) if re.search(r"PrjMgm$", os.path.basename(here), re.I) else here
-    for root, dirs, files in os.walk(top):
-        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP]
-        if LOCK_NAME in files:
-            locks.append(os.path.join(root, LOCK_NAME))
-    for lock in locks:
-        rec = ((load_json(lock) or {}).get("tools") or {}).get("work-manager") or {}
-        if rec.get("path"):
-            candidates.append(os.path.join(os.path.dirname(lock), rec["path"].replace("/", os.sep)))
+    for root, lock in tool_locks(project):
+        part = (lock.get("parts") or {}).get("work-manager") or {}
+        if part.get("path"):
+            candidates.append(os.path.normpath(os.path.join(root, part["path"].replace("/", os.sep))))
     candidates.append(optional_sibling("work-manager"))
     for skill in candidates:
         path = os.path.join(skill, "references", "sizes.md") if skill else None
@@ -180,12 +154,32 @@ def find_records(folder):
     return None
 
 
+def project_top(folder):
+    """The project around a folder: above the planning folder when given it,
+    else the folder itself. Never the folder that holds the project."""
+    here = os.path.abspath(folder)
+    return os.path.dirname(here) if re.search(r"PrjMgm$", os.path.basename(here), re.I) else here
+
+
+def tool_locks(folder):
+    """Every tool's lock in the project, walking down from its top only:
+    [(the lock's folder, the lock)]. Each lock records its parts by their path
+    from that folder."""
+    out = []
+    for root, dirs, files in os.walk(project_top(folder)):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP]
+        if LOCK_NAME in files:
+            data = load_json(os.path.join(root, LOCK_NAME))
+            if data:
+                out.append((root, data))
+    return out
+
+
 def installed(folder):
-    """The skills installed for this project: its lock, else the skills beside this one."""
-    lock = find_up(folder, LOCK_NAME)
-    if lock:
-        data = load_json(lock) or {}
-        return sorted(k for k in data.get("tools", {}) if not k.endswith(" docs"))
+    """The skills installed for this project: its tools' locks, else the skills beside this one."""
+    locks = tool_locks(folder)
+    if locks:
+        return sorted(k for _, lock in locks for k in (lock.get("parts") or {}) if k not in ("TD", "_shared"))
     skills = os.path.dirname(os.path.dirname(HERE))
     return sorted(n for n in os.listdir(skills) if os.path.isfile(os.path.join(skills, n, "SKILL.md")))
 

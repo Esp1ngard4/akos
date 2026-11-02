@@ -228,16 +228,25 @@ def test_init(root, scratch):
           all(os.path.isdir(p) for p in (plan, os.path.join(project, "01. Execution"),
                                          os.path.join(project, "02. General Ref Materials", "03. Workspaces"))),
           sorted(os.listdir(project)))
-    with io.open(os.path.join(project, "tools.lock.json"), encoding="utf-8") as fh:
-        root_lock = json.load(fh)
-    check("at the root, the team's tools only, with their own lock",
-          sorted(root_lock["tools"]) == sorted(pack["team_skills"]) and not os.path.exists(os.path.join(project, ".agents", "skills", "wbs-manager")),
-          sorted(root_lock["tools"]))
-    with io.open(os.path.join(plan, "tools.lock.json"), encoding="utf-8") as fh:
-        lock = json.load(fh)
-    check("every skill in the pack installed and locked in the project-management folder",
-          all(s in lock["tools"] for s in pack["skills"]) and "action-tracker-manager" not in lock["tools"],
-          sorted(set(pack["skills"]) - set(lock["tools"])))
+    locks, old = {}, []
+    for dp, _, fs in os.walk(project):
+        if "tool.lock.json" in fs:
+            locks[dp] = json.load(io.open(os.path.join(dp, "tool.lock.json"), encoding="utf-8"))
+        if "tools.lock.json" in fs:
+            old.append(dp)
+    check("no old lock anywhere", not old, str(old))
+    parts = lambda: {k: os.path.normpath(os.path.join(d, p["path"])) for d, l in locks.items() for k, p in l["parts"].items() if k != "TD"}
+    check("at the root, the team's skills only",
+          sorted(os.listdir(os.path.join(project, ".agents", "skills"))) == sorted(pack["team_skills"]),
+          sorted(os.listdir(os.path.join(project, ".agents", "skills"))))
+    check("every skill in the pack installed in the project-management folder, each recorded by its tool's lock",
+          all(parts().get(s) == os.path.join(plan, ".agents", "skills", s) for s in pack["skills"])
+          and all(parts().get(s) == os.path.join(project, ".agents", "skills", s) for s in pack["team_skills"])
+          and "action-tracker-manager" not in parts(),
+          sorted(set(pack["skills"]) - set(parts())))
+    check("every lock in a tool folder in the tool register's folder, beside its TD",
+          locks and all(os.path.dirname(d) == os.path.join(plan, "05. TSP")
+                        and any(f.startswith("TD.") for f in os.listdir(d)) for d in locks), sorted(locks)[:3])
     top = sorted(os.listdir(plan))
     want = ["04. Artifact Register", "05. TSP", "06. WBS", "07. RAID", "08. Sprints", "09. Comms", "10. Reports",
             "11. Onboarding", "12. Confidential", "14. Change Requests", "15. Project Brief.md"]
@@ -248,9 +257,13 @@ def test_init(root, scratch):
     check("the tool register numbers the tools itself and names each one's AKOS tool",
           [t["ID"] for t in tools] == list(range(1, len(tools) + 1)) and all(t.get("Upstream", "").startswith("AKOS TSP.") for t in tools)
           and any(t["Upstream"] == "AKOS TSP.15" and t["Skill"] == "status-board-manager" for t in tools), tools[:2])
-    check("each tool's TD in the register's folder, and locked",
+    check("each tool's TD in its folder, and locked",
           all(t.get("Doc Aux") == "Yes" and os.path.isfile(os.path.join(plan, "05. TSP", t["Links"])) for t in tools)
-          and all(("%s docs" % t["Upstream"].split()[1]) in lock["tools"] for t in tools), [t.get("Links") for t in tools][:2])
+          and sorted(l["tsp"] for l in locks.values()) == sorted(t["Upstream"].split()[1] for t in tools), [t.get("Links") for t in tools][:2])
+    check("each tool's folder named by its row, not by its AKOS number",
+          all(os.path.isdir(os.path.join(plan, "05. TSP", "TSP.%s %s" % (t["ID"], t["Name"]))) for t in tools)
+          and any(t["Upstream"] == "AKOS TSP.17" and t["ID"] != 17 for t in tools), [t["ID"] for t in tools])
+    check("the installer's own TD among them", any(t["Upstream"] == "AKOS TSP.4" for t in tools))
     wbs = os.path.join(plan, "06. WBS", "WBS Greenfield.json")
     with io.open(wbs, encoding="utf-8") as fh:
         data = json.load(fh)
@@ -276,8 +289,9 @@ def test_init(root, scratch):
     check("the artifact register audits the whole project clean", "0 error(s), 0 warning(s)" in out, out[-400:])
     ok, out = run([os.path.join(skills, "tsp-manager", "scripts", "audit_tsp.py"), tsp], root)
     check("the tool register audits clean", "0 error(s), 0 warning(s)" in out, out[-400:])
-    ok, out = run([installer, "status", "--project", plan, "--check"], root)
-    check("status --check clean", ok, out[-300:])
+    ok, out = run([installer, "status", "--project", project, "--check"], root)
+    check("status --check clean from the root, the PM and the team tools together",
+          ok and "work-manager" in out and "wbs-manager" in out, out[-300:])
     ok, out = run([installer, "init", project, "--name", "Again", "--catalogue", root], root)
     check("init refuses a folder that already holds a project", not ok and "already holds a project" in out, out[-300:])
     nogit = os.path.join(scratch, "akos-zip")
@@ -293,7 +307,7 @@ def test_upstream(root, scratch):
     cat = os.path.join(scratch, "upstream-cat")
     subprocess.check_call(["git", "clone", "-q", root, cat])
     project = os.path.join(scratch, "upstream-project")
-    ok, out = run([os.path.join(cat, "install.py"), "add", "status-board-manager", "--into", project, "--docs", "TSP"], cat)
+    ok, out = run([installer, "add", "status-board-manager", "--into", project, "--catalogue", cat], root)
     if not check("a tool and its TD installed from a clone", ok, out[-300:]):
         return
     status = lambda *extra: run([installer, "status", "--project", project, "--upstream", "--source", cat] + list(extra), root)
@@ -323,11 +337,15 @@ def test_upstream(root, scratch):
 
 
 def test_installer(root, scratch):
-    """Vendor a tool into a throwaway project and drive the drift check.
+    """Install a tool into a throwaway project and drive the drift check.
 
-    The interesting assertion is the last pair: an edited copy must fail
-    `status --check`, and must pass again only once someone has said why.
+    Each tool keeps one lock, in its own folder beside its TD, recording every
+    part by its path from the lock. The interesting assertions: an edited copy
+    must fail `status --check` and pass again only once someone has said why;
+    skills in .agents folders side by side are all found; a moved part is found
+    and re-pointed; an old lock is refused.
     """
+    import json
     print("\ninstall.py")
     installer = os.path.join(root, "install.py")
     if not check("installer present", os.path.isfile(installer), installer):
@@ -341,16 +359,20 @@ def test_installer(root, scratch):
     if not check("add runs", ok, out):
         return
     skill = os.path.join(project, ".agents", "skills", "wbs-manager", "SKILL.md")
-    check("skill vendored into the project", os.path.isfile(skill), skill)
-    lock = os.path.join(project, "tools.lock.json")
-    if not check("lock written", os.path.isfile(lock), lock):
+    check("skill installed into the project", os.path.isfile(skill), skill)
+    folder = os.path.join(project, "TSP", "TSP.1 WBS Register")
+    lock = os.path.join(folder, "tool.lock.json")
+    if not check("the tool's lock written in its folder, beside its TD",
+                 os.path.isfile(lock) and os.path.isfile(os.path.join(folder, "TD.1 - WBS Register.md")), lock):
         return
-
-    import json
-    rec = json.load(io.open(lock, encoding="utf-8"))["tools"]["wbs-manager"]
-    check("lock records origin and commit",
-          bool(rec.get("commit")) and rec.get("origin", "").startswith("TSP/"),
-          str(rec)[:200])
+    check("no register: the tool folder keeps AKOS's name, and add says how to start one",
+          "--pack foundation" in out, out[-300:])
+    rec = json.load(io.open(lock, encoding="utf-8"))
+    part = rec["parts"].get("wbs-manager", {})
+    check("the lock records origin, commit, and the skill's path from the lock",
+          bool(part.get("commit")) and part.get("origin", "").startswith("TSP/")
+          and part.get("path") == "../../.agents/skills/wbs-manager" and rec["parts"]["TD"]["path"] == ".",
+          str(part)[:200])
 
     ok, out = run([installer, "status", "--project", project, "--check"], root)
     check("status --check passes on a fresh copy", ok, out)
@@ -365,6 +387,108 @@ def test_installer(root, scratch):
     check("accept records the change", ok, out)
     ok, out = run([installer, "status", "--project", project, "--check"], root)
     check("status --check passes once declared", ok, out)
+
+    # Skills side by side: a team folder beside the project's own, its tool
+    # folder in the same TSP folder. One status from the top sees both.
+    team = os.path.join(project, "Team")
+    os.makedirs(team)
+    ok, out = run([installer, "add", "change-request", "--into", team, "--catalogue", root,
+                   "--tools", os.path.join("..", "TSP")], root)
+    cr = json.load(io.open(os.path.join(project, "TSP", "TSP.18 Change Requests", "tool.lock.json"), encoding="utf-8")) \
+        if ok else {"parts": {}}
+    check("a skill in another folder's .agents: its lock reaches it by a relative path",
+          cr["parts"].get("change-request", {}).get("path") == "../../Team/.agents/skills/change-request", out[-300:])
+    ok, out = run([installer, "status", "--project", project, "--check"], root)
+    check("status from the top finds every tool's lock", ok and "change-request" in out and "wbs-manager" in out, out[-300:])
+
+    # A moved part: the folder holding the skill renamed, not the lock's.
+    os.rename(team, os.path.join(project, "Team work"))
+    ok, out = run([installer, "status", "--project", project, "--check"], root)
+    check("a moved skill is reported where the lock expected it, and found by name",
+          not ok and "MISSING" in out and "found at Team work/.agents/skills/change-request" in out, out[-400:])
+    ok, out = run([installer, "accept", "change-request", "--project", project,
+                   "--path", os.path.join(project, "Team work", ".agents", "skills", "change-request")], root)
+    ok2, out2 = run([installer, "status", "--project", project, "--check"], root)
+    check("accept --path re-points it, and status is clean", ok and ok2, (out + out2)[-400:])
+
+    # An old lock, one per folder, is refused, not misread.
+    io.open(os.path.join(project, "tools.lock.json"), "w", encoding="utf-8").write('{"source": "x", "tools": {}}')
+    ok, out = run([installer, "status", "--project", project], root)
+    check("an old lock is refused with where locks live now", not ok and "tool.lock.json" in out and "Traceback" not in out,
+          out[-300:])
+    os.remove(os.path.join(project, "tools.lock.json"))
+
+
+def test_foundation(root, scratch):
+    """The foundation pack: the artifact register and the tool register, set up
+    in a running project without renaming the team's folders; every installed
+    tool then registered, its folder named by its row. And the project pack
+    includes it."""
+    import json
+    print("\ninstall.py init --pack foundation")
+    installer = os.path.join(root, "install.py")
+    project = os.path.join(scratch, "running")
+    os.makedirs(os.path.join(project, "Docs"))
+    io.open(os.path.join(project, "Docs", "notes.md"), "w", encoding="utf-8").write("ours\n")
+    for skill in ("wbs-manager", "sprint-facilitator"):
+        run([installer, "add", skill, "--into", project, "--catalogue", root], root)
+    ok, out = run([installer, "init", project, "--pack", "foundation", "--name", "Running", "--catalogue", root], root)
+    if not check("foundation runs on a running project", ok, out[-600:]):
+        return
+    check("the team's folders are not renamed", os.path.isfile(os.path.join(project, "Docs", "notes.md")),
+          sorted(os.listdir(project)))
+    plan = next((os.path.join(project, n) for n in os.listdir(project) if n.endswith("PrjMgm")), None)
+    art = os.path.join(plan or project, "00. Artifact Register", "Artifact Register Running.json")
+    check("an artifact register in a numbered planning folder", plan and os.path.basename(plan)[0].isdigit()
+          and os.path.isfile(art), sorted(os.listdir(project)))
+    reg = os.path.join(project, "TSP", "TSP Register Running.json")
+    tools = json.load(io.open(reg, encoding="utf-8"))["tools"] if os.path.isfile(reg) else []
+    check("the tool register in the TSP folder add had used", bool(tools), sorted(os.listdir(os.path.join(project, "TSP"))))
+    check("every tool registered, the installer's and the registers' own included",
+          {t.get("Upstream") for t in tools} == {"AKOS TSP.1", "AKOS TSP.3", "AKOS TSP.4", "AKOS TSP.5", "AKOS TSP.8"},
+          [t.get("Upstream") for t in tools])
+    check("each tool folder renamed to its row's number",
+          all(os.path.isfile(os.path.join(project, "TSP", "TSP.%s %s" % (t["ID"], t["Name"]), "tool.lock.json")) for t in tools)
+          and not os.path.isdir(os.path.join(project, "TSP", "TSP.8 Sprint Ceremonies")), sorted(os.listdir(os.path.join(project, "TSP"))))
+    ok, out = run([installer, "status", "--project", project, "--check"], root)
+    check("every lock still reaches its parts after the renames", ok, out[-400:])
+
+    ok, out = run([installer, "add", "raid-manager", "--into", project, "--catalogue", root], root)
+    tools = json.load(io.open(reg, encoding="utf-8"))["tools"]
+    raid = next((t for t in tools if t.get("Upstream") == "AKOS TSP.2"), {})
+    check("a tool added later is registered, its folder named by its row",
+          ok and raid and os.path.isdir(os.path.join(project, "TSP", "TSP.%s RAID Register" % raid.get("ID"))), out[-300:])
+    ok, out = run([installer, "init", project, "--pack", "foundation", "--name", "Running", "--catalogue", root], root)
+    again = json.load(io.open(reg, encoding="utf-8"))["tools"]
+    check("run again, it keeps both registers and adds no row", ok and "kept" in out and len(again) == len(tools), out[-300:])
+
+    # A register written with its meta block last, far down the file, is still found.
+    late = os.path.join(scratch, "meta-last", "PrjMgm", "04. Artifact Register")
+    os.makedirs(late)
+    rows = [{"ID": i, "Name": "Row %d" % i, "Description": "x" * 200} for i in range(40)]
+    io.open(os.path.join(late, "Ours.json"), "w", encoding="utf-8").write(
+        json.dumps({"artifacts": rows, "meta": {"kind": "artifact-register", "scope": "Ours"}}, indent=2))
+    ok, out = run([installer, "init", os.path.dirname(os.path.dirname(late)), "--pack", "foundation", "--name", "Late",
+                   "--catalogue", root], root)
+    check("an artifact register with its meta last is kept, not duplicated",
+          ok and "kept" in out
+          and sorted(n for n in os.listdir(os.path.dirname(late)) if not n.startswith(".")) == ["04. Artifact Register", "TSP"],
+          out[-400:])
+
+    empty = os.path.join(scratch, "empty-foundation")
+    ok, out = run([installer, "init", empty, "--pack", "foundation", "--name", "Empty", "--catalogue", root], root)
+    plan = next((os.path.join(empty, n) for n in os.listdir(empty) if n.endswith("PrjMgm")), "") if ok else ""
+    check("in an empty folder: the planning folder with both registers",
+          ok and any(n.endswith("TSP") and n[0].isdigit() for n in os.listdir(plan)), out[-400:])
+
+    with io.open(os.path.join(root, "packs", "project.json"), encoding="utf-8") as fh:
+        project_pack = json.load(fh)
+    with io.open(os.path.join(root, "packs", "foundation.json"), encoding="utf-8") as fh:
+        foundation = json.load(fh)
+    check("the project pack includes the foundation",
+          set(foundation["skills"]) <= set(project_pack["skills"])
+          and set(foundation["tool_docs"]) <= set(project_pack.get("tool_docs", []))
+          and all(project_pack[k] == foundation[k] for k in ("planning", "register", "tools")), "")
 
 
 def test_concurrent_save(root, scratch):
@@ -1027,9 +1151,10 @@ def test_sprint_ceremonies(root, scratch):
     installed = os.path.join(project, ".agents", "skills", "sprint-facilitator",
                              "scripts", "sprint_record.py")
     check("the record script arrives with the skill", os.path.isfile(installed), installed)
-    lock = json.load(io.open(os.path.join(project, "tools.lock.json"), encoding="utf-8"))
-    check("both skills recorded in the lock",
-          all(n in lock.get("tools", {}) for n in SPRINT_SKILLS), str(sorted(lock.get("tools", {}))))
+    lock_file = os.path.join(project, "TSP", "TSP.8 Sprint Ceremonies", "tool.lock.json")
+    lock = json.load(io.open(lock_file, encoding="utf-8")) if os.path.exists(lock_file) else {}
+    check("both skills recorded in their tool's one lock",
+          all(n in lock.get("parts", {}) for n in SPRINT_SKILLS), str(sorted(lock.get("parts", {}))))
 
 
 STK_TOOL = "TSP.13 Stakeholder Register"
@@ -1529,7 +1654,7 @@ def test_reporting(root, scratch):
           ok and "Client lead" in html and "Kim Client" not in html, out[:300])
 
     # --- a project folder holding a lock and a numbered reports folder ----------
-    io.open(os.path.join(project, "tools.lock.json"), "w", encoding="utf-8").write('{"source": "x", "tools": {}}')
+    io.open(os.path.join(project, "tool.lock.json"), "w", encoding="utf-8").write('{"kind": "akos-tool-lock", "parts": {}}')
     os.makedirs(os.path.join(project, "05. Reports"), exist_ok=True)
     ok, out = run([report, "status", project, "--records", records, "--sprint", "S26.Q4.1",
                    "--as-of", "2026-10-21"], work)
@@ -2171,13 +2296,13 @@ def test_numbered_layout(root, scratch):
     areg = os.path.join(work, "04. Artifact Register, Demo.json")
     run_raw([os.path.join(art, "create_artifact_register.py"), areg, "Demo"], work)
     settings = json.load(io.open(areg, encoding="utf-8"))["meta"]["settings"]
-    check("layout: a new artifact register ignores the installer's lock", "tools.lock.json" in settings.get("ignore", []),
+    check("layout: a new artifact register ignores the installer's lock", "tool.lock.json" in settings.get("ignore", []),
           str(settings))
-    io.open(os.path.join(work, "tools.lock.json"), "w", encoding="utf-8").write("{}")
+    io.open(os.path.join(work, "tool.lock.json"), "w", encoding="utf-8").write("{}")
     io.open(os.path.join(work, "Loose notes.md"), "w", encoding="utf-8").write("x")
     ok, out = run_raw([os.path.join(art, "audit_artifact_register.py"), areg, "--root", work], work)
     check("layout: the disk check skips the ignored lock and still flags an unnumbered file",
-          "tools.lock.json" not in out and "Loose notes.md" in out, out[-400:])
+          "tool.lock.json" not in out and "Loose notes.md" in out, out[-400:])
 
 
 def test_migrate_vocabulary(root, scratch):
@@ -2210,45 +2335,41 @@ def test_migrate_vocabulary(root, scratch):
 
 
 def test_installer_docs(root, scratch):
-    """--docs places a tool's TD in the project's TSP folder, locked as its own
-    entry, and every command works on it while seeing the TD files only.
+    """A tool's TD is always placed in its folder, as its lock's TD part, and
+    every command works on it while seeing the TD files only.
 
     The project here is a project-management folder, as at work: skills under
-    its .agents/skills, TDs under its TSP folder. Upstream moves in a clone of
-    the catalogue, so update has a real base, theirs and mine to merge.
+    its .agents/skills, tool folders under its TSP folder. Upstream moves in a
+    clone of the catalogue, so update has a real base, theirs and mine to merge.
     """
     import json
-    print("\nInstaller: tool definitions (--docs)")
+    print("\nInstaller: tool definitions")
     installer = os.path.join(root, "install.py")
     project = os.path.join(scratch, "docs-project", "General", "0.PrjMgm")
     os.makedirs(project, exist_ok=True)
-    lock_path = os.path.join(project, "tools.lock.json")
+    lock_path = os.path.join(project, "TSP", "TSP.8 Sprint Ceremonies", "tool.lock.json")
     td8 = os.path.join(project, "TSP", "TSP.8 Sprint Ceremonies", "TD.8 - Sprint Ceremonies.md")
     td4 = os.path.join(project, "TSP", "TSP.4 Tool Installer", "TD.4 - Tool Installer.md")
 
-    ok, out = run_raw([installer, "add", "sprint-facilitator", "--into", project, "--catalogue", root,
-                       "--docs", "TSP"], root)
-    lock = json.load(io.open(lock_path, encoding="utf-8")) if os.path.exists(lock_path) else {"tools": {}}
-    rec = lock["tools"].get("TSP.8 docs") or {}
-    check("docs: add --docs places the skill and its TD, each locked",
-          ok and os.path.isfile(td8) and "sprint-facilitator" in lock["tools"]
+    ok, out = run_raw([installer, "add", "sprint-facilitator", "--into", project, "--catalogue", root], root)
+    lock = json.load(io.open(lock_path, encoding="utf-8")) if os.path.exists(lock_path) else {"parts": {}}
+    rec = lock["parts"].get("TD") or {}
+    check("docs: add places the skill and its TD, both parts of the tool's lock",
+          ok and os.path.isfile(td8) and "sprint-facilitator" in lock["parts"]
           and rec.get("only") == "TD" and list(rec.get("files") or {}) == ["TD.8 - Sprint Ceremonies.md"], out[:300])
-    ok, out = run_raw([installer, "add", "sprint-planning-precheck", "--into", project, "--catalogue", root,
-                       "--docs", "TSP"], root)
+    ok, out = run_raw([installer, "add", "sprint-planning-precheck", "--into", project, "--catalogue", root], root)
     check("docs: a second skill of the same tool reuses its TD", ok and "TD reused" in out, out[:300])
     ok, out = run_raw([installer, "add", "TSP.4", "--into", project, "--catalogue", root], root)
-    check("docs: a tool ID without --docs is refused", not ok and "--docs" in out, out[:200])
-    ok, out = run_raw([installer, "add", "TSP.4", "--into", project, "--catalogue", root, "--docs", "TSP"], root)
-    check("docs: add TSP.4 --docs places a TD alone, for a tool with no skill",
+    check("docs: add TSP.4 places a TD alone, for a tool with no skill",
           ok and os.path.isfile(td4) and not os.path.isdir(os.path.join(project, ".agents", "skills", "TSP.4")), out[:300])
 
     io.open(os.path.join(os.path.dirname(td4), "Our install notes.md"), "w", encoding="utf-8").write("ours\n")
     ok, out = run_raw([installer, "status", "--project", project, "--check"], root)
-    check("docs: another file beside a TD is not drift", ok, out[-300:])
+    check("docs: another file beside a TD, the lock included, is not drift", ok, out[-300:])
     with io.open(td4, "a", encoding="utf-8") as fh:
         fh.write("\n## Our adaptation\n\nInstalled into the PM folder.\n")
     ok, out = run_raw([installer, "status", "--project", project, "--check"], root)
-    check("docs: an edited TD is reported", not ok and "TSP.4 docs" in out and "MODIFIED" in out, out[-300:])
+    check("docs: an edited TD is reported", not ok and "TSP.4 TD" in out and "MODIFIED" in out, out[-300:])
 
     # Upstream moves: a clone of the catalogue with a change to TD.4's opening line.
     upstream = os.path.join(scratch, "docs-upstream")
@@ -2260,12 +2381,12 @@ def test_installer_docs(root, scratch):
     io.open(up_td, "w", encoding="utf-8", newline="\n").write("\n".join(text))
     subprocess.check_call(["git", "-c", "user.email=smoke@test", "-c", "user.name=smoke", "commit", "-qam",
                            "upstream TD change"], cwd=upstream, **quiet)
-    ok, out = run_raw([installer, "update", "TSP.4 docs", "--project", project, "--source", upstream], root)
+    ok, out = run_raw([installer, "update", "TSP.4", "--project", project, "--source", upstream], root)
     merged = io.open(td4, encoding="utf-8").read()
     check("docs: update merges the upstream TD change and keeps the local edit",
           ok and "(upstream revision)" in merged and "## Our adaptation" in merged
           and os.path.isfile(os.path.join(os.path.dirname(td4), "Our install notes.md")), out[-300:])
-    ok, out = run_raw([installer, "accept", "TSP.4 docs", "--project", project, "-m", "adapted for the PM folder"], root)
+    ok, out = run_raw([installer, "accept", "TSP.4", "--project", project, "-m", "adapted for the PM folder"], root)
     ok2, out2 = run_raw([installer, "status", "--project", project, "--check"], root)
     check("docs: accept records the adapted TD, and status is clean again",
           ok and ok2 and "declared: adapted for the PM folder" in out2, out2[-300:])
@@ -2289,7 +2410,7 @@ def test_installer_update(root, scratch):
     installer = os.path.join(root, "install.py")
     project = os.path.join(scratch, "update-project")
     os.makedirs(project, exist_ok=True)
-    lock_path = os.path.join(project, "tools.lock.json")
+    lock_path = os.path.join(project, "TSP", "TSP.1 WBS Register", "tool.lock.json")
     skill = os.path.join(project, ".agents", "skills", "wbs-manager", "SKILL.md")
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
 
@@ -2314,7 +2435,7 @@ def test_installer_update(root, scratch):
         return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=upstream).decode().strip()
 
     def lock():
-        return json.load(io.open(lock_path, encoding="utf-8"))["tools"]["wbs-manager"]
+        return json.load(io.open(lock_path, encoding="utf-8"))["parts"]["wbs-manager"]
 
     # Clean: upstream revises the title, the project adds a section at the end.
     move_upstream(lambda line: line + " (upstream revision)", "upstream SKILL change")
@@ -2493,6 +2614,7 @@ def main():
             test_tool(tool, root, work)
         test_installer(root, scratch)
         test_init(root, scratch)
+        test_foundation(root, scratch)
         test_upstream(root, scratch)
         test_reconciliation(root, scratch)
         test_catalogue(root, scratch)
@@ -2528,7 +2650,7 @@ def main():
             for f in failures:
                 print("  - %s" % f)
             return 1
-        print("All checks passed (%d tools, plus the installer, init and status --upstream, the "
+        print("All checks passed (%d tools, plus the installer, init, the foundation pack and status --upstream, the "
               "reconciliation case, the catalogue, the shared modules, effort "
               "and splits, the "
               "concurrent-save check, the Execution layout, the "

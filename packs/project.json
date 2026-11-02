@@ -5,6 +5,7 @@
              "weekly-review-facilitator", "reporting", "status-board-manager", "stakeholder-manager",
              "artifact-register", "tsp-manager", "td-author", "onboarding-guide"],
   "team_skills": ["work-manager", "change-request"],
+  "tool_docs": ["TSP.4"],
   "top": [
     ["PrjMgm", "Project management: the registers, the records, the reports and the brief; every skill, for the product manager", null],
     ["Execution", "The work itself: one folder per WBS row, WP.<WBS ID> <Title>, with its discovery, specification, plan and notes", null],

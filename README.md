@@ -91,14 +91,15 @@ a workspace per profile. Commit it, open the *Product manager* workspace with yo
 *"let's write the project brief"*.
 [Your first hour](https://esp1ngard4.github.io/akos/first-hour.html) walks through what follows.
 
-**A project already running** adds the tools it needs, one at a time:
+**A project already running** gets the two registers its tools rest on, then adds the tools it needs, one at a time:
 ```bash
+python akos/install.py init <your-repo> --pack foundation --name "<project>"
 python akos/install.py add wbs-manager --into <your-repo>
 ```
 
-Either way, commit `.agents/skills/` and `tools.lock.json` together, so everyone who clones gets
-the same tools. Later, `git pull` the clone and `python akos/install.py status --upstream --project
-<the folder with tools.lock.json> --source akos` says which of them have a newer version, with the `update` line for each. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
+Each tool gets a folder in the project's `TSP` folder, with its design document and its lock. Either way, commit `.agents/skills/`
+and the `TSP` folder together, so everyone who clones gets the same tools. Later, `git pull` the clone and
+`python akos/install.py status --upstream --project <your-repo> --source akos` says which of them have a newer version, with the `update` line for each. GitHub Copilot, Codex and Cursor read `.agents/skills/`; for Claude Code add
 `--dest .claude/skills`.
 
 ## The tools
