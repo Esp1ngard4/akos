@@ -414,6 +414,12 @@
       "Description": "TD.13 v1.2: the register found in Confidential/Stakeholder Mgm through the artifact register, so reports read it; the sprint calendar searched upward from it; check reports a register outside Confidential and a per-sprint communication with no calendar.",
       "ID": 69,
       "Tool": "Stakeholder Register"
+    },
+    {
+      "Changed On": "2026-11-03",
+      "Description": "TD.1 v1.21: a row owns its sprint (the start gate no longer inherits a parent's commitment); add and set --parent ask what work under a parent means: reopen a closed parent or file elsewhere, and in, pulled into or later than the sprint under a committed one; a reminder when a child may widen its parent; check warns on an open row under a closed parent. A Deliverable is finished when its purpose is met.",
+      "ID": 70,
+      "Tool": "WBS Register"
     }
   ],
   "control_activities": [],
@@ -464,8 +470,8 @@
         ]
       }
     },
-    "updated": "2026-11-03T13:34:34",
-    "values_hash": "sha256:b7352ddb94eca14d024bc2349fa402521f67b48ca7a7b1875175aab5879badd9",
+    "updated": "2026-11-03T16:23:44",
+    "values_hash": "sha256:03b618771e634d9091b72b55f54aeef119759d6d13a8bd1eabc8c58cf211dcef",
     "version": 1
   },
   "tools": [

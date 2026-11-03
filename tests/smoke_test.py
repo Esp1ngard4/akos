@@ -2117,6 +2117,79 @@ def test_sync_commands(root, scratch):
           ok and "Check the old tool" not in out, out[:300])
 
 
+def test_under_a_parent(root, scratch):
+    """Placing an open row under a parent asks what the work means: reopen a
+    closed parent or file elsewhere; in, pulled into or later than the sprint
+    under a committed one; a reminder when it may widen the parent."""
+    import json
+    from datetime import date, timedelta
+    print("\nUnder a parent")
+    work = os.path.join(scratch, "under")
+    plan = os.path.join(work, "planning")
+    os.makedirs(plan, exist_ok=True)
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs = os.path.join(scripts, "wbs.py")
+    reg = os.path.join(plan, "WBS Atlas.json")
+    ok, out = run_raw([os.path.join(scripts, "create_wbs.py"), reg, "Atlas"], work)
+    if not check("under a parent: create", ok, out):
+        return
+    t = date.today()
+    iso = lambda d: d.isoformat()
+    data = json.load(io.open(reg, encoding="utf-8"))
+    data["sprints"] = [
+        {"Sprint": "S1", "Starts": iso(t - timedelta(days=28)), "Ends": iso(t - timedelta(days=15))},
+        {"Sprint": "S2", "Starts": iso(t - timedelta(days=14)), "Ends": iso(t + timedelta(days=5))},
+        {"Sprint": "S3", "Starts": iso(t + timedelta(days=6)), "Ends": iso(t + timedelta(days=19))}]
+    ended = {"Status": "Done", "Actual End": iso(t - timedelta(days=20)), "Sprint Ended": "S1"}
+    data["items"] = [
+        {"ID": 1, "Title": "Committed feature", "Type": "Feature", "Status": "Not Started", "Sprint Planned": "S2"},
+        dict({"ID": 40, "Title": "Closed deliverable", "Type": "Deliverable"}, **ended),
+        dict({"ID": 41, "Title": "Closed feature", "Type": "Feature", "Parent": 40}, **ended),
+        {"ID": 42, "Title": "Open deliverable", "Type": "Deliverable", "Status": "Implementing"},
+        {"ID": 43, "Title": "Feature closed this sprint", "Type": "Feature", "Parent": 42, "Status": "Done",
+         "Sprint Planned": "S2", "Sprint Ended": "S2", "Actual End": iso(t)},
+        dict({"ID": 44, "Title": "Closed story", "Type": "Story"}, **ended),
+        dict({"ID": 46, "Title": "Closed feature, open child", "Type": "Feature"}, **ended),
+        {"ID": 47, "Title": "Open child", "Type": "Story", "Parent": 46, "Status": "Not Started"},
+    ]
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data, indent=2))
+    row = lambda rid: [r for r in json.load(io.open(reg, encoding="utf-8"))["items"] if r["ID"] == rid][0]
+    added = lambda out: row(int(out.split()[2]))
+
+    ok, out = run_raw([wbs, "add", reg, "More work", "--parent", "43"], work)
+    check("under a parent: an open row under a closed one is refused, naming both ways forward",
+          not ok and "--reopen-parent" in out and "file this row elsewhere, under 42" in out, out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "44", "--parent", "41"], work)
+    check("under a parent: a closed row goes under a closed one with no question", ok, out)
+    ok, out = run_raw([wbs, "add", reg, "x", "--parent", "42", "--reopen-parent", "x"], work)
+    check("under a parent: --reopen-parent on an open parent is refused", not ok and "nothing to reopen" in out, out)
+    ok, out = run_raw([wbs, "add", reg, "Leftover", "--parent", "41", "--reopen-parent", "AC 2 was never met"], work)
+    check("under a parent: --reopen-parent reopens every closed row up to the first open one",
+          ok and all(r.get("Status") == "Implementing" and not r.get("Actual End") and not r.get("Sprint Ended")
+                     and "Reopened" in (r.get("Comments") or "") for r in (row(40), row(41))), out)
+    leftover = added(out)["ID"] if ok else 0
+    ok, out = run_raw([wbs, "set", reg, "--id", str(leftover), "--status", "Implementing"], work)
+    check("under a parent: work under a parent reopened from an earlier sprint is asked",
+          not ok and "--outside-sprint" in out, out)
+    ok, out = run_raw([wbs, "add", reg, "Breakdown", "--parent", "1"], work)
+    check("under a parent: a row with no sprint under a committed parent is refused, three answers shown",
+          not ok and "--in-sprint" in out and "--pulled-in" in out and "--later" in out, out)
+    ok, out = run_raw([wbs, "add", reg, "Breakdown in", "--parent", "1", "--in-sprint"], work)
+    check("under a parent: --in-sprint plans it as part of the parent's commitment, no reminder",
+          ok and added(out).get("Sprint Planned") == "S2" and "Scope widened" not in out, out)
+    ok, out = run_raw([wbs, "add", reg, "Breakdown later", "--parent", "1", "--later"], work)
+    check("under a parent: --later sets no sprint and reminds to update the parent if it widens",
+          ok and not added(out).get("Sprint Planned") and "if this widens ID 1" in out, out)
+    ok, out = run_raw([wbs, "add", reg, "Taken on now", "--parent", "1", "--status", "Implementing",
+                       "--pulled-in", "displaces nothing"], work)
+    check("under a parent: --pulled-in sets Sprint Added and prints the record line once",
+          ok and added(out).get("Sprint Added") == "S2" and out.count("**pulled in") == 1, out)
+    ok, out = run_raw([wbs, "add", reg, "Own sprint", "--parent", "1", "--sprint-planned", "S3"], work)
+    check("under a parent: a row naming its own sprint is never asked", ok, out)
+    ok, out = run_raw([wbs, "check", reg], work)
+    check("under a parent: check warns on an open row under a closed parent", "open under closed item 46" in out, out)
+
+
 def test_pull_ins(root, scratch):
     """Work the sprint never committed to asks first, and the daily check finds
     the pull-ins the record does not name.
@@ -2189,7 +2262,8 @@ def test_pull_ins(root, scratch):
     ok, out = run_raw([wbs, "set", reg, "--id", "4", "--status", "Implementing"], work)
     check("pull-ins: a committed row starts with no question", ok, out)
     ok, out = run_raw([wbs, "set", reg, "--id", "2", "--status", "Implementing"], work)
-    check("pull-ins: a child of a committed parent starts with no question", ok, out)
+    check("pull-ins: a row owns its sprint: a child of a committed parent is asked like any other",
+          not ok and "--pulled-in" in out, out)
     ok, out = run_raw([wbs, "set", reg, "--id", "12", "--status", "Implementing"], work)
     check("pull-ins: a committed child does not commit its parent", not ok and "--pulled-in" in out, out)
     ok, out = run_raw([wbs, "set", reg, "--id", "10", "--priority", "Must"], work)
@@ -2684,6 +2758,7 @@ def main():
         test_sync_commands(root, scratch)
         test_effort_and_splits(root, scratch)
         test_pull_ins(root, scratch)
+        test_under_a_parent(root, scratch)
         test_migrate_vocabulary(root, scratch)
         test_numbered_layout(root, scratch)
         test_installer_docs(root, scratch)

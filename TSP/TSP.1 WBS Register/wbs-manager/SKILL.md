@@ -101,7 +101,7 @@ A row says four independent things, and keeping them apart is what lets delivera
 
 The noun/verb column is the quickest test in practice: deliverables and features name *things*, stories and tasks name *activity*. "Renovated kitchen" against "install the cabinets"; "Calendar integration" against "enhance the sync script".
 
-**The deliverable is the parent; work on it are children.** A Deliverable is never finished — it accumulates features for as long as it exists. A tool enhanced three times has one Deliverable row and three Features beneath it, not three peer rows.
+**The deliverable is the parent; work on it are children.** A tool enhanced three times has one Deliverable row and three Features beneath it, not three peer rows. **A Deliverable is finished when its purpose is met**, and reopened when later work shows it wasn't (operation 2): a closed row is reopened rather than given a sibling.
 
 `Class` is the distinction between what the project exists to produce and what it needs in order to run. A business case or a project management plan is a real, tracked deliverable that no stakeholder wants the project *for* — PRINCE2 calls these management products, PMBOK separates product scope from project scope. `Enabler` is the third case: work that serves the product without being visible in it, such as a migration or an architectural spike.
 
@@ -194,6 +194,19 @@ Keep it to about 80 words (100 for a Deliverable or Feature). It's the row's cur
 
 Claims the next ID, refuses a `Parent` that does not exist or would close a cycle, holds every vocabulary field to the register's own vocabulary, and keeps `Key Deliverable` off rows that cannot carry it. Defaults: Status `Portfolio Backlog`, Type `Story`, Nature `Build`. Choose `Code` as the hierarchical position; it is display only. Omit fields that have no value rather than writing empty strings. Then **refresh the dashboard** (operation 5).
 
+**Placing an open row under a parent asks what the work means**, on `add --parent` and on `set --parent` alike. Ask the user; never pick the answer.
+
+- **Under a closed parent** (Done or Cancelled) it is refused. Either the parent did not deliver its outcome: `--reopen-parent "<why>"` reopens it and every closed row above it up to the first open one (Implementing, `Actual End` and `Sprint Ended` cleared, a `Reopened` note below the closure note). Or it did, and the row is filed elsewhere, under the open row the refusal names. A closed row goes under a closed parent with no question.
+- **Under a parent committed to the running sprint**, a row naming no sprint of its own is refused until it says whether it is in the sprint. A commitment to a parent does not commit everything filed under it: part of a breakdown is often left for later.
+
+  ```bash
+  python <skill-path>/scripts/wbs.py add "<register>" "Title" --parent 37 --in-sprint      # part of 37's committed work: Sprint Planned
+  python <skill-path>/scripts/wbs.py add "<register>" "Title" --parent 37 --pulled-in "displaces nothing"   # new work taken on now
+  python <skill-path>/scripts/wbs.py add "<register>" "Title" --parent 37 --later          # not this sprint
+  ```
+
+- **Any new child may widen its parent.** Only the user can tell whether it delivers part of what the parent's description and acceptance criteria already say. Unless the answer was `--in-sprint`, the tool reminds you: if it widens the parent, rewrite the parent's description and acceptance criteria and note it (`note --title "Scope widened"`).
+
 ### 3. Edit items
 
 ```bash
@@ -241,7 +254,7 @@ It is stored as `2026-Nov-3 · Scope narrowed: Was two screens…`. The dashboar
 
 The acceptance criteria show one per line, numbered. On a closed row, each criterion shows the verdict its closure note gives it. A number starts a criterion only when it continues the sequence, so an ID in brackets inside a criterion isn't one; the Verification tab counts criteria the same way.
 
-**Starting work the sprint never committed to asks first.** Moving a row to `Implementing` or `Done` (through `set` or `add`) is refused when the sprint running today has not committed to it: not planned or carried into it, not pulled in already, and not under a parent that is. **A parent counts only when it is committed itself:** a committed child does not make it so, since a parent's own acceptance criteria can stay unmet when every child is done. When a sprint means to close a parent (a goal naming a key deliverable), commit the parent at planning too; otherwise its close is asked like any other row. Ask the user which of two it is, then pass the answer:
+**Starting work the sprint never committed to asks first.** Moving a row to `Implementing` or `Done` (through `set` or `add`) is refused when the sprint running today has not committed to it: not planned or carried into it, and not pulled in already. **A row owns its sprint:** a committed parent does not commit its children, and a committed child does not commit its parent, whose own acceptance criteria can stay unmet when every child is done. It is the rule the sprint metrics count by. When a sprint means to close a parent (a goal naming a key deliverable), commit the parent at planning too; otherwise its close is asked like any other row. Ask the user which of two it is, then pass the answer:
 
 ```bash
 python <skill-path>/scripts/wbs.py set "<register>" --id 58 --status Implementing --pulled-in "displaces nothing"   # or "delays <scope> 61"
@@ -273,7 +286,7 @@ It also holds the two time fields apart, which is what stops `Horizon` rotting i
 - **`Horizon` alongside a `Sprint Planned`** — a commitment supersedes an intention.
 - **A sprint ID the calendar does not hold**, in any of the three sprint fields. Silent when the register has no calendar: with nothing to check against, guessing would be worse than saying nothing.
 - **A committed row still in `Portfolio Backlog` or `Funnel`** — a warning. A commitment means `Not Started`.
-- **An open parent whose own estimate differs from its leaves' sum** — a warning, under the 100% rule: a parent's children make up 100% of its work, so its own estimate (made before it was broken down) is compared with theirs, never added to it. Below it, the breakdown is incomplete or leaves are unestimated; above it, scope grew. Closed parents are not checked: their difference is history, shown on the Breakdown. `add --parent` reminds you when the parent carries an estimate.
+- **An open parent whose own estimate differs from its leaves' sum** — a warning, under the 100% rule: a parent's children make up 100% of its work, so its own estimate (made before it was broken down) is compared with theirs, never added to it. Below it, the breakdown is incomplete or leaves are unestimated; above it, the scope grew or the estimate was optimistic, and either is worth knowing. Closed parents are not checked: their difference is history, shown on the Breakdown. `add --parent` reminds you when the parent carries an estimate.
 
 And it holds the schedule dates against reality:
 
@@ -287,6 +300,7 @@ And it holds the schedule dates against reality:
 
 And it holds commitments to the work they name:
 
+- **An open row under a closed parent** — a warning: reopen the parent, or move the row (operation 2).
 - **An open parent committed to a sprint with none of its children in it** — a warning. A committed parent takes its hours from its children in the sprint, so with none there the work that finishes it is not named: a refinement gap. `refined` reports the same before planning.
 - **An open row carried into two or more sprints** — a warning: re-scope it, break it down, or drop it out loud. A split's rest inherits the commitment history, so a remainder pushed again is caught too.
 

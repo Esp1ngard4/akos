@@ -564,19 +564,113 @@ def current_sprint(data):
     return sprint_on(data, date.today().isoformat())
 
 
-def committed_now(data, row, sprint):
-    """Committed to the sprint itself, pulled into it already, or under a row
-    that is: work on a committed parent's children is the parent's work. Never
-    by a committed child: a parent is a commitment of its own, whose AC can stay
-    unmet when every child is done, so it counts only when it was itself
-    planned, carried or pulled into the sprint."""
-    seen, cur = set(), row
-    while cur is not None and str(cur.get("ID")) not in seen:
-        if committed_to(cur, sprint) or cur.get("Sprint Added") == sprint:
-            return True
+def committed_now(row, sprint):
+    """Planned, carried or pulled into the sprint, by the row's own fields.
+
+    A row owns its sprint: a committed parent does not commit its children,
+    since part of a breakdown is often left for later on purpose, and a
+    committed child does not commit its parent, whose AC can stay unmet when
+    every child is done. The same rule `sprint_populations` counts by, so the
+    gate and the metrics agree on what was in the sprint."""
+    return committed_to(row, sprint) or row.get("Sprint Added") == sprint
+
+
+def closed_chain(data, parent):
+    """The parent and every closed row above it, up to the first open one."""
+    chain, seen, cur = [], set(), parent
+    while cur is not None and cur.get("Status") in CLOSED and str(cur.get("ID")) not in seen:
+        chain.append(cur)
         seen.add(str(cur.get("ID")))
-        cur = find(data, cur.get("Parent")) if cur.get("Parent") is not None else None
-    return False
+        cur = find(data, cur.get("Parent")) if cur.get("Parent") not in (None, "") else None
+    return chain, cur
+
+
+def reopen(row, why, changed):
+    """Back to Implementing, its finish undone, the reason noted. The closure
+    note stays: closing again adds a second one above it."""
+    was = row.get("Status")
+    row["Status"] = "Implementing"
+    for field in ("Actual End", "Sprint Ended"):
+        row.pop(field, None)
+    add_note(row, "Was %s. %s" % (was, why.strip()), "Reopened")
+    changed.append("item %s reopened (was %s): Actual End and Sprint Ended cleared"
+                   % (row.get("ID"), was))
+
+
+def place_under_parent(data, row, args, changed):
+    """An open row placed under a parent: what that work means.
+
+    Under a closed parent it means the parent did not deliver its outcome, so
+    it is reopened, or the row belongs elsewhere. Under a parent committed to
+    the running sprint, a row naming no sprint of its own is in the sprint or
+    not, and only the user knows which. Either way the new work may widen the
+    parent, which only the user can judge, so that is a reminder, not a
+    refusal. Returns the sprint record line for a pull-in, else None."""
+    why = getattr(args, "reopen_parent", None)
+    in_sprint, later = getattr(args, "in_sprint", False), getattr(args, "later", False)
+    parent = find(data, row.get("Parent")) if row.get("Parent") not in (None, "") else None
+    if why is not None and not why.strip():
+        sys.exit("--reopen-parent is empty. Say why the parent did not deliver its outcome.")
+    if parent is None or row.get("Status") in CLOSED:
+        if why is not None or in_sprint or later:
+            sys.exit("--reopen-parent, --in-sprint and --later answer an open row "
+                     "placed under a parent; this edit is not one.")
+        return None
+    pid = parent.get("ID")
+    chain, above = closed_chain(data, parent)
+    if chain and why is None:
+        elsewhere = ("under %s (the nearest open row above it) or a new row there"
+                     % above.get("ID")) if above is not None else "under another parent"
+        sys.exit("Item %s is %s. Work under it means one of two things:\n"
+                 "  it did not deliver its outcome:  --reopen-parent \"<why>\"\n"
+                 "  it did:  file this row elsewhere, %s"
+                 % (pid, parent.get("Status"), elsewhere))
+    if why is not None and not chain:
+        sys.exit("Item %s is %s: there is nothing to reopen." % (pid, parent.get("Status")))
+    for closed in chain:
+        reopen(closed, why, changed)
+
+    line = None
+    sprint = current_sprint(data)
+    asked = bool(sprint) and committed_now(parent, sprint) and not sprint_ids(row)
+    pulled = getattr(args, "pulled_in", None)
+    answers = [a for a in (in_sprint, later, pulled) if a]
+    if (in_sprint or later) and not asked:
+        sys.exit("--in-sprint and --later answer a row with no sprint placed under a "
+                 "parent committed to the running sprint; this one is not.")
+    if asked:
+        if len(answers) > 1:
+            sys.exit("One answer: --in-sprint, --pulled-in or --later.")
+        if not answers:
+            sys.exit("Item %s is committed to %s. Is this row in the sprint?\n"
+                     "  part of %s's committed work:  --in-sprint\n"
+                     "  new work taken on now:        --pulled-in \"displaces nothing\"   "
+                     "(or \"delays <item>\")\n"
+                     "  not this sprint:              --later"
+                     % (pid, sprint, pid))
+        when = "%d-%s" % (date.today().day, D.MONTHS[date.today().month - 1])
+        if in_sprint:
+            row["Sprint Planned"] = sprint
+            row.pop("Horizon", None)
+            if row.get("Status") in UNCOMMITTED:
+                row["Status"] = "Not Started"
+            add_note(row, "In %s as part of ID %s's commitment." % (sprint, pid))
+            changed.append("Sprint Planned=%s (part of ID %s's commitment)" % (sprint, pid))
+        elif pulled:
+            effect = pulled.strip().rstrip(".")
+            row["Sprint Added"] = sprint
+            add_note(row, "Pulled into %s on %s; effect: %s." % (sprint, when, effect))
+            changed.append("Sprint Added=%s (pulled in; effect: %s)" % (sprint, pulled))
+            line = record_line(args.register, data, row, effect)
+            args.pulled_in = None            # answered here; the start gate has nothing to ask
+        else:
+            changed.append("no sprint (--later: not part of ID %s's commitment in %s)"
+                           % (pid, sprint))
+    if not in_sprint:
+        changed.append("note: if this widens ID %s, update its description and acceptance "
+                       "criteria and note it: wbs.py note --id %s --title \"Scope widened\" \"...\""
+                       % (pid, pid))
+    return line
 
 
 def scope_code(data):
@@ -610,7 +704,7 @@ def pull_in_gate(data, row, args, changed, was):
             sys.exit("--pulled-in and --outside-sprint answer a move to Implementing "
                      "or Done in the running sprint; this edit is not one.")
         return None
-    if committed_now(data, row, sprint):
+    if committed_now(row, sprint):
         if pulled or outside:
             sys.exit("Item %s is committed to %s already: no answer is needed."
                      % (row["ID"], sprint))
@@ -684,7 +778,8 @@ def cmd_add(args):
     stamp_actuals(data, row, args, created)
     stamp_sprint_ended(data, row, args, created)
     R.rows(data, ITEMS).append(row)
-    line = pull_in_gate(data, row, args, created, None)
+    placed = place_under_parent(data, row, args, created)
+    line = pull_in_gate(data, row, args, created, None) or placed
     # The 100% rule: work added under a parent that carries its own estimate
     # must fit inside it, or that estimate becomes the original one.
     parent = find(data, args.parent) if args.parent else None
@@ -763,7 +858,12 @@ def cmd_set(args):
     clear_horizon_on_close(row, args, changed)
     stamp_actuals(data, row, args, changed)
     stamp_sprint_ended(data, row, args, changed)
-    line = pull_in_gate(data, row, args, changed, was)
+    placed = place_under_parent(data, row, args, changed) if args.parent else None
+    if not args.parent and (getattr(args, "reopen_parent", None) is not None
+                            or args.in_sprint or args.later):
+        sys.exit("--reopen-parent, --in-sprint and --later go with --parent: they "
+                 "answer what a row placed under a parent means.")
+    line = pull_in_gate(data, row, args, changed, was) or placed
     check_deliverable(row)
     if not changed:
         sys.exit("Nothing to change. Pass at least one field.")
@@ -995,6 +1095,9 @@ def cmd_check(args):
                 errors.append("item %s: Parent %s does not exist" % (rid, parent))
             elif str(rid) in ancestors(data, parent):
                 errors.append("item %s: Parent %s closes a cycle" % (rid, parent))
+            elif row.get("Status") not in CLOSED and find(data, parent).get("Status") in CLOSED:
+                warnings.append("item %s: open under closed item %s - reopen %s or move %s"
+                                % (rid, parent, parent, rid))
         elif row.get("Type") not in DELIVERABLE_LEVELS and row.get("Type"):
             warnings.append("item %s: %s with no Parent" % (rid, row.get("Type")))
 
@@ -1003,7 +1106,7 @@ def cmd_check(args):
         gap = estimate_gap(data, row) if row.get("Status") not in HORIZON_CLEARS_ON else None
         if gap:
             own, total, unest = gap
-            why = ("scope grew past the estimate" if total > own else
+            why = ("scope grew, or the estimate was optimistic" if total > own else
                    "the breakdown is incomplete" + (" (%d leaf/leaves unestimated)" % unest if unest else ""))
             warnings.append("item %s: its own estimate is %gh, its children sum to %gh - %s. "
                             "The children are the estimate now; the parent's is the original"
@@ -2162,6 +2265,14 @@ def main():
                               "'delays <item>'). Sets Sprint Added and prints the record line")
         sub.add_argument("--outside-sprint", metavar="REASON",
                          help="...or it is work outside the sprint, with why. Noted, nothing marked")
+        sub.add_argument("--reopen-parent", metavar="WHY",
+                         help="placing an open row under a closed parent: the parent did not "
+                              "deliver its outcome, so it and every closed row above it reopen")
+        sub.add_argument("--in-sprint", action="store_true",
+                         help="a row with no sprint under a parent committed to the running "
+                              "sprint is part of that commitment: sets Sprint Planned")
+        sub.add_argument("--later", action="store_true",
+                         help="...or it is not in this sprint: no sprint is set")
         sub.add_argument("--dry-run", action="store_true")
 
     s = subs.add_parser("add", help="add an item, claiming the next ID")
