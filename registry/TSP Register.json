@@ -408,6 +408,12 @@
       "Description": "TD.16 v1.3: installed tools read from each tool's lock, walking down from the project only.",
       "ID": 68,
       "Tool": "Onboarding"
+    },
+    {
+      "Changed On": "2026-11-03",
+      "Description": "TD.13 v1.2: the register found in Confidential/Stakeholder Mgm through the artifact register, so reports read it; the sprint calendar searched upward from it; check reports a register outside Confidential and a per-sprint communication with no calendar.",
+      "ID": 69,
+      "Tool": "Stakeholder Register"
     }
   ],
   "control_activities": [],
@@ -458,8 +464,8 @@
         ]
       }
     },
-    "updated": "2026-11-02T10:05:24",
-    "values_hash": "sha256:c7d9c8c77976f1da127ba5cd1c751c274c3113c1c4018bf769543b0e0ba292c5",
+    "updated": "2026-11-03T13:34:34",
+    "values_hash": "sha256:b7352ddb94eca14d024bc2349fa402521f67b48ca7a7b1875175aab5879badd9",
     "version": 1
   },
   "tools": [

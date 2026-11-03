@@ -272,6 +272,16 @@ def test_init(root, scratch):
     check("the WBS declares the execution folder", (data["meta"].get("execution") or {}).get("folder") == "../../01. Execution")
     check("the stakeholder register in Confidential/Stakeholder Mgm",
           os.path.isfile(os.path.join(plan, "12. Confidential", "13. Stakeholder Mgm", "Stakeholders Greenfield.json")))
+    stk_scripts = os.path.join(plan, ".agents", "skills", "stakeholder-manager", "scripts")
+    code = ("import sys; sys.path.insert(0, %r); import stk_register as STK; "
+            "d = STK.load_or_default(%r, scope='Greenfield'); "
+            "print(d['meta'].get('default', False), len(STK.sprint_calendar(d['meta'].get('path'))))"
+            % (stk_scripts, plan))
+    ok, out = run(["-c", code], project)
+    check("the planning folder reaches the register in Confidential, not the solo default",
+          ok and out.startswith("False "), out)
+    check("the register reads the WBS's sprint calendar from Confidential",
+          ok and out.split()[-1] == str(len(sprints)), out)
     with io.open(os.path.join(project, ".gitignore"), encoding="utf-8") as fh:
         check("the confidential folder kept out of git", "00. PrjMgm/12. Confidential/" in fh.read().split("\n"))
     ws = os.path.join(project, "02. General Ref Materials", "03. Workspaces")

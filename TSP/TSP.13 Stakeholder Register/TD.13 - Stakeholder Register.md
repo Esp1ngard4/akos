@@ -21,7 +21,7 @@ It is an outflow of governance, not a publisher and not a CRM. It hands over the
 | `stakeholder-manager` | `stakeholder-manager/SKILL.md` and `scripts/` | Every read and write of a register, the contacts file, audience resolution, due dates, the audit, the dashboard, and `stk_register.py`, the reader other tools import |
 | Dashboard template | `stakeholder-manager/templates/dashboard.html` | The page `refresh_stk.py` fills |
 | Example | `stakeholder-manager/examples/Stakeholders Atlas.json` | A made-up register: a sponsor, a client, a delivery team and a steering group |
-| `Stakeholders <scope>.json` | Your project's planning folder, beside its WBS | **Source of truth** for that project: groups, stakeholders, communications, change log |
+| `Stakeholders <scope>.json` | `Confidential/Stakeholder Mgm` in your project's planning folder, numbered by its artifact register (the starter pack makes `12. Confidential/13. Stakeholder Mgm`) | **Source of truth** for that project: groups, stakeholders, communications, change log. Out of git with the whole Confidential folder |
 | `Contacts <scope>.csv` | Beside the register | How to reach each stakeholder. **Outside git** |
 | `Stakeholder Dashboard.html` | Beside the register | Generated view, never hand-edited, outside git |
 
@@ -40,14 +40,15 @@ Standard library only. Dependencies, all optional: `wbs-manager` (TSP.1) or an a
 - **Evidence is one date.** Specialist stakeholder software is built around an interaction log; this tool keeps `Last Done` per communication, which is enough to say what is overdue. Conversations are recorded as meeting notes. A full log is worth its cost only when a project has more than a handful of external stakeholders.
 - **It rides the ceremonies.** Communication tied to the work's rhythm gets done; a separate communications calendar does not. The close-out sends what is due per sprint and the weekly review names what is overdue.
 - **Solo is the default.** A project with no register has its owner as its one stakeholder and a status report per sprint as its one communication. Consumers read through `load_or_default`, so nothing breaks, and a register is created only when someone besides the owner needs to hear.
-- **Found by shape, not by a path.** A register is a JSON file whose `meta.kind` is `stakeholder-register`. `--all` walks a root folder you name for that shape; there is no configured list of projects, and no folder layout is assumed beyond the register sitting with its project.
+- **Found by shape, not by a path.** A register is a JSON file whose `meta.kind` is `stakeholder-register`. `--all` walks a root folder you name for that shape; there is no configured list of projects.
+- **Confidential, and found through the artifact register.** A register says what each person's stake is and how engaged they are: material about people the team need not read. It sits in a Confidential folder of the planning folder, so access is set on that folder alone and the registers beside it stay open to the team. Given the planning folder, a tool finds it where the artifact register says first, matching folders by ID because names drift, then by name. The sprint calendar sits elsewhere in the planning folder, so it is searched upward from the register.
 - **Communications and content meet at one point.** A communication is owed to named people with a stake in one project; content is written for a public audience against a strategy. Where a project's audience is the public, its communication points to a content plan and holds nothing else. The pointer runs one way, so the content system stays unaware of this register and portable without it.
 
 ## Naming conventions
 
 - **IDs**: `G.n` groups, `S.n` stakeholders, `C.n` communications, assigned once within a register and never reused: a reused ID would silently rebind the audiences and contacts rows that name it. A stakeholder's `S.n` is also the key of its row in the contacts file.
 - **Scope**: the register's `meta.scope` is the same string as the project's WBS `meta.scope`, so a ref reads the same in both.
-- **Files**: `Stakeholders <scope>.json` and `Contacts <scope>.csv` in the project's planning folder; `Stakeholder Dashboard.html` beside them.
+- **Files**: `Stakeholders <scope>.json` and `Contacts <scope>.csv` in `<planning folder>/Confidential/Stakeholder Mgm`; `Stakeholder Dashboard.html` beside them.
 - **Vocabularies**: engagement on PMBOK's five levels, share level `owner` or `external` as the reporting tool and RAID's `Sharable` use them, mode on PRINCE2's channel types. A register may override a vocabulary in `meta.settings.vocabularies`.
 - **Content pointer**: `content: <strategy scope> › <plan name>`, as the content system names them.
 
@@ -77,7 +78,7 @@ The contacts file is shared, if at all, wherever the project's folder is shared:
 
 ## How it is tested
 
-`tests/smoke_test.py` installs the skill into an empty project and runs it: a register created with its contacts file; a group, stakeholders and communications added; contacts written; an audience resolved, whole and split; a communication done; `due` per sprint against a scratch WBS calendar and with no calendar; `check` finding a missing contact, a gap with no action and a contacts file git would take; the dashboard generated with no address in it; the solo default on a project with no register; and the example register passing `check` with the findings it is built to show: a gap with no engagement action, and no contacts file, since none is shipped.
+`tests/smoke_test.py` installs the skill into an empty project and runs it: a register created with its contacts file; a group, stakeholders and communications added; contacts written; an audience resolved, whole and split; a communication done; `due` per sprint against a scratch WBS calendar and with no calendar; `check` finding a missing contact, a gap with no action and a contacts file git would take; the dashboard generated with no address in it; the solo default on a project with no register; on a project set up from the starter pack, the planning folder reaching the register in Confidential and the register reading the WBS's sprint calendar; and the example register passing `check` with the findings it is built to show: a gap with no engagement action, and no contacts file, since none is shipped.
 
 What is **not** tested is whether the analysis is right: whether a stakeholder's power or engagement was read well. No test asserts that, and none can.
 
@@ -118,5 +119,6 @@ Nothing is sent by this tool, and no external service is read: addresses come fr
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.2 | 2026-11-03 | The register in `Confidential/Stakeholder Mgm`, where the starter pack puts it: given the planning folder it is found through the artifact register first, then by name, so the status report reads it instead of the solo default; the sprint calendar is searched upward from it, so `per sprint` follows the sprints instead of every 14 days. `check` reports a register outside Confidential and a `per sprint` communication with no calendar. |
 | v1.1 | 2026-10-27 | The sprint close-out sends the communications due (TD.8 v1.4), the weekly review names the overdue ones and the gaps with no action (TD.11 v1.2), and the reporting tool reads audiences, shares at a communication's share level and shows stakeholders on the charter (TD.10 v1.3). |
 | v1.0 | 2026-10-27 | Published as TSP.13. One skill with its scripts, dashboard template and a made-up example register. Registers found by `meta.kind` under a root you name; the sprint calendar from the project's own agile conventions or WBS; contacts per project, with the tool checking that git leaves them out; content pointers checked against the nearest `content-system/`. |

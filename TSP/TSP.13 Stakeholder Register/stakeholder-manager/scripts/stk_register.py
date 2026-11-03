@@ -26,6 +26,11 @@ import registry as R
 import stk_schema as S
 
 SKIP_DIRS = ("PreviousV", "Reports", "AuxMat", ".git", "__pycache__", "node_modules")
+SKILL = "stakeholder-manager"
+CONFIDENTIAL = "Confidential"
+STK_FOLDER = "Stakeholder Mgm"
+ID_PREFIX = re.compile(r"^(\d+)\.\s*")
+PLANNING_NAME = re.compile(r"^(\d+\.\s*)?PrjMgm$")
 
 
 # --- finding ------------------------------------------------------------------
@@ -38,14 +43,118 @@ def _kind(path):
         return None
 
 
-def find(folder):
-    """The register in a project folder, or None. Two is an error."""
+def _in(folder):
+    """The register directly in a folder, or None. Two is an error."""
     hits = [p for p in glob.glob(os.path.join(folder, "Stakeholders *.json"))
             if _kind(p) == S.KIND]
     if len(hits) > 1:
         raise SystemExit("More than one stakeholder register in %s: %s"
                          % (folder, ", ".join(os.path.basename(h) for h in hits)))
     return hits[0] if hits else None
+
+
+def _named(parent, name):
+    """The folder in `parent` called `name`, with or without an ID prefix."""
+    try:
+        entries = sorted(os.listdir(parent))
+    except OSError:
+        return None
+    for entry in entries:
+        if ID_PREFIX.sub("", entry) == name and os.path.isdir(os.path.join(parent, entry)):
+            return os.path.join(parent, entry)
+    return None
+
+
+def _with_id(parent, artifact_id):
+    try:
+        entries = sorted(os.listdir(parent))
+    except OSError:
+        return None
+    for entry in entries:
+        m = ID_PREFIX.match(entry)
+        if m and str(int(m.group(1))) == str(artifact_id) and os.path.isdir(os.path.join(parent, entry)):
+            return os.path.join(parent, entry)
+    return None
+
+
+def _records(folder):
+    """{kind: (path, data)} for the registers in a planning folder or one level below it."""
+    found = {}
+    for path in sorted(glob.glob(os.path.join(folder, "*.json")) + glob.glob(os.path.join(folder, "*", "*.json"))):
+        try:
+            with io.open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        kind = (data.get("meta") or {}).get("kind") if isinstance(data, dict) else None
+        found.setdefault(kind, (path, data))
+    return found
+
+
+def _from_artifact_register(folder):
+    """The Stakeholder Mgm folder as the artifact register records it: the folder
+    this tool manages (its ID from the tool register's Skill column), else the
+    row named for it. Resolved by the IDs on disk, not the names."""
+    records = _records(folder)
+    if "artifact-register" not in records:
+        return None
+    art, data = records["artifact-register"]
+    rows = data.get("artifacts", [])
+    tools = records.get("tsp-register", (None, {}))[1].get("tools", [])
+    tool_ids = {str(t.get("ID")) for t in tools
+                if SKILL in [s.strip() for s in str(t.get("Skill") or "").split(",")]}
+    live = [r for r in rows if r.get("Type") == "Folder" and r.get("Status") != "Retired"]
+    managed = lambda r: (re.match(r"^[A-Z]+\.(\d+)$", str(r.get("Managed By") or "").strip()) or [None, None])[1]
+    row = (next((r for r in live if managed(r) in tool_ids), None)
+           or next((r for r in live if str(r.get("Name", "")).strip() == STK_FOLDER), None))
+    if not row:
+        return None
+    by_id = dict((str(r.get("ID")), r) for r in rows)
+    chain, cur = [], row
+    while cur is not None and len(chain) < 20:
+        chain.insert(0, str(cur.get("ID")))
+        parent = str(cur.get("Parent Digital", "")).strip()
+        if parent in ("Main", "", "N/A", "-"):
+            break
+        cur = by_id.get(parent)
+    if cur is None:
+        return None
+    # The register describes its project from the top, so the chain starts at
+    # a top folder: climb from the register until the first link resolves.
+    here = os.path.dirname(art)
+    for _ in range(4):
+        path = here
+        for artifact_id in chain:
+            path = _with_id(path, artifact_id)
+            if not path:
+                break
+        if path:
+            return path
+        here = os.path.dirname(here)
+    return None
+
+
+def stakeholder_folder(folder):
+    """Where a project's register lives, given its planning folder: the artifact
+    register's answer first, then Confidential/Stakeholder Mgm by name."""
+    found = _from_artifact_register(folder)
+    if found:
+        return found
+    conf = _named(folder, CONFIDENTIAL)
+    return _named(conf, STK_FOLDER) if conf else None
+
+
+def find(folder):
+    """A project's register, given its planning folder or the register's own
+    folder, or None: through Confidential/Stakeholder Mgm first, then the
+    folder itself."""
+    home = stakeholder_folder(folder)
+    return (_in(home) if home else None) or _in(folder)
+
+
+def in_confidential(register_path):
+    parts = os.path.abspath(register_path).split(os.sep)
+    return any(ID_PREFIX.sub("", p) == CONFIDENTIAL for p in parts)
 
 
 def resolve(path):
@@ -168,26 +277,33 @@ def git_state(path):
 
 def sprint_calendar(register_path):
     """[(start, end)] dates, ascending: the project's agile conventions file, else
-    its WBS register, each found by meta.kind in the register's folder and below.
-    Empty when there is neither; `per sprint` then reads as every 14 days, and
-    the callers say so."""
-    folder = os.path.dirname(os.path.abspath(register_path)) if register_path else None
-    candidates = []
-    if folder:
+    its WBS register, each found by meta.kind in the register's folder and below,
+    then a folder up at a time to the planning folder, since the register sits in
+    Confidential and they do not. Empty when there is neither; `per sprint` then
+    reads as every 14 days, and the callers say so."""
+    folders = []
+    if register_path:
+        # Up to the planning folder when the register sits inside one
+        # (Confidential/Stakeholder Mgm); otherwise its own folder only, never
+        # into whatever holds the project.
+        here = os.path.dirname(os.path.abspath(register_path))
+        chain = [here, os.path.dirname(here), os.path.dirname(os.path.dirname(here))]
+        top = next((i for i, f in enumerate(chain) if PLANNING_NAME.match(os.path.basename(f))), 0)
+        folders = chain[:top + 1]
+    for folder in folders:
         jsons = [p for p in glob.glob(os.path.join(folder, "**", "*.json"), recursive=True)
                  if not any(part in SKIP_DIRS for part in p[len(folder):].split(os.sep))]
-        candidates += [p for p in jsons if _kind(p) == "agile-conventions"]
-        candidates += [p for p in jsons if _kind(p) == "wbs-register"]
-    for path in candidates:
-        try:
-            with io.open(path, encoding="utf-8") as fh:
-                sprints = json.load(fh).get("sprints") or []
-            spans = sorted((dt.date.fromisoformat(s["Starts"]), dt.date.fromisoformat(s["Ends"]))
-                           for s in sprints if s.get("Starts") and s.get("Ends"))
-        except (OSError, ValueError, KeyError, TypeError):
-            continue
-        if spans:
-            return spans
+        for path in ([p for p in jsons if _kind(p) == "agile-conventions"]
+                     + [p for p in jsons if _kind(p) == "wbs-register"]):
+            try:
+                with io.open(path, encoding="utf-8") as fh:
+                    sprints = json.load(fh).get("sprints") or []
+                spans = sorted((dt.date.fromisoformat(s["Starts"]), dt.date.fromisoformat(s["Ends"]))
+                               for s in sprints if s.get("Starts") and s.get("Ends"))
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+            if spans:
+                return spans
     return []
 
 
@@ -401,6 +517,12 @@ def check(data, register_path=None):
             for sid in contacts:
                 if sid not in people:
                     add("warning", sid, "contacts row with no stakeholder")
+        if not in_confidential(register_path):
+            add("warning", "", "the register is not in a Confidential folder: move it, its contacts "
+                "and dashboard to <planning folder>/Confidential/Stakeholder Mgm")
+        if any(S.is_active(c) and S.cadence_kind(c.get("Cadence")) == "per sprint"
+               for c in R.rows(data, S.COMMS)) and not sprint_calendar(register_path):
+            add("warning", "", "no sprint calendar found: `per sprint` reads as every 14 days")
 
     strategies = content_root(register_path) if register_path else None
     unchecked = False

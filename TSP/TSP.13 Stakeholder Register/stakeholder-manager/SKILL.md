@@ -15,7 +15,7 @@ Python 3, standard library only. Examples write `python`; on macOS/Linux use `py
 
 | File | Role |
 |---|---|
-| `Stakeholders <scope>.json`, in the project's planning folder beside its WBS | **Source of truth.** Written only through `stk.py`. |
+| `Stakeholders <scope>.json`, in `Confidential/Stakeholder Mgm` inside the project's planning folder (numbered by its artifact register: `12. Confidential/13. Stakeholder Mgm`) | **Source of truth.** Written only through `stk.py`. Keep the Confidential folder out of git and restrict who can open it. |
 | `Contacts <scope>.csv`, beside it | How to reach each stakeholder, keyed by `S.n`. **Outside git.** Written by `stk.py contact` or by hand in a spreadsheet. |
 | `Stakeholder Dashboard.html`, beside it | Generated. Never edit by hand; keep it out of git. |
 | `scripts/stk.py` | Every read and write: `add-group`, `add`, `add-comm`, `set`, `contact`, `done`, `audience`, `due`, `gaps`, `check`, `list`, `show`. |
@@ -26,7 +26,7 @@ Python 3, standard library only. Examples write `python`; on macOS/Linux use `py
 | `scripts/create_stk.py` | A new, empty register and contacts file. Never run it on a live one. |
 | `examples/Stakeholders Atlas.json` | A made-up register to read or copy from. |
 
-`<reg>` below is the register's JSON **or the folder that holds it**; `<skill>` is this folder. `<scope>` is the same string as the project's WBS `meta.scope`.
+`<reg>` below is the register's JSON, **the folder that holds it, or the project's planning folder**: given the planning folder, the register is found through the artifact register first (the folder this tool manages, else the one named Stakeholder Mgm, matched by ID), then `Confidential/Stakeholder Mgm` by name, then the planning folder itself. `<skill>` is this folder. `<scope>` is the same string as the project's WBS `meta.scope`.
 
 ## The register
 
@@ -79,7 +79,7 @@ python <skill>/scripts/stk.py show <reg> --id S.4
 
 When a project has someone besides its owner to keep informed: a sponsor, a client, a steering group, a supplier.
 
-1. `python <skill>/scripts/create_stk.py "<project planning folder>" --scope "<the WBS's meta.scope>"`. If it prints a `.gitignore` line, add it before anything else.
+1. `python <skill>/scripts/create_stk.py "<project planning folder>/Confidential/Stakeholder Mgm" --scope "<the WBS's meta.scope>"`. A project set up from the starter pack has the folder already; otherwise create it, registered in the artifact register if the project keeps one. If it prints a `.gitignore` line, add it before anything else.
 2. Groups first: who is addressed together (`add-group <reg> "Steering group" --purpose "..."`).
 3. Stakeholders: `add <reg> "Name" --role "..." --groups G.1 --share external`. Ask the user for power, interest, current and desired engagement, and the stake; leave blank what they don't answer.
 4. Communications: what the user actually keeps up, not an ideal plan. `add-comm <reg> "Monthly steering update" --mode push --audience G.1 --cadence monthly --channel email`.
@@ -111,7 +111,7 @@ python <skill>/scripts/stk.py due <reg>... | --all [--root DIR]  [--as-of DATE] 
 ```
 
 - **Calendar cadences** fall due that long after `Last Done`; overdue once passed. `--within 7` also lists those falling due in the coming week.
-- **`per sprint`** is due during each sprint: done since the current sprint started is on track; last done in the previous sprint (or never) is due; a whole sprint missed is overdue. The sprint calendar is the project's agile conventions file, else its WBS register, found in the register's folder and below. With neither, `per sprint` reads as every 14 days, and `due` says so.
+- **`per sprint`** is due during each sprint: done since the current sprint started is on track; last done in the previous sprint (or never) is due; a whole sprint missed is overdue. The sprint calendar is the project's agile conventions file, else its WBS register, searched from the register's folder upward to the planning folder. With neither, `per sprint` reads as every 14 days, and `due` says so.
 - **`on event`** is never due; `--events` lists them so they are not forgotten.
 - Never done is due.
 
@@ -124,7 +124,7 @@ python <skill>/scripts/stk.py check <reg>
 python <skill>/scripts/stk.py check --all [--root DIR]   # every project, plus contacts that disagree across projects
 ```
 
-Within a project: unknown or inactive IDs in groups and audiences, a group with no active members, missing analysis fields, a gap with no engagement action, a stakeholder with no contacts row (and the reverse), a recipient with no address for the channel, a contacts file git tracks or would take, a `content:` channel whose plan cannot be found (checked against the nearest `content-system/strategies/` at or above the register; with none, a note says the pointers were not checked). Across projects: the same name or email with different details, named without the values. Each finding is a decision for the user; nothing is fixed silently.
+Within a project: a register outside a Confidential folder, a `per sprint` communication with no sprint calendar found, unknown or inactive IDs in groups and audiences, a group with no active members, missing analysis fields, a gap with no engagement action, a stakeholder with no contacts row (and the reverse), a recipient with no address for the channel, a contacts file git tracks or would take, a `content:` channel whose plan cannot be found (checked against the nearest `content-system/strategies/` at or above the register; with none, a note says the pointers were not checked). Across projects: the same name or email with different details, named without the values. Each finding is a decision for the user; nothing is fixed silently.
 
 ### Refresh the dashboard
 
