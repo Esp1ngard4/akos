@@ -15,7 +15,8 @@ operation.
 ## Requirements
 
 **No dependencies.** Standard library only. Commands below write `python`,
-correct on Windows; use `python3` on macOS/Linux.
+correct on Windows; use `python3` on macOS/Linux. `--root` is needed only for a
+register that records no root (below).
 
 ## The rule that makes this tool work
 
@@ -59,6 +60,31 @@ Values are written `TSP.n` and must name a live tool in your tool register.
 `audit` checks this. (The prefix is `TOOL_PREFIX` in `schema.py` if your register
 numbers things differently.)
 
+## The register's root
+
+A register records the scope's top folder once, in `meta.settings.root`, as a
+path **from the register's own folder**: `..` for a register in the planning
+folder, `../..` for one in a folder of its own inside it. Relative, so it holds
+on another machine and when the scope moves. With it, no command needs
+`--root`; `--root`, when given, still wins. A register with no single digital
+top records none.
+
+```
+python artifact.py root <register>              # show it
+python artifact.py root <register> <folder>     # set it
+python artifact.py path <register> --id 4       # 00. PrjMgm/04. Project Brief.md
+python artifact.py path <register> --id 4 --absolute
+```
+
+- **`root <folder>`** stores the folder relative to the register, and refuses
+  one the register does not lead back from: the register's own row (its file's
+  ID, or its folder's) must resolve to the register.
+- **`path`** walks the row's `Parent Digital` chain down from the root, one ID
+  prefix per level: the register's claim, not a search. Where the disk
+  disagrees it says where it stopped; `audit` shows what moved. It refuses a
+  retired row and one with no digital home.
+- **Use `path` to find an artifact**, from any tool, not a search by name.
+
 ## Schema
 
 `Artifacts` sheet. The header row is detected rather than assumed, so a register
@@ -96,6 +122,11 @@ python create_artifact_register.py "7. Artifact Register, Atlas.json" "Atlas" \
     --area "5:Operations"
 ```
 
+The new register records its root: its own folder (`.`), or with `--folder`
+the one above. **In a planned layout** (the planning folder as 00 and the
+register's folder inside it), pass `--root <the project folder>`, since the
+seed row starts at `Main` and cannot tell. `install.py init` does.
+
 ## Editing artifacts
 
 `artifact.py` handles the operations where the register and the disk must
@@ -105,12 +136,12 @@ a way nothing detects — the audit matches on ID, not on name.
 
 ```
 python artifact.py add    <register> <path> --name "Site Survey" --type Document \
-                          --parent-digital 4 --root <folder>
-python artifact.py add    <register> <path> --id 22 --root <folder>
-python artifact.py rename <register> --id 22 --name "New Name" --root <folder>
-python artifact.py move   <register> --id 22 --parent-digital 12 --root <folder>
-python artifact.py retire <register> --id 22 --root <folder> --archive ./Archive --yes
-python artifact.py repad  <register> --root <folder> [--width 3]
+                          --parent-digital 4
+python artifact.py add    <register> <path> --id 22
+python artifact.py rename <register> --id 22 --name "New Name"
+python artifact.py move   <register> --id 22 --parent-digital 12
+python artifact.py retire <register> --id 22 --archive ./Archive --yes
+python artifact.py repad  <register> [--width 3]
 ```
 
 - **`add`** takes the next unused ID — never a gap left by a retirement — writes
@@ -123,6 +154,11 @@ python artifact.py repad  <register> --root <folder> [--width 3]
 - **`retire`** disposes of the artifact and sets `Status = Retired`. It moves the
   artifact to `--archive` if you give one and **deletes it otherwise**. The row
   stays and the ID stays spent forever, so an old reference still resolves.
+- **`rename`, `move` and `retire` find the artifact as `path` does**, by its
+  chain. Off its chain, a scan that skips managed folders takes the one match
+  and says where it found it, and refuses two. `move` looks where the artifact
+  is before the row changes, and a register moved with its folder is saved at
+  its new path with its root rewritten.
 
 - **`repad`** brings every filename up to the register's ID width. Needed once
   when a register adopts padding, and again if the width is raised. **Only the
@@ -149,12 +185,13 @@ artifacts (filterable), containment trees, review queue, findings.
 
 ```
 python refresh_artifact_register.py "<register>.json" "Artifact Dashboard.html" \
-    --scope "Atlas" --root "<folder it describes>" --tool-register "<tool register>.json"
+    --scope "Atlas" --tool-register "<tool register>.json"
 ```
 
-`--root` and `--tool-register` are optional and take the same values as `audit`.
-Pass them and the Findings tab carries the full audit; omit them and it says which
-checks were skipped rather than implying a clean bill. The tab label shows a
+`--tool-register` is optional and takes the same value as `audit`, and so does
+`--root` for a register with no root of its own. With them the Findings tab
+carries the full audit; without, it says which checks were skipped rather than
+implying a clean bill. The tab label shows a
 count, so a register with problems announces them on open.
 
 The Artifacts tab filters on Status, Type, Location, Area of Focus and Managed By.
@@ -165,10 +202,12 @@ the field is empty — which is how you find artifacts still missing a `Type`.
 
 ```
 python audit_artifact_register.py "<register>.json" \
-    --root "<folder it describes>" --tool-register "<tool register>.json"
+    --tool-register "<tool register>.json"
 ```
 
-Exits non-zero on errors. Every finding is listed; `--summary` gives class names
+The register's root turns on the disk reconciliation (`--root` for a register
+without one); a stored root that is not a folder is a finding. Exits non-zero
+on errors. Every finding is listed; `--summary` gives class names
 and counts only.
 
 Errors: duplicate IDs, invalid `Type`/`Status`, parents pointing at IDs that do

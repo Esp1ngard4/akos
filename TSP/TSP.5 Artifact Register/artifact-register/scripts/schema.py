@@ -103,3 +103,93 @@ def scan_folder(root, stop_ids=(), ignore=()):
 
     walk(root, "")
     return prefixed, bare
+
+
+def stop_ids(rows, empty=True):
+    """IDs a disk scan must not descend into - the delegation rule, applied to
+    the filesystem: a row another tool manages, a tool, and with `empty` a row
+    nothing sits in. Looking for a misfiled artifact wants `empty=False`: it may
+    be in a folder the register thinks is empty."""
+    claimed = set()
+    for row in rows:
+        claimed.update(p for p in parent_of(row) if p and p != ROOT_PARENT)
+    stop = set()
+    for row in rows:
+        rid = clean(row.get("ID"))
+        if (clean(row.get("Managed By")) or clean(row.get("Type")) == "Tool"
+                or (empty and rid not in claimed)):
+            stop.add(rid)
+    return stop
+
+
+# --- where the scope is, and where an artifact sits in it --------------------
+
+def root_of(register, data):
+    """(absolute root, problem) from `meta.settings.root`, which is relative to
+    the register's own folder. (None, None) when the register records none."""
+    rel = ((data.get("meta") or {}).get("settings") or {}).get("root")
+    if not rel:
+        return None, None
+    path = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(register)),
+                                         rel.replace("/", os.sep)))
+    if not os.path.isdir(path):
+        return None, "the register's root %r is not a folder (%s)" % (rel, path)
+    return path, None
+
+
+def relative_root(register, folder):
+    """`folder` as the register stores it: from the register's folder, forward slashes."""
+    rel = os.path.relpath(os.path.abspath(folder), os.path.dirname(os.path.abspath(register)))
+    return rel.replace(os.sep, "/")
+
+
+def chain(rows, artifact_id):
+    """The Parent Digital chain from the top down to the row, as ID strings.
+    Raises ValueError saying why when the row has no digital home."""
+    by_id = dict((clean(r.get("ID")), r) for r in rows)
+    out, cur = [], by_id.get(str(artifact_id))
+    if cur is None:
+        raise ValueError("no artifact with ID %s in this register" % artifact_id)
+    while True:
+        rid = clean(cur.get("ID"))
+        if rid in out:
+            raise ValueError("ID %s sits inside itself (a Parent Digital cycle)" % rid)
+        out.insert(0, rid)
+        parent, _ = parent_of(cur)
+        if parent == ROOT_PARENT:
+            return out
+        if not parent:
+            raise ValueError("ID %s has no digital home (Parent Digital N/A)" % rid
+                             if rid == str(artifact_id) else
+                             "ID %s sits in ID %s, which has no digital home" % (artifact_id, rid))
+        cur = by_id.get(parent)
+        if cur is None:
+            raise ValueError("ID %s sits in ID %s, which is not in the register" % (rid, parent))
+
+
+def resolve(root, rows, artifact_id):
+    """Walk the row's chain down from `root`, one ID prefix per level - the
+    register's claim, not a search. Returns the absolute path; raises ValueError
+    naming the deepest folder reached and what was missing there."""
+    path = root
+    for rid in chain(rows, artifact_id):
+        hits = []
+        try:
+            entries = sorted(os.listdir(path))
+        except OSError:
+            entries = []
+        for name in entries:
+            match = ID_PREFIX.match(name)
+            if match and str(int(match.group(1))) == rid and not name.startswith(("~$", ".")):
+                hits.append(name)
+        where = os.path.relpath(path, root).replace(os.sep, "/")
+        where = "the root" if where == "." else where
+        if not hits:
+            raise ValueError("nothing prefixed %s in %s" % (rid, where))
+        if len(hits) > 1:
+            raise ValueError("%d entries prefixed %s in %s: %s"
+                             % (len(hits), rid, where, ", ".join(hits)))
+        path = os.path.join(path, hits[0])
+        if rid != str(artifact_id) and not os.path.isdir(path):
+            raise ValueError("%s is a file, but ID %s sits inside it" % (hits[0], artifact_id))
+    return path

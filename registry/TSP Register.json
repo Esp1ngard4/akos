@@ -420,6 +420,12 @@
       "Description": "TD.1 v1.21: a row owns its sprint (the start gate no longer inherits a parent's commitment); add and set --parent ask what work under a parent means: reopen a closed parent or file elsewhere, and in, pulled into or later than the sprint under a committed one; a reminder when a child may widen its parent; check warns on an open row under a closed parent. A Deliverable is finished when its purpose is met.",
       "ID": 70,
       "Tool": "WBS Register"
+    },
+    {
+      "Changed On": "2026-11-03",
+      "Description": "TD.5 v1.8: a register records its root, relative to itself (artifact.py root, checked), and artifact.py path resolves a row by its Parent Digital chain; --root optional everywhere; rename, move and retire find by the chain, with a scan outside managed folders as fallback; move of the register's own folder saves at its new path; install.py init passes the project as the root; TSP.13's lookup reads it.",
+      "ID": 71,
+      "Tool": "TSP.5"
     }
   ],
   "control_activities": [],
@@ -470,8 +476,8 @@
         ]
       }
     },
-    "updated": "2026-11-03T16:23:44",
-    "values_hash": "sha256:03b618771e634d9091b72b55f54aeef119759d6d13a8bd1eabc8c58cf211dcef",
+    "updated": "2026-11-03T22:53:06",
+    "values_hash": "sha256:be5a8d5027ecd9d2b775f9b3ad8d7ebd2f86b6f0b662a56826f54256eed0ecbd",
     "version": 1
   },
   "tools": [

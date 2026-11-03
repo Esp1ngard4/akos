@@ -24,18 +24,6 @@ def _parse_date(value):
         return None
 
 
-def _stop_ids(rows, claimed):
-    """IDs the disk scan must not descend into - the delegation rule, applied to
-    the filesystem. See TD.5."""
-    stop = set()
-    for row in rows:
-        rid = S.clean(row.get("ID"))
-        if (S.clean(row.get("Managed By")) or S.clean(row.get("Type")) == "Tool"
-                or rid not in claimed):
-            stop.add(rid)
-    return stop
-
-
 def load_tools(path):
     """{id: name} from the tool register, or None if not supplied."""
     if not path or not os.path.isfile(path):
@@ -137,7 +125,7 @@ def run(data, root=None, tools=None, stale_years=STALE_YEARS):
 
     # --- the disk --------------------------------------------------------
     if root:
-        stop = _stop_ids(rows, claimed)
+        stop = S.stop_ids(rows)
         prefixed, bare = S.scan_folder(root, stop, R.setting(data, "ignore", []))
         stats["disk"] = {"prefixed": len(prefixed), "bare": len(bare),
                          "boundaries": len(stop), "root": root}
@@ -172,7 +160,7 @@ def run(data, root=None, tools=None, stale_years=STALE_YEARS):
     else:
         stats["disk"] = None
         warn("disk not checked",
-             "supply the folder this register describes to reconcile against it")
+             "record the folder this register describes (artifact.py root) to reconcile against it")
 
     return errors, warnings, stats
 

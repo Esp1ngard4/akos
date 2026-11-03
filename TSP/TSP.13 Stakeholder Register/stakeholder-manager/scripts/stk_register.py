@@ -120,9 +120,13 @@ def _from_artifact_register(folder):
     if cur is None:
         return None
     # The register describes its project from the top, so the chain starts at
-    # a top folder: climb from the register until the first link resolves.
+    # a top folder: the root the register records, relative to itself; a
+    # register without one is climbed from until the first link resolves.
     here = os.path.dirname(art)
-    for _ in range(4):
+    root = ((data.get("meta") or {}).get("settings") or {}).get("root")
+    if root:
+        here = os.path.normpath(os.path.join(here, root.replace("/", os.sep)))
+    for _ in range(1 if root else 4):
         path = here
         for artifact_id in chain:
             path = _with_id(path, artifact_id)

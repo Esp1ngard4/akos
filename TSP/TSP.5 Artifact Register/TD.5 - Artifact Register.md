@@ -79,6 +79,30 @@ difference between a document that is internally consistent and one that is
 actually true, and it is the reason this tool can catch a filing error that a
 person would find years later, if ever.
 
+### Finding an artifact: the root and the chain
+
+A register stores **no paths**. A row says what contains it (`Parent Digital`)
+and the disk carries its ID, so its path is worked out, not declared: walk the
+chain from the top, one ID prefix per level. A stored path would be a second
+copy of what the disk already says, and would go stale on every rename.
+
+What the chain cannot say is where the top is. That is the one path a register
+records, `meta.settings.root`, **relative to the register's own folder**. It
+cannot be inferred, because registers sit at different depths (in the planning
+folder, or in a folder of their own inside it). It is relative because a cloud
+folder sits at a different path on every machine and a scope can move as a
+whole. Setting it is checked: the register's own row has to lead back to the
+register from there, so a wrong root is refused rather than stored.
+
+Every lookup follows the chain: `path`, `rename`, `move`, `retire`, and other
+tools finding an artifact through the register. The chain is the register's
+claim, so a lookup checks that claim instead of searching around it. Searching
+for the shallowest entry carrying a number also reaches into folders another
+tool manages, whose own numbering can carry the same number. A search survives
+only as the fallback for an artifact that is off its chain. It skips managed
+folders, accepts one match and says where it found it, so the misfiling is
+reported, not hidden.
+
 ## Scopes
 
 One tool, one register per scope — the same shape as
@@ -179,6 +203,9 @@ and leave rows pointing at nothing.
   `Managed By` points into it, and this tool is registered there. The two are
   reciprocal: the tool register says what governs things, this register says what
   is governed.
+- **[Stakeholder Register](../TSP.13%20Stakeholder%20Register/TD.13%20-%20Stakeholder%20Register.md)** —
+  finds a scope's Stakeholder Mgm folder through this register, starting from
+  its root.
 - **[WBS](../TSP.1%20WBS%20Register/TD.1%20-%20WBS%20Register.md)** — a register
   whose rows carry acceptance criteria and sprints is a WBS, not this. If you find
   yourself adding a status workflow to an artifact register, you have the wrong
@@ -207,8 +234,8 @@ and leave rows pointing at nothing.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.8 | 2026-11-03 | **A register records its root, and an artifact is found by its chain.** `meta.settings.root`, relative to the register, written by `create` (`--root` for a planned layout, which `install.py init` passes) and set by `artifact.py root`, which checks the register leads back to itself. `artifact.py path` resolves a row. `--root` is optional everywhere. `rename`, `move` and `retire` find by the chain instead of the shallowest prefix, which could reach a managed folder's own `NN.`; the scan stays as a fallback. A bug fixed: `move` of the register's own folder saved to the old path. TSP.13's lookup reads the root and climbs only without one. |
 | v1.7 | 2026-11-02 | **The ignore default follows the installer's lock:** `tool.lock.json`, one in each installed tool's folder (TD.4 v1.11), where it was `tools.lock.json`, one per folder installed into. A register made before keeps its own list; it needs the new name only where a tool's folder is scanned. |
 | v1.6 | 2026-10-28 | **`add --new-id N` claims a planned number.** IDs come from the highest plus one, so a register whose own row is 02 could not number the folders above it 00 and 01. `--new-id` registers under a number no row holds; a retired row stays in the register, so such a number was never used, and claiming it reuses nothing. |
-| v1.5 | 2026-10-28 | **A register can live in a folder of its own.** `create_artifact_register.py --folder` makes the folder the register's row, so a project keeps it as `00. Artifact Register/` like any other register, and the audit stays clean without looking inside. Asked for by the user on the first `install.py init`, which had left the register as a bare file at the top. |
 
 Earlier versions are in this file's git history.

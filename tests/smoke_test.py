@@ -74,11 +74,13 @@ TOOLS = [
         "name": "TSP.5 Artifact Register",
         "skill": "TSP/TSP.5 Artifact Register/artifact-register",
         "assets": [],
-        "register": "05. Artifact Register, Demo.json",
+        # A scope of its own: the register's root is its disk check, and the
+        # shared work folder holds every other tool's files too.
+        "register": os.path.join("Artifact Demo", "05. Artifact Register", "Artifact Register Demo.json"),
         "dashboard": "Artifact Dashboard.html",
         "collections": ["artifacts", "locations", "areas_of_focus"],
         "create": lambda s, r, d: [os.path.join(s, "scripts", "create_artifact_register.py"),
-                                   r, "Demo"],
+                                   r, "Demo", "--folder"],
         "refresh": lambda s, r, d: [os.path.join(s, "scripts", "refresh_artifact_register.py"),
                                     r, d, "--scope", "Demo"],
         "audit": lambda s, r: [os.path.join(s, "scripts", "audit_artifact_register.py"), r],
@@ -297,6 +299,8 @@ def test_init(root, scratch):
     reg = os.path.join(plan, "04. Artifact Register", "Artifact Register Greenfield.json")
     ok, out = run([os.path.join(skills, "artifact-register", "scripts", "audit_artifact_register.py"), reg, "--root", project], root)
     check("the artifact register audits the whole project clean", "0 error(s), 0 warning(s)" in out, out[-400:])
+    ok, out = run([os.path.join(skills, "artifact-register", "scripts", "audit_artifact_register.py"), reg], root)
+    check("and from the root it records, with no --root", "0 error(s), 0 warning(s)" in out, out[-400:])
     ok, out = run([os.path.join(skills, "tsp-manager", "scripts", "audit_tsp.py"), tsp], root)
     check("the tool register audits clean", "0 error(s), 0 warning(s)" in out, out[-400:])
     ok, out = run([installer, "status", "--project", project, "--check"], root)
@@ -846,6 +850,104 @@ def test_reconciliation(root, scratch):
     ok, out = run([os.path.join(scripts, "audit_artifact_register.py"),
                    register, "--root", work], work)
     check("disk check passes once filed", ok, out)
+
+
+def test_register_root(root, scratch):
+    """An artifact register records its root, relative to itself, and every
+    lookup follows a row's chain down from it rather than searching."""
+    print("\nTSP.5 the register's root")
+    scripts = os.path.join(root, "TSP", "TSP.5 Artifact Register", "artifact-register", "scripts")
+    art = lambda *a: run_raw([os.path.join(scripts, "artifact.py")] + list(a), scratch)
+    load = lambda p: json.load(io.open(p, encoding="utf-8"))
+
+    def write(path, text="x"):
+        io.open(path, "w", encoding="utf-8").write(text)
+
+    # A register at the top of its scope.
+    flat = os.path.join(scratch, "root-flat")
+    os.makedirs(flat)
+    reg = os.path.join(flat, "00. Register.json")
+    run_raw([os.path.join(scripts, "create_artifact_register.py"), reg, "Flat"], scratch)
+    check("root: a register at the top records '.'", load(reg)["meta"]["settings"].get("root") == ".")
+    write(os.path.join(flat, "Doc.md"))
+    art("add", reg, os.path.join(flat, "Doc.md"), "--name", "Doc", "--parent-digital", "Main")
+    ok, out = art("path", reg, "--id", "1")
+    check("root: path resolves from the stored root", ok and out.strip() == "01. Doc.md", out)
+    ok, out = run_raw([os.path.join(scripts, "audit_artifact_register.py"), reg], scratch)
+    check("root: audit reconciles the disk with no --root", "disk:" in out and "disk not checked" not in out, out)
+    os.makedirs(os.path.join(flat, "Sub"))
+    art("add", reg, os.path.join(flat, "Sub"), "--name", "Sub", "--type", "Folder", "--parent-digital", "Main")
+    ok, out = art("move", reg, "--id", "0", "--parent-digital", "2")
+    moved = os.path.join(flat, "02. Sub", "00. Register.json")
+    check("root: a register moved is saved at its new path, its root rewritten",
+          ok and not os.path.exists(reg) and os.path.isfile(moved)
+          and load(moved)["meta"]["settings"].get("root") == "..", out)
+    ok, out = art("retire", moved, "--id", "1", "--yes")
+    check("root: retire acts on the file through the stored root",
+          ok and not os.path.exists(os.path.join(flat, "01. Doc.md")), out)
+    ok, out = art("path", moved, "--id", "1")
+    check("root: path refuses a retired row", not ok and "retired" in out, out)
+    data = load(moved)
+    data["meta"]["settings"]["root"] = "../nowhere"
+    write(moved, json.dumps(data, indent=2))
+    ok, out = run_raw([os.path.join(scripts, "audit_artifact_register.py"), moved], scratch)
+    check("root: a stored root that is not a folder is an audit finding", "register root not found" in out, out)
+    ok, out = art("rename", moved, "--id", "2", "--name", "Other")
+    check("root: and stops a command that changes the disk", not ok and "Stopped" in out, out)
+
+    # A register two levels down, in a layout planned before it existed.
+    deep = os.path.join(scratch, "root-deep")
+    os.makedirs(os.path.join(deep, "PrjMgm", "02. Register"))
+    os.makedirs(os.path.join(deep, "Execution"))
+    reg = os.path.join(deep, "PrjMgm", "02. Register", "Register.json")
+    run_raw([os.path.join(scripts, "create_artifact_register.py"), reg, "Deep", "--folder", "--root", deep], scratch)
+    check("root: create --root records the scope's top, relative", load(reg)["meta"]["settings"].get("root") == "../..")
+    art("add", reg, os.path.join(deep, "PrjMgm"), "--new-id", "0", "--name", "PrjMgm", "--type", "Folder",
+        "--parent-digital", "Main")
+    reg = os.path.join(deep, "00. PrjMgm", "02. Register", "Register.json")
+    ok, out = art("move", reg, "--id", "2", "--parent-digital", "0")
+    check("root: move finds an artifact off its chain, and says so",
+          ok and "not where the register says" in out and "already in place" in out, out)
+    art("add", reg, os.path.join(deep, "Execution"), "--new-id", "1", "--name", "Execution", "--type", "Folder",
+        "--parent-digital", "Main", "--managed-by", "TSP.17")
+    write(os.path.join(deep, "00. PrjMgm", "Brief.md"))
+    art("add", reg, os.path.join(deep, "00. PrjMgm", "Brief.md"), "--name", "Brief", "--parent-digital", "0")
+    write(os.path.join(deep, "01. Execution", "03. Decoy.md"))
+    ok, out = art("root", reg, os.path.join(deep, "00. PrjMgm"), "--dry-run")
+    check("root: refuses a folder the register does not lead back from", not ok and "Refusing" in out, out)
+    ok, out = art("root", reg, deep, "--dry-run")
+    check("root: accepts the one it does", ok and "resolves to the register" in out, out)
+    ok, out = art("path", reg, "--id", "3")
+    check("root: path walks the chain", ok and out.strip() == "00. PrjMgm/03. Brief.md", out)
+    ok, out = art("rename", reg, "--id", "3", "--name", "Project Brief")
+    check("root: rename reaches the artifact, not a managed folder's same number",
+          ok and os.path.isfile(os.path.join(deep, "00. PrjMgm", "03. Project Brief.md"))
+          and os.path.isfile(os.path.join(deep, "01. Execution", "03. Decoy.md")), out)
+    shutil.move(os.path.join(deep, "00. PrjMgm", "03. Project Brief.md"), os.path.join(deep, "03. Project Brief.md"))
+    ok, out = art("path", reg, "--id", "3")
+    check("root: a disk that disagrees names where it stopped", not ok and "nothing prefixed 3 in 00. PrjMgm" in out, out)
+    ok, out = art("rename", reg, "--id", "3", "--name", "Brief")
+    check("root: off its chain, the one match is found and named", ok and "found at 03. Project Brief.md" in out, out)
+    os.makedirs(os.path.join(deep, "00. PrjMgm", "Notes"))
+    art("add", reg, os.path.join(deep, "00. PrjMgm", "Notes"), "--name", "Notes", "--type", "Folder",
+        "--parent-digital", "0")
+    write(os.path.join(deep, "00. PrjMgm", "04. Notes", "03. Copy.md"))
+    ok, out = art("rename", reg, "--id", "3", "--name", "Again")
+    check("root: off its chain with two matches, refused", not ok and "entries carry it" in out, out)
+
+    # TSP.13 starts from the stored root; climbing would reach the decoy first.
+    os.makedirs(os.path.join(deep, "00. PrjMgm", "05. Stakeholder Mgm"))
+    data = load(reg)
+    data["artifacts"].append({"ID": 5, "Name": "Stakeholder Mgm", "Type": "Folder", "Status": "Active",
+                              "Parent Digital": "0", "Parent Physical": "N/A"})
+    write(reg, json.dumps(data, indent=2))
+    os.makedirs(os.path.join(os.path.dirname(reg), "00. Decoy", "05. Stakeholder Mgm"))
+    stk = os.path.join(root, "TSP", "TSP.13 Stakeholder Register", "stakeholder-manager", "scripts")
+    code = ("import sys; sys.path.insert(0, %r); import stk_register as K; "
+            "print(K._from_artifact_register(%r))" % (stk, os.path.join(deep, "00. PrjMgm")))
+    ok, out = run_raw(["-c", code], scratch)
+    check("root: the stakeholder lookup starts from the stored root",
+          os.path.normcase(out.strip()) == os.path.normcase(os.path.join(deep, "00. PrjMgm", "05. Stakeholder Mgm")), out)
 
 
 CONTENT_TOOL = "TSP.6 Content System"
@@ -2753,6 +2855,7 @@ def main():
         test_foundation(root, scratch)
         test_upstream(root, scratch)
         test_reconciliation(root, scratch)
+        test_register_root(root, scratch)
         test_catalogue(root, scratch)
         test_tsp_fields(root, scratch)
         test_sync_commands(root, scratch)

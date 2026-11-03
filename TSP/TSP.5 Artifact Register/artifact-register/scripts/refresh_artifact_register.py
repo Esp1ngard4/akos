@@ -19,6 +19,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import checks                                                   # noqa: E402
 import registry as R                                            # noqa: E402
+import schema as S                                              # noqa: E402
 
 STALE_YEARS = 2
 
@@ -356,8 +357,8 @@ document.getElementById('scope').innerHTML = [
     ? '<b>Disk</b> &mdash; reconciled against <code>' + FINDINGS.checked.disk +
       '</code>. The scan stops where the register stops: at delegated artifacts, at tools, ' +
       'and at containers the register names no children inside.'
-    : '<b>Disk</b> &mdash; <i>not checked.</i> Re-run with <code>--root</code> to reconcile ' +
-      'the register against the folder it describes.'
+    : '<b>Disk</b> &mdash; <i>not checked.</i> Record the register\'s root ' +
+      '(<code>artifact.py root</code>) to reconcile it against the folder it describes.'
 ].map(s => '<div>' + s + '</div>').join('');
 </script>
 </body>
@@ -372,7 +373,8 @@ def main():
     p.add_argument("output")
     p.add_argument("--scope", help="name shown in the title (default: from the register)")
     p.add_argument("--root", help="folder this register describes; enables the disk "
-                                  "reconciliation on the Findings tab")
+                                  "reconciliation on the Findings tab (default: the "
+                                  "root the register records)")
     p.add_argument("--tool-register", help="tool register; enables the "
                                        "delegation check on the Findings tab")
     args = p.parse_args()
@@ -382,7 +384,6 @@ def main():
     scope = args.scope or data["meta"].get("scope") or "Register"
 
     # Every field any row uses, in schema order first so the grid is stable.
-    import schema as S
     seen = set()
     for row in rows:
         seen.update(row)
@@ -394,12 +395,20 @@ def main():
 
     # Same checks the audit runs - one definition, so the dashboard and the
     # command line can never report different findings.
+    # The register's own root unless --root is given; a stored one that is
+    # not a folder is a finding, not a stop - the rest still gets checked.
+    root, problem = (args.root, None) if args.root else S.root_of(args.register, data)
     errors, warnings, stats = checks.run(
-        data, root=args.root, tools=checks.load_tools(args.tool_register))
+        data, root=root, tools=checks.load_tools(args.tool_register))
+    if problem:
+        warnings.pop("disk not checked", None)
+        warnings.setdefault("register root not found", []).append(
+            problem + " - set it again with artifact.py root")
     findings = {
         "errors": errors,
         "warnings": warnings,
-        "checked": {"disk": (stats["disk"] or {}).get("root") if stats["disk"] else None,
+        # The stored root as stored, relative, so the page names no machine's path.
+        "checked": {"disk": (args.root or R.setting(data, "root")) if stats["disk"] else None,
                     "tsp": stats.get("delegations_resolved") is not None},
     }
     warning_count = sum(len(v) for v in warnings.values())

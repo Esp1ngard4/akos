@@ -23,7 +23,7 @@ DEFAULT_LOCATIONS = [("Physical", "Home"), ("Physical", "Office"),
                      ("Digital", "Cloud drive"), ("Digital", "Local disk")]
 
 
-def build(path, scope, locations, areas, width, folder=False):
+def build(path, scope, locations, areas, width, folder=False, root=None):
     # The row is the register's file, or with `folder` the folder it sits in.
     entry = os.path.basename(os.path.dirname(os.path.abspath(path))) if folder else os.path.basename(path)
     seed_match = S.ID_PREFIX.match(entry)
@@ -35,6 +35,10 @@ def build(path, scope, locations, areas, width, folder=False):
     # filename is generated. Storing it in both places is how you get "07. 07. x".
     name = stem[prefix.end():].strip() if prefix else stem
     today = dt.date.today().isoformat()
+    # The seed sits at Main, so the scope's top is where the seed is - the
+    # register's folder, or with `folder` the one above it - unless told otherwise.
+    top = root or (os.path.dirname(os.path.dirname(os.path.abspath(path))) if folder
+                   else os.path.dirname(os.path.abspath(path)))
 
     data = R.new(S.KIND, scope, {
         "artifacts": [{
@@ -47,7 +51,8 @@ def build(path, scope, locations, areas, width, folder=False):
         "locations": [{"ID": i, "Location": n, "Kind": k, "Active": "Yes"}
                       for i, (k, n) in enumerate(locations, start=1)],
         "areas_of_focus": [{"ID": a, "Name": n} for a, n in areas],
-    }, settings={"id_width": width, "ignore": ["tool.lock.json"]})
+    }, settings={"id_width": width, "ignore": ["tool.lock.json"],
+                 "root": S.relative_root(path, top)})
     R.save(path, data)
     return seed
 
@@ -66,6 +71,9 @@ def main():
                         "a register under 100 artifacts." % S.ID_WIDTH_DEFAULT)
     p.add_argument("--folder", action="store_true",
                    help="the register sits in a folder of its own, and that folder is its row")
+    p.add_argument("--root", metavar="FOLDER",
+                   help="the scope's top folder, when the register does not sit in it "
+                        "(default: the register's folder, or the one above with --folder)")
     p.add_argument("--force", action="store_true", help="overwrite an existing file")
     args = p.parse_args()
 
@@ -88,7 +96,7 @@ def main():
     if args.folder:
         os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     seed = build(args.output, args.scope, locations or DEFAULT_LOCATIONS,
-                 areas, args.id_width, args.folder)
+                 areas, args.id_width, args.folder, args.root)
     padded = S.format_id(seed, args.id_width)
     print("Created %s" % args.output)
     print("  scope: %s | %d locations | %d areas | IDs padded to %d digits"
@@ -99,9 +107,9 @@ def main():
     if not entry.startswith(padded + "."):
         print("  note: rename the %s to start %s. so its own prefix is padded too"
               % ("folder" if args.folder else "file", padded))
+    print("  root %s, kept relative to the register" % R.setting(R.load(args.output), "root"))
     print("\nNext:")
-    print('  python artifact.py add "%s" <path> --name "..." --root <folder>'
-          % args.output)
+    print('  python artifact.py add "%s" <path> --name "..."' % args.output)
 
 
 if __name__ == "__main__":

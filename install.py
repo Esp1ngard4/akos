@@ -747,7 +747,7 @@ def cmd_init(args):
     reg = pack["register"]
     first_id = len(pack["top"])
     art = os.path.join(planning, "%02d. %s" % (first_id, reg["folder"]), reg["file"].format(name=args.name))
-    run_skill(skills(), "artifact-register", "create_artifact_register.py", [art, args.name, "--folder"], project)
+    run_skill(skills(), "artifact-register", "create_artifact_register.py", [art, args.name, "--folder", "--root", project], project)
     ids = {}
 
     def artifact(path, name, about, parent, kind="Folder", new_id=None):
@@ -874,7 +874,7 @@ def adopt(args, pack, project):
         folder = os.path.join(planning, "00. %s" % reg["folder"])        # its own first row, as in init
         os.makedirs(folder)
         run_script(os.path.join(scripts, "create_artifact_register.py"),
-                   [os.path.join(folder, reg["file"].format(name=args.name)), args.name, "--folder"], project)
+                   [os.path.join(folder, reg["file"].format(name=args.name)), args.name, "--folder", "--root", project], project)
 
         def locate(path):
             if os.path.exists(path) or path == project:

@@ -10,6 +10,8 @@
     python artifact.py move   <register> --id 22 --parent-digital 12 --root <folder>
     python artifact.py retire <register> --id 22 --root <folder> --yes
     python artifact.py repad  <register> --root <folder> [--width 3]
+    python artifact.py root   <register> [<folder>]            # show, or set, the root
+    python artifact.py path   <register> --id 22 [--absolute]  # where it is on disk
     python artifact.py review <register> --before 2020-01-01   # bulk stamp
 
 `Name` and the parent columns are encoded into the filesystem, so changing either
@@ -18,6 +20,9 @@ audit matches on ID, not on name. These operations change both together.
 
 Plain field edits - Description, Comments, Owner, Managed By, Area of Focus,
 Type - are just JSON. Edit the file.
+
+`--root` can be left out once the register records its root (`root`), which it
+keeps relative to its own folder so it survives other machines and a moved scope.
 
 `retire` deletes the artifact. It refuses to orphan registered children, and does
 nothing without --yes.
@@ -66,13 +71,37 @@ def target_name(artifact_id, name, original, width):
     return "%s. %s%s" % (S.format_id(artifact_id, width), name, ext)
 
 
-def locate(root, artifact_id):
-    prefixed, _ = S.scan_folder(root)
-    hits = prefixed.get(str(artifact_id), [])
+def locate(root, rows, artifact_id):
+    """Where the artifact is: by its Parent Digital chain, the way `path` finds
+    it. Where the disk disagrees, a scan that skips managed folders, as the
+    audit does, may still find it - one match only, and it says where."""
+    if not root:
+        return None
+    try:
+        return S.resolve(root, rows, artifact_id)
+    except ValueError as why:
+        missed = why
+    prefixed, _ = S.scan_folder(root, S.stop_ids(rows, empty=False) - {str(artifact_id)})
+    hits = sorted(prefixed.get(str(artifact_id), []), key=lambda p: p.count("/"))
     if not hits:
         return None
-    hits.sort(key=lambda p: p.count("/"))    # shallowest is the artifact itself
+    if any(not h.startswith(hits[0] + "/") for h in hits[1:]):
+        sys.exit("ID %s is not where the register says (%s), and %d entries carry it: "
+                 "%s. Settle which one it is first." % (artifact_id, missed, len(hits), ", ".join(hits)))
+    print("  disk    found at %s, not where the register says (%s); audit will flag it"
+          % (hits[0], missed))
     return os.path.join(root, hits[0].replace("/", os.sep))
+
+
+def own_row(register, rows):
+    """The row that is the register itself: its file's ID, else its folder's."""
+    ids = set(S.clean(r.get("ID")) for r in rows)
+    reg = os.path.abspath(register)
+    for path in (reg, os.path.dirname(reg)):
+        match = S.ID_PREFIX.match(os.path.basename(path))
+        if match and str(int(match.group(1))) in ids:
+            return str(int(match.group(1))), path
+    return None, None
 
 
 def children_of(rows, artifact_id):
@@ -202,7 +231,7 @@ def cmd_rename(args):
     row["Name"] = args.name
     print("  row     updated")
 
-    path = locate(args.root, args.id)
+    path = locate(args.root, rows, args.id)
     if path:
         new = rename_on_disk(path, target_name(args.id, args.name, path, width),
                              args.dry_run)
@@ -222,6 +251,8 @@ def cmd_move(args):
     ids = set(S.clean(r.get("ID")) for r in rows)
 
     print("Moving artifact %s (%s)" % (args.id, S.clean(row.get("Name"))))
+    # Found where it is now, before the row says where it is going.
+    path = locate(args.root, rows, args.id) if args.root and args.parent_digital is not None else None
     for flag, field in (("parent_digital", "Parent Digital"),
                         ("parent_physical", "Parent Physical")):
         value = getattr(args, flag)
@@ -235,15 +266,15 @@ def cmd_move(args):
               % (field, S.clean(row.get(field)) or S.NO_PARENT, value))
         row[field] = value
 
+    register = args.register
     if args.root and args.parent_digital is not None:
-        path = locate(args.root, args.id)
         if not path:
             print("  disk    nothing found with prefix %s" % args.id)
         else:
             if args.parent_digital in (S.ROOT_PARENT, S.NO_PARENT):
                 dest_dir = args.root
             else:
-                dest_dir = locate(args.root, args.parent_digital)
+                dest_dir = locate(args.root, rows, args.parent_digital)
                 if not dest_dir or not os.path.isdir(dest_dir):
                     sys.exit("Parent %s is not a folder on disk; move it by hand."
                              % args.parent_digital)
@@ -258,7 +289,12 @@ def cmd_move(args):
                                                 os.sep))
                 if not args.dry_run:
                     shutil.move(path, dest)
-    return finish(args, data)
+                    register = followed(args.register, path, dest)
+                    if register != args.register and R.setting(data, "root"):
+                        # The register changed depth, so its way up to the root did too.
+                        data["meta"]["settings"]["root"] = S.relative_root(register, args.root)
+                        print("  root    %s (the register moved)" % data["meta"]["settings"]["root"])
+    return finish(args, data, register)
 
 
 def cmd_retire(args):
@@ -279,7 +315,7 @@ def cmd_retire(args):
 
     print("Retiring artifact %s (%s)" % (args.id, name))
     verb = "archive" if args.archive else "delete"
-    path = locate(args.root, args.id) if args.root else None
+    path = locate(args.root, rows, args.id)
     if path:
         kind = "folder" if os.path.isdir(path) else "file"
         where = (" -> %s" % args.archive) if args.archive else ""
@@ -426,6 +462,61 @@ def cmd_review(args):
     return finish(args, data)
 
 
+def cmd_root(args):
+    """Show the register's root, or set it - relative, and only once the
+    register's own row leads back to the register from there."""
+    data, rows, _ = load(args.register)
+    if not args.folder:
+        rel = R.setting(data, "root")
+        if not rel:
+            print("No root recorded. Set one: artifact.py root \"%s\" <folder>" % args.register)
+            return 1
+        path, problem = S.root_of(args.register, data)
+        print("root %s -> %s" % (rel, problem or path))
+        return 1 if problem else 0
+    if not os.path.isdir(args.folder):
+        sys.exit("%s is not a folder." % args.folder)
+    rid, actual = own_row(args.register, rows)
+    if rid is None:
+        print("  check   not verified - neither the register nor its folder carries an ID")
+    else:
+        try:
+            found = S.resolve(args.folder, rows, rid)
+        except ValueError as why:
+            sys.exit("Refusing: from %s the register's own row, ID %s, does not resolve (%s)."
+                     % (args.folder, rid, why))
+        if os.path.normcase(os.path.abspath(found)) != os.path.normcase(actual):
+            sys.exit("Refusing: from %s, ID %s resolves to %s, not to the register."
+                     % (args.folder, rid, found))
+        print("  check   ID %s resolves to the register" % rid)
+    rel = S.relative_root(args.register, args.folder)
+    data["meta"].setdefault("settings", {})["root"] = rel
+    print("  root    %s" % rel)
+    if args.dry_run:
+        print("\n  dry run - nothing written.")
+        return 0
+    R.save(args.register, data)
+    return 0
+
+
+def cmd_path(args):
+    """Where a row is on disk, by its chain - the register's claim, checked."""
+    data, rows, _ = load(args.register)
+    row = row_for(rows, args.id)
+    if S.clean(row.get("Status")) == "Retired":
+        sys.exit("ID %s is retired." % args.id)
+    if not args.root:
+        sys.exit("This register records no root. Set it: artifact.py root \"%s\" <folder>"
+                 ", or pass --root." % args.register)
+    try:
+        found = S.resolve(args.root, rows, args.id)
+    except ValueError as why:
+        sys.exit("ID %s: %s. Run audit_artifact_register.py to see what moved." % (args.id, why))
+    print(os.path.abspath(found) if args.absolute
+          else os.path.relpath(found, args.root).replace(os.sep, "/"))
+    return 0
+
+
 # --- entry point ------------------------------------------------------------
 
 def main():
@@ -486,6 +577,18 @@ def main():
     s.add_argument("--type", choices=S.TYPES)
     s.set_defaults(func=cmd_review)
 
+    s = subs.add_parser("root", help="show or set the folder this register describes")
+    s.add_argument("register")
+    s.add_argument("folder", nargs="?", help="the scope's top folder; stored relative to the register")
+    s.add_argument("--dry-run", action="store_true", help="show what would change, write nothing")
+    s.set_defaults(func=cmd_root)
+
+    s = subs.add_parser("path", help="where an artifact is on disk, by its chain")
+    shared(s, dry=False)
+    s.add_argument("--id", required=True)
+    s.add_argument("--absolute", action="store_true", help="the full path, not one from the root")
+    s.set_defaults(func=cmd_path)
+
     s = subs.add_parser("retire", help="dispose of the artifact; keep the row and ID")
     shared(s, dry=False)
     s.add_argument("--id", required=True)
@@ -500,6 +603,11 @@ def main():
     if not getattr(args, "command", None):
         p.print_help()
         return 0
+    if hasattr(args, "root") and not args.root:
+        # The register's own record of its root; --root, when given, wins.
+        args.root, problem = S.root_of(args.register, R.load(args.register))
+        if problem and args.command != "review":
+            sys.exit("Stopped: %s. Pass --root, or set it again: artifact.py root." % problem)
     return args.func(args)
 
 

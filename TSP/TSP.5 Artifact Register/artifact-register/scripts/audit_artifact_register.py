@@ -7,6 +7,8 @@
         --root "<the folder it describes>" \
         --tool-register "<tool register>"
 
+`--root` is needed only when the register records no root of its own.
+
 The filesystem check is the one no other register can do. Because the ID is
 written onto the artifact, the register makes a claim about the disk that can be
 verified: a file with no ID prefix is unregistered, and a row whose ID appears
@@ -24,13 +26,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import checks                                                   # noqa: E402
 import registry as R                                            # noqa: E402
+import schema as S                                              # noqa: E402
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("register")
-    p.add_argument("--root", help="folder this register describes, for the disk check")
+    p.add_argument("--root", help="folder this register describes, for the disk check "
+                                  "(default: the root the register records)")
     p.add_argument("--tool-register", help="tool register, for the Managed By check")
     p.add_argument("--summary", action="store_true",
                    help="class names and counts only, without the individual rows")
@@ -42,8 +46,15 @@ def main():
     print("  %d artifacts | scope: %s | updated %s"
           % (len(rows), data["meta"].get("scope"), data["meta"].get("updated")))
 
+    # The register's own root unless --root is given; a stored one that is
+    # not a folder is a finding, not a stop - the rest still gets checked.
+    root, problem = (args.root, None) if args.root else S.root_of(args.register, data)
     errors, warnings, stats = checks.run(
-        data, root=args.root, tools=checks.load_tools(args.tool_register))
+        data, root=root, tools=checks.load_tools(args.tool_register))
+    if problem:
+        warnings.pop("disk not checked", None)
+        warnings.setdefault("register root not found", []).append(
+            problem + " - set it again with artifact.py root")
 
     if stats.get("delegations_resolved") is not None:
         print("  delegations: %d checked, %d resolved"
