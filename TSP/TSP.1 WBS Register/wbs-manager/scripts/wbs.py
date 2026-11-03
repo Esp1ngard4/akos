@@ -399,18 +399,21 @@ def one_paragraph(text):
     return re.sub(r"\n\s*\n+", "\n", text.strip())
 
 
-def add_note(row, text):
+def add_note(row, text, title=None):
     """Newest entry on top - below any closure note, which stays pinned.
 
     Comments is a log of dated paragraphs. A closed row is read first for
     how it ended, so a note added after the close goes under the closure
-    rather than displacing it; everything older sits beneath.
+    rather than displacing it; everything older sits beneath. A title, when
+    given, sits between the date and the text (`2026-Nov-3 · Title: text`),
+    and the dashboard shows it as the entry's heading.
     """
     paras = [p for p in (row.get("Comments") or "").split("\n\n") if p.strip()]
     pinned = 0
     while pinned < len(paras) and CLOSURE_MARK.match(paras[pinned]):
         pinned += 1
-    paras.insert(pinned, "%s: %s" % (today_text(), one_paragraph(text)))
+    head = "%s · %s" % (today_text(), title.strip()) if title and title.strip() else today_text()
+    paras.insert(pinned, "%s: %s" % (head, one_paragraph(text)))
     row["Comments"] = "\n\n".join(paras)
     return pinned
 
@@ -695,7 +698,31 @@ def cmd_add(args):
         row["ID"], args.title, "\n  " + "\n  ".join(created) if created else ""))
     if line:
         print("\n  Add to the sprint record's Committed items, today:\n  " + line)
+    if not (row.get("Description") or "").strip():
+        print("\n  No description yet. Its shape for a %s (references/descriptions.md):\n  %s"
+              % (row.get("Type", "row"), description_template(row).replace("\n", "\n  ")))
     return code
+
+
+# A row's description by its type (references/descriptions.md): one sentence
+# on what it delivers or changes, then the labels for its type. Nature picks
+# the shape for an Analyse or a Fix; the type does the rest.
+DESCRIPTION_LABELS = {
+    "Deliverable": ("Purpose", "Not"),
+    "Feature": ("Value", "Approach", "Not", "PRD"),
+    "Story": ("Problem", "Approach"),
+    "Task": (),
+}
+NATURE_LABELS = {"Analyse": ("Question", "Decides"), "Fix": ("Symptom", "Cause")}
+
+
+def description_template(row):
+    kind = row.get("Type")
+    labels = NATURE_LABELS.get(row.get("Nature")) if kind in ("Story", "Task") else None
+    labels = labels if labels is not None else DESCRIPTION_LABELS.get(kind, ("Problem",))
+    noun = kind in ("Deliverable", "Feature")
+    lead = "<what it %s, in one sentence>" % ("is or adds" if noun else "changes")
+    return "\n".join([lead] + ["%s: <...>" % l for l in labels])
 
 
 def cmd_set(args):
@@ -753,7 +780,11 @@ def cmd_note(args):
         sys.exit("No item with ID %s." % args.id)
     if not args.text.strip():
         sys.exit("The note is empty.")
-    pinned = add_note(row, args.text)
+    title = (args.title or "").strip()
+    if ":" in title or "\n" in title:
+        sys.exit("A note's title is one line with no colon: the colon ends it. "
+                 "Put the rest in the text.")
+    pinned = add_note(row, args.text, title)
     return finish(args, data, "Item %s: note added %s" % (
         args.id, "below the closure note" if pinned else "at the top of Comments"))
 
@@ -2152,6 +2183,8 @@ def main():
     s.add_argument("register")
     s.add_argument("--id", required=True)
     s.add_argument("text")
+    s.add_argument("--title", help="a few words the dashboard shows as the "
+                                   "entry's heading; one line, no colon")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_note)
 

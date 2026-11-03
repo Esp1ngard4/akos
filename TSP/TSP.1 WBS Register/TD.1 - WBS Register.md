@@ -14,6 +14,7 @@ Each project gets its own register. There is no central one.
 |---|---|---|---|
 | This document | owned | `TSP.1 WBS Register/` | Governance: purpose, conventions, relationships, history |
 | `wbs-manager` skill | owned | `TSP.1 WBS Register/wbs-manager/` | Operating instructions and scripts |
+| `references/descriptions.md` | owned | `TSP.1 WBS Register/wbs-manager/references/` | A row's description by its type: the shape, the labels, examples |
 | `WBS <Project>.json` | owned, per project | wherever you keep project management artefacts | **Source of truth** — one per project |
 | `WBS Dashboard.html` | generated | alongside the register | Derived view; overwritten on refresh, never hand-edited |
 
@@ -85,6 +86,8 @@ Once a sprint's work lives in two places — rows here, tasks in a tracker — t
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.20 | 2026-11-03 | **A description template per row type.** `references/descriptions.md` sets each type's shape from best practice: one sentence on what the row delivers or changes, then labelled parts. Deliverable: Purpose, Not. Feature: Value (naming the outcome it serves and the measure it should move), Approach, Not, PRD. Story: Problem, Approach. Analyse: Question, Decides. Fix: Symptom, Cause. Task: one line. The description is the current state, about 80 words (100 for a Deliverable or Feature); history goes to a titled note. `wbs.py add` prints the shape when a row has no description. The card shows the labels as sections, renders bold, paragraphs, bullet lines and code, and folds a long description after its first paragraph. |
+| v1.19 | 2026-11-03 | **Comments and criteria read as entries.** The card shows each Comments entry as its own block, with its date, a label (Closure, Note, Carried, Pulled in, Split, Outside sprint) and its title. A long entry folds to its first line, the newest open. The closure note is pinned, with *What happened*, *AC* and *Follow-up* as sections and a verdict badge per criterion. `ID n` in the text links to the card. The acceptance criteria show one per line, numbered, each with its closure verdict on a closed row. A number starts a criterion only when it continues the sequence; the Verification tab counts criteria the same way. `wbs.py note --title` gives an entry a heading, and SKILL.md asks for notes written to be read in a list. |
 | v1.18 | 2026-10-29 | **The Execution folder's conventions move to Work Management (TSP.17).** The team, who work in that folder, did not load this skill; the conventions now have one owner, used by the people who apply them. This skill keeps what it reads: a row's specification by its `ID <n>` (`refined`), and `meta.execution`. |
 | v1.17 | 2026-10-28 | **A new register can declare its Execution folder.** `create_wbs.py --execution <folder>` writes `meta.execution.folder` at creation, so a project set up by `install.py init`, whose folders the artifact register numbers (`01. Execution`), needs no hand edit. |
 | v1.16 | 2026-10-28 | **A team updates its status on a board, and the WBS keeps one writer** (TSP.15): a pull-in, a carried split or a cancellation is followed by the board's update, where a board exists. `wbs.py` itself knows nothing of boards. |

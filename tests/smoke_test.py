@@ -600,6 +600,58 @@ def test_execution_layout(root, scratch):
           not ok and "No Execution folder" in out, out[:300])
 
 
+def test_readable_card(root, scratch):
+    """The card reads a row's description, criteria and comments as parts.
+
+    refresh_wbs.py reads each once (desc_parts, ac_list, comment_entries) and
+    the page renders what it receives; wbs.py note --title gives an entry a
+    heading, and add prints a description's shape by the row's type.
+    """
+    import importlib
+    print("\nReadable card")
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs, refresh = os.path.join(scripts, "wbs.py"), os.path.join(scripts, "refresh_wbs.py")
+    sys.path.insert(0, scripts)
+    try:
+        sys.modules.pop("refresh_wbs", None)
+        rw = importlib.import_module("refresh_wbs")
+    finally:
+        sys.path.pop(0)
+    parts = rw.desc_parts("Show each comment as a block. Problem: one plain block.\n**Approach:** parse once.")
+    check("card: a description reads as its lead and labelled parts",
+          [(p["h"], p["t"]) for p in parts] == [("", "Show each comment as a block."),
+                                                ("Problem", "one plain block."), ("Approach", "parse once.")])
+    check("card: criteria read in sequence; an ID in brackets is not one",
+          [a["n"] for a in rw.ac_list("(1) a, see (168). (2) b. (3) c.")] == ["1", "2", "3"]
+          and [a["n"] for a in rw.ac_list("1. a, ID 61. 2. b.")] == ["1", "2"]
+          and rw.ac_count("(1) a (168). (2) b.") == 2)
+    ents = rw.comment_entries("Closure 2026-Nov-2 (Done): What happened: built. AC: (1) a - met. "
+                              "(2) b - partial: half, rest in ID 9. Follow-up: ID 9.\n\n"
+                              "2026-Nov-3 · Moved: Was A, now B.\n\nOld prose with no date.")
+    check("card: the closure note reads as sections with a verdict per criterion",
+          ents[0]["k"] == "closure" and [a["v"] for a in ents[0]["cs"][1]["ac"]] == ["met", "partial"])
+    check("card: a titled note and undated prose read as their kinds",
+          (ents[1]["k"], ents[1]["ti"]) == ("note", "Moved") and ents[2]["k"] == "legacy")
+
+    work = os.path.join(scratch, "card")
+    os.makedirs(work, exist_ok=True)
+    reg, html = os.path.join(work, "WBS Card.json"), os.path.join(work, "WBS Dashboard.html")
+    ok, out = run([os.path.join(scripts, "create_wbs.py"), reg, "Card"], work)
+    ok2, out2 = run([wbs, "add", reg, "Choose the team's board", "--type", "Story", "--nature", "Analyse"], work)
+    check("card: a row added with no description prints its shape",
+          ok and ok2 and "Question: <...>" in out2 and "Decides: <...>" in out2, (out + out2)[-300:])
+    ok, out = run([wbs, "note", reg, "--id", "1", "--title", "Scope narrowed", "Was two boards, now one."], work)
+    check("card: note --title stores the date, the title and the text",
+          ok and " · Scope narrowed: Was two boards" in io.open(reg, encoding="utf-8").read(), out)
+    ok, out = run([wbs, "note", reg, "--id", "1", "--title", "Bad: title", "x"], work)
+    check("card: a title with a colon is refused", not ok and "no colon" in out, out)
+    ok, out = run([refresh, reg, html, "Card"], work)
+    page = io.open(html, encoding="utf-8").read() if ok else ""
+    check("card: the page renders the parts, its regexes intact",
+          "function commentsBlock(" in page and "function descBlock(" in page and "function acBlock(" in page
+          and "(P\\d+\\s+)?\\b(IDs?)" in page and "\x08" not in page, out[-200:])
+
+
 def test_shared_modules(root, scratch):
     """Modules copied into every skill folder must be identical.
 
@@ -2629,6 +2681,7 @@ def main():
         test_raid_lessons(root, scratch)
         test_concurrent_save(root, scratch)
         test_execution_layout(root, scratch)
+        test_readable_card(root, scratch)
         test_content_system(root, scratch)
         test_notebook_manager(root, scratch)
         test_sprint_ceremonies(root, scratch)
@@ -2653,7 +2706,7 @@ def main():
         print("All checks passed (%d tools, plus the installer, init, the foundation pack and status --upstream, the "
               "reconciliation case, the catalogue, the shared modules, effort "
               "and splits, the "
-              "concurrent-save check, the Execution layout, the "
+              "concurrent-save check, the Execution layout, the readable card, the "
               "docs-versus-code pass, "
               "the content system, the notebook manager, the sprint "
               "ceremonies, the daily loop, the weekly review, the action tracker, the "

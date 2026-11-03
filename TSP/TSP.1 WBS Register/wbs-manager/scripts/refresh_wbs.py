@@ -218,16 +218,151 @@ REFERRAL = re.compile(r"\bin ID (\d+)'s comments|\bsee ID (\d+)", re.I)
 
 
 def ac_count(text):
-    """How many criteria a row states: numbered (1), (2)..., else bullet lines,
-    else one if anything is written."""
+    """How many criteria a row states, read as the card shows them (ac_list):
+    numbered (1)... or 1. ... in sequence, else bullet lines, else one if
+    anything is written. An ID in brackets, "(168)", is not a criterion."""
+    items = ac_list(text)
+    numbered = [a for a in items if a["n"]]
+    return len(numbered) or len(items)
+
+
+def ac_items(text):
+    """[(n, text, verdict)] for the AC part of a closure note, one per (n).
+
+    A criterion's verdict is the last verdict word in its chunk: met,
+    partial or not met; 'dropped' and 'n/a' count as met (deliberately set
+    aside), and a chunk with no verdict word gives None. Text before the
+    first (n) is kept as an unnumbered item when it says anything."""
+    parts = re.split(r"\((\d+)\)", text)
+    pieces = [(None, parts[0])] + [(parts[i], parts[i + 1]) for i in range(1, len(parts) - 1, 2)]
+    out = []
+    for n, chunk in pieces:
+        if not chunk.strip():
+            continue
+        words = VERDICT_WORD.findall(chunk)
+        v = None
+        if words:
+            w = words[-1].lower()
+            v = "not met" if w == "not met" else "partial" if w.startswith("part") else "met"
+        out.append((n, chunk.strip(), v))
+    return out
+
+
+AC_NUMBERING = (re.compile(r"\((\d+)\)"), re.compile(r"(?:(?<=\s)|^)(\d+)\.\s"))
+
+
+def ac_list(text):
+    """A row's acceptance criteria as [{'n', 't'}], for the card.
+
+    Numbered as (1)... or 1. ...: a number starts a criterion only when it
+    continues the sequence 1, 2, 3, so a stray "ID 61." mid-sentence does not
+    split one. Otherwise bullet lines, one each; otherwise the prose, whole."""
     text = (text or "").strip()
     if not text:
-        return 0
-    numbered = set(re.findall(r"\((\d+)\)", text))
-    if numbered:
-        return len(numbered)
-    bullets = [l for l in text.split("\n") if l.strip().startswith(("- ", "* "))]
-    return len(bullets) or 1
+        return []
+    for pat in AC_NUMBERING:
+        seq, want = [], 1
+        for m in pat.finditer(text):
+            if int(m.group(1)) == want:
+                seq.append(m)
+                want += 1
+        if len(seq) >= 2 or (seq and seq[0].start() == 0):
+            out = []
+            if text[:seq[0].start()].strip():
+                out.append({"n": None, "t": text[:seq[0].start()].strip()})
+            for i, m in enumerate(seq):
+                end = seq[i + 1].start() if i + 1 < len(seq) else len(text)
+                out.append({"n": m.group(1), "t": text[m.end():end].strip()})
+            return out
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    if len(lines) > 1 and sum(l.startswith(("- ", "* ")) for l in lines) >= len(lines) - 1:
+        return [{"n": None, "t": l[2:].strip() if l.startswith(("- ", "* ")) else l} for l in lines]
+    return [{"n": None, "t": text}]
+
+
+# --- Descriptions: a lead, then labelled parts (references/descriptions.md) --
+#
+# A label starts a line or a sentence, and may be bold as Todoist tasks write
+# it (**Problem:**). Anything before the first label is the lead.
+
+DESC_LABELS = ("Purpose", "Value", "Approach", "Problem", "Question", "Decides",
+               "Symptom", "Cause", "Scope", "Not", "PRD")
+DESC_LABEL = re.compile(r"(?:^|(?<=\n)|(?<=[.!?)]\s))\*{0,2}(%s)\*{0,2}\s*:\*{0,2}[ \t]*"
+                        % "|".join(DESC_LABELS))
+
+
+def desc_parts(text):
+    """[{'h': label or '', 't': text}] for a row's description."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    marks = list(DESC_LABEL.finditer(text))
+    out = []
+    if not marks or text[:marks[0].start()].strip():
+        out.append({"h": "", "t": text[:marks[0].start() if marks else len(text)].strip()})
+    for i, m in enumerate(marks):
+        body = text[m.end(): marks[i + 1].start() if i + 1 < len(marks) else len(text)].strip()
+        if body:
+            out.append({"h": m.group(1), "t": body})
+    return out
+
+
+# --- Comments, read once so the card can show them as entries -------------
+#
+# Comments is a log of paragraphs, newest on top: a pinned closure note
+# (`Closure 2026-Nov-2 (Done): What happened: ... AC: (1) ... - met. Follow-up:
+# ...`), then dated entries written by `wbs.py` (`2026-Nov-3: ...`, or with a
+# title, `2026-Nov-3 · Title: ...`). Rows written before that convention hold
+# undated prose; it is shown as one block, as written.
+
+ENTRY_HEAD = re.compile(r"(\d{4}-(?:[A-Za-z]{3}|\d{2})-\d{1,2})(?: · ([^:\n]+?))?:\s*(.*)", re.S)
+CLOSURE_ENTRY = re.compile(r"Closure (\d{4}-[A-Za-z]{3}-\d{1,2}) \((Done|Cancelled)\):\s*(.*)", re.S)
+CLOSURE_SECTION = re.compile(r"\b(What happened|Why|AC(?: status)?|Acceptance criteria|Follow-up)\s*:", re.I)
+ENTRY_KINDS = (("Carried into", "carried"), ("Pulled into", "pulled in"),
+               ("Worked outside the sprint", "outside sprint"), ("Split", "split"))
+VERDICT_TAIL = re.compile(r"\s*[-–—]\s*(?:met|dropped|n/a)\.?\s*$", re.I)
+
+
+def closure_sections(text):
+    """The closure note's parts, in order: [{'h': heading, 't': text}], with
+    the AC part as items {'n', 't', 'v'} so each criterion shows its verdict."""
+    marks = list(CLOSURE_SECTION.finditer(text))
+    if not marks:
+        return [{"h": "", "t": text.strip()}]
+    out = []
+    if text[:marks[0].start()].strip():
+        out.append({"h": "", "t": text[:marks[0].start()].strip()})
+    for i, m in enumerate(marks):
+        body = text[m.end(): marks[i + 1].start() if i + 1 < len(marks) else len(text)].strip()
+        head = m.group(1)
+        if head.lower().startswith(("ac", "acceptance")):
+            items = [{"n": n, "t": VERDICT_TAIL.sub("", t), "v": v} for n, t, v in ac_items(body)]
+            out.append({"h": "AC", "ac": items})
+        else:
+            out.append({"h": head[0].upper() + head[1:], "t": body.rstrip(".") + "." if body else ""})
+    return out
+
+
+def comment_entries(text):
+    """[{'k': kind, 'd': date, 's': status, 'ti': title, 't': text, 'cs':
+    closure sections}] for one row's Comments, in their stored order."""
+    out = []
+    for para in (p.strip() for p in (text or "").split("\n\n")):
+        if not para:
+            continue
+        m = CLOSURE_ENTRY.match(para)
+        if m:
+            out.append({"k": "closure", "d": m.group(1), "s": m.group(2),
+                        "cs": closure_sections(m.group(3))})
+            continue
+        m = ENTRY_HEAD.match(para)
+        if m:
+            body = m.group(3).strip()
+            kind = next((k for prefix, k in ENTRY_KINDS if body.startswith(prefix)), "note")
+            out.append({"k": kind, "d": m.group(1), "ti": (m.group(2) or "").strip(), "t": body})
+        else:
+            out.append({"k": "legacy", "t": para})
+    return out
 
 
 def verification(row):
@@ -255,15 +390,9 @@ def verification(row):
         else:
             out["state"] = "no verdict"
         return out
-    chunks = [c for c in re.split(r"\(\d+\)", ac.group(1)) if c.strip()] or [ac.group(1)]
     worst = None
-    for c in chunks:
-        words = VERDICT_WORD.findall(c)
-        if not words:
-            continue
-        w = words[-1].lower()
-        v = "not met" if w == "not met" else "partial" if w.startswith("part") else "met"
-        if worst is None or VERDICT_RANK[v] > VERDICT_RANK[worst]:
+    for _, _, v in ac_items(ac.group(1)):
+        if v is not None and (worst is None or VERDICT_RANK[v] > VERDICT_RANK[worst]):
             worst = v
     out["state"] = {"met": "verified", "partial": "partly met", "not met": "not met",
                     None: "no verdict"}[worst]
@@ -545,6 +674,59 @@ tr:hover td{background:#f0f4ff}
 .sheet dt{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;
   margin-top:14px;font-weight:600}
 .sheet dd{margin:4px 0 0;font-size:13px;line-height:1.5;color:#1a1a2e;white-space:pre-wrap}
+/* Description: a lead and labelled parts, light formatting. */
+.sheet dd.desc{white-space:normal}
+.desc p{margin:0 0 6px}
+.desc p:last-child{margin-bottom:0}
+.desc ul{margin:2px 0 6px;padding-left:18px}
+.desc li{margin:2px 0}
+.desc code{font-size:12px;background:#f1f5f9;border-radius:4px;padding:0 4px}
+.dsec + .dsec{margin-top:8px}
+.desc details.more{margin-top:8px}
+.desc details.more>summary{cursor:pointer;color:#4472C4;font-size:12px}
+.desc details.more[open]>summary{margin-bottom:6px}
+/* Acceptance criteria: one per line, numbered, with the verdict once closed. */
+.sheet dd.acl-dd{white-space:normal}
+.acl{list-style:none;margin:2px 0 0;padding:0}
+.acl li{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:start;padding:6px 10px 6px 6px;margin:4px 0;background:#f8fafc;border-radius:6px}
+.acn{font-weight:700;color:#4472C4;font-size:12px;text-align:right;line-height:1.6}
+.act{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.acl .v{padding:2px 7px;margin-top:1px}
+/* Comments: one block per entry, the closure note pinned and distinct. */
+.sheet dd.cm-list{white-space:normal}
+.cm{border-left:3px solid #e5e7eb;padding:7px 10px 8px;margin:8px 0;background:#fff;border-radius:0 6px 6px 0}
+.cm + .cm{margin-top:10px}
+.cm-closure{border-left-color:#16a34a;background:#f0fdf4}
+.cm-closure.cm-cancelled{border-left-color:#94a3b8;background:#f8fafc}
+.cm-legacy{border-left-style:dashed}
+.cm-head{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:12px;color:#374151}
+summary.cm-head{cursor:pointer;list-style:none}
+summary.cm-head::-webkit-details-marker{display:none}
+summary.cm-head::before{content:'\\25B8';color:#9ca3af;font-size:11px;width:10px}
+details[open]>summary.cm-head::before{content:'\\25BE'}
+details[open] .cm-snip{display:none}
+.cm-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-radius:4px;padding:1px 6px;background:#f1f5f9;color:#475569}
+.tag-closure{background:#dcfce7;color:#166534}
+.cm-cancelled .tag-closure{background:#e2e8f0;color:#334155}
+.tag-pulled-in{background:#fef3c7;color:#92400e}
+.tag-carried{background:#fee2e2;color:#991b1b}
+.tag-split{background:#e0e7ff;color:#3730a3}
+.tag-outside-sprint{background:#f3e8ff;color:#6b21a8}
+.cm-date{font-weight:700;color:#1a1a2e}
+.cm-title{font-weight:600;color:#1a1a2e}
+.cm-snip{color:#6b7280;flex-basis:100%;margin-left:18px;font-size:12px}
+.cm-body{font-size:13px;line-height:1.55;margin-top:4px;white-space:pre-wrap;overflow-wrap:anywhere}
+.cm-sec{font-size:13px;line-height:1.55;margin-top:7px;overflow-wrap:anywhere}
+.cm-sl{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:1px}
+.cm-ac{list-style:none;margin:2px 0 0;padding:0}
+.cm-ac li{display:grid;grid-template-columns:72px 1fr;gap:8px;margin:4px 0;align-items:start}
+.v{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:4px;padding:2px 0;text-align:center;margin-top:2px}
+.v-met{background:#dcfce7;color:#166534}
+.v-partial{background:#fef3c7;color:#92400e}
+.v-not-met{background:#fee2e2;color:#991b1b}
+.v-none{background:#f1f5f9;color:#475569}
+.idlink{font:inherit;color:#4472C4;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+.idlink:hover,.idlink:focus-visible{text-decoration-style:solid;outline:none}
 .sheet .datebox{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
   gap:8px;padding:10px 20px 0}
 .sheet .datebox div{background:#f8fafc;border-radius:6px;padding:8px 10px;font-size:12px}
@@ -691,6 +873,87 @@ function ancestors(id){
   return out;
 }
 const crumbLink=p=>`<button class="idbtn" onclick="openDetail(${p.id})" title="ID ${esc(p.id)}: open this card">${esc(p.t)||esc(p.id)}</button>`;
+
+/* Comments arrive as entries, read once by refresh_wbs.py (comment_entries).
+   An "ID 175" in the text opens that card; one named with a project first
+   ("P12 ID 41") is another register's, and stays text. */
+function linkIds(s){
+  return esc(s).replace(/(P\\d+\\s+)?\\b(IDs?)\\s+(\\d+(?![A-Za-z\\d])(?:(?:,\\s*|\\s+and\\s+|\\s*&amp;\\s*)\\d+(?![A-Za-z\\d]))*)/g,(m,proj,w,nums)=>
+    proj?m:w+' '+nums.replace(/\\d+/g,n=>byId.has(n)?`<button class="idlink" onclick="openDetail(${n})" title="Open ID ${n}">${n}</button>`:n));
+}
+const CM_TAG={'closure':'Closure','note':'Note','carried':'Carried','pulled in':'Pulled in','outside sprint':'Outside sprint','split':'Split'};
+const CM_FOLD=280;
+function commentEntry(e,open){
+  if(e.k==='legacy')return `<div class="cm cm-legacy"><div class="cm-body">${linkIds(e.t)}</div></div>`;
+  const tag=`<span class="cm-tag tag-${e.k.replace(/ /g,'-')}">${CM_TAG[e.k]||'Note'}${e.s?' · '+esc(e.s):''}</span>`;
+  const date=e.d?`<b class="cm-date">${esc(e.d)}</b>`:'';
+  if(e.k==='closure'){
+    const secs=e.cs.map(c=>c.ac
+      ?`<div class="cm-sec"><span class="cm-sl">Acceptance criteria</span><ul class="cm-ac">${c.ac.map(a=>
+          `<li><span class="v v-${a.v?a.v.replace(/ /g,'-'):'none'}">${a.v||'no verdict'}</span><span>${a.n?'<b>('+esc(a.n)+')</b> ':''}${linkIds(a.t)}</span></li>`).join('')}</ul></div>`
+      :`<div class="cm-sec">${c.h?`<span class="cm-sl">${esc(c.h)}</span>`:''}${linkIds(c.t)}</div>`).join('');
+    return `<div class="cm cm-closure${e.s==='Cancelled'?' cm-cancelled':''}"><div class="cm-head">${tag}${date}</div>${secs}</div>`;
+  }
+  const title=e.ti?`<span class="cm-title">${esc(e.ti)}</span>`:'';
+  if(e.t.length<=CM_FOLD)
+    return `<div class="cm"><div class="cm-head">${tag}${date}${title}</div><div class="cm-body">${linkIds(e.t)}</div></div>`;
+  const lead=e.t.length>120?e.t.slice(0,120).replace(/\\s+\\S*$/,'')+'…':e.t;
+  const snip=e.ti?'':`<span class="cm-snip">${esc(lead)}</span>`;
+  return `<details class="cm"${open?' open':''}><summary class="cm-head">${tag}${date}${title}${snip}</summary><div class="cm-body">${linkIds(e.t)}</div></details>`;
+}
+/* Light formatting people already write: blank-line paragraphs, bullet
+   lines, **bold** and `code`; IDs linked as in comments. */
+function mdLite(s){
+  const inl=t=>linkIds(t).replace(/\\*\\*(.+?)\\*\\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  const bullet=/^\\s*[-*] /;
+  return String(s).split(/\\n\\s*\\n/).map(b=>{
+    const out=[];let run=[],para=[];
+    const flush=()=>{
+      if(para.length){out.push(`<p>${para.map(inl).join('<br>')}</p>`);para=[];}
+      if(run.length){out.push(`<ul>${run.map(l=>`<li>${inl(l.replace(bullet,''))}</li>`).join('')}</ul>`);run=[];}
+    };
+    b.split('\\n').filter(l=>l.trim()).forEach(l=>{
+      if(bullet.test(l)){if(para.length){const p=para;para=[];out.push(`<p>${p.map(inl).join('<br>')}</p>`);}run.push(l);}
+      else{if(run.length)flush();para.push(l);}
+    });
+    flush();
+    return out.join('');
+  }).join('');
+}
+/* A description: its lead, then its labelled parts. A long one folds after
+   its first paragraph, labelled or not. */
+const DESC_FOLD=110;
+function descBlock(parts){
+  if(!parts||!parts.length)return '';
+  const sec=(h,t)=>`<div class="dsec">${h?`<span class="cm-sl">${esc(h)}</span>`:''}${mdLite(t)}</div>`;
+  const words=parts.reduce((n,p)=>n+p.t.split(/\\s+/).length,0);
+  if(words<=DESC_FOLD)return `<dt>Description</dt><dd class="desc">${parts.map(p=>sec(p.h,p.t)).join('')}</dd>`;
+  const [first,...rest]=parts;
+  const paras=first.t.split(/\\n\\s*\\n/);
+  const shown=sec(first.h,paras[0]);
+  const hidden=(paras.length>1?sec('',paras.slice(1).join('\\n\\n')):'')+rest.map(p=>sec(p.h,p.t)).join('');
+  const body=hidden?shown+`<details class="more"><summary>more</summary>${hidden}</details>`:shown;
+  return `<dt>Description</dt><dd class="desc">${body}</dd>`;
+}
+/* Acceptance criteria one per line, numbered; on a closed row each carries
+   the verdict its closure note gives it, by number. */
+function acBlock(d){
+  const items=d.acl||[];
+  if(!items.length)return '';
+  if(items.length===1&&!items[0].n)return `<dt>Acceptance criteria</dt><dd>${linkIds(items[0].t)}</dd>`;
+  const cl=(d.cm||[]).find(e=>e.k==='closure');
+  const sec=cl&&cl.cs.find(c=>c.ac);
+  const verdict=new Map(sec?sec.ac.filter(a=>a.n).map(a=>[a.n,a.v]):[]);
+  return `<dt>Acceptance criteria (${items.filter(a=>a.n).length||items.length})</dt><dd class="acl-dd"><ol class="acl">${items.map(a=>{
+    const v=a.n&&verdict.has(a.n)?verdict.get(a.n):null;
+    const tag=cl&&a.n?`<span class="v v-${v?v.replace(/ /g,'-'):'none'}">${v||'no verdict'}</span>`:'<span></span>';
+    return `<li><span class="acn">${a.n?esc(a.n):'&bull;'}</span><span class="act">${linkIds(a.t)}</span>${tag}</li>`;}).join('')}</ol></dd>`;
+}
+function commentsBlock(entries){
+  if(!entries||!entries.length)return '';
+  const newest=entries.findIndex(e=>e.k!=='closure'&&e.k!=='legacy');
+  return `<dt>Comments (${entries.length})</dt><dd class="cm-list">${entries.map((e,i)=>commentEntry(e,i===newest)).join('')}</dd>`;
+}
 // The card open in the details, the cards opened before it (for Back), and the
 // address: #item=<ID> opens the dashboard at a card, and the browser's Back works.
 let detailId=null,detailTrail=[],hashOwn=false;
@@ -751,17 +1014,17 @@ function openDetail(id,viaHash){
         </div>
         <dl>
           ${rollup?`<dt>Rolls up</dt><dd>${esc(rollup)}</dd>`:''}
-          ${block('Description',d.de)}
+          ${descBlock(d.dp)}
           ${kids.length?`<dt>Children (${kids.length})</dt><dd><div class="kids">${[...kids].sort(byCode).map(k=>
             `<div class="kid"><button class="idbtn" onclick="openDetail(${k.id})" title="Open the full record">${k.id}</button><span class="t">${esc(k.t)||'<em>(no title)</em>'}</span>${badge(k.s)}<span class="h">${k.e?k.e+'h':''}</span></div>`).join('')}</div></dd>`:''}
-          ${block('Acceptance criteria',d.ac)}
+          ${acBlock(d)}
           ${block('Action plan',d.ap)}
           ${block('Key dependencies',d.dep)}
           ${block('Planning considerations',d.pcon)}
           ${block('Validation approach',d.va)}
           ${block('Control approach',d.capp)}
           ${block('Control tool',d.ctool)}
-          ${block('Comments',d.cm)}
+          ${commentsBlock(d.cm)}
         </dl>
       </div>
     </div>`;
@@ -1362,9 +1625,11 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None,
             # it, and the register had to be opened in an editor to read an
             # acceptance criterion.
             'de': str(it.get('Description', '') or ''),
+            'dp': desc_parts(str(it.get('Description', '') or '')),
             'ac': str(it.get('Acceptance Criteria', '') or ''),
+            'acl': ac_list(str(it.get('Acceptance Criteria', '') or '')),
             'ap': str(it.get('Action Plan', '') or ''),
-            'cm': str(it.get('Comments', '') or ''),
+            'cm': comment_entries(str(it.get('Comments', '') or '')),
             'dep': str(it.get('Key Dependencies', '') or ''),
             'pcon': str(it.get('Planning Considerations', '') or ''),
             'va': str(it.get('Validation Approach', '') or ''),

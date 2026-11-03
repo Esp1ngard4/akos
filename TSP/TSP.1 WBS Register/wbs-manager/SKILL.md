@@ -181,6 +181,17 @@ items = R.rows(data, "items")
 python <skill-path>/scripts/wbs.py add "<register>" "Title" --type Story --parent 37 --code 3.4
 ```
 
+**Write the description to its type's shape** (`references/descriptions.md`). Open with one sentence on what the row delivers or changes. Then the type's labels, each starting a line:
+
+- **Deliverable:** Purpose, Not.
+- **Feature:** Value (including the outcome it serves and the measure it moves), Approach, Not, PRD.
+- **Story:** Problem, Approach.
+- **Analyse:** Question, Decides.
+- **Fix:** Symptom, Cause.
+- **Task:** one line.
+
+Keep it to about 80 words (100 for a Deliverable or Feature). It's the row's current state: history goes in a titled note, and nothing another field holds goes in. When scope changes, rewrite the description and note the change. Added without a description, a row prints its shape.
+
 Claims the next ID, refuses a `Parent` that does not exist or would close a cycle, holds every vocabulary field to the register's own vocabulary, and keeps `Key Deliverable` off rows that cannot carry it. Defaults: Status `Portfolio Backlog`, Type `Story`, Nature `Build`. Choose `Code` as the hierarchical position; it is display only. Omit fields that have no value rather than writing empty strings. Then **refresh the dashboard** (operation 5).
 
 ### 3. Edit items
@@ -214,6 +225,21 @@ python <skill-path>/scripts/wbs.py note "<register>" --id 42 "Scope revised: was
 ```
 
 It stamps the date and puts the entry on top, **below any closure note** — a closed row is read first for how it ended, so the closure stays pinned however much is added after it. One paragraph per entry, because the blank line is what separates them. Rows written before this convention hold their entries run together in one paragraph, oldest first; they are re-cut by reading them, not by script, since the entries are woven into prose.
+
+**Write a note to be read in a list.** Open with one sentence on what changed, then at most two or three on why. Detail belongs in the row's Execution folder, with a pointer to it. Give a note that will be looked for later a title, a few words with no colon:
+
+```bash
+python <skill-path>/scripts/wbs.py note "<register>" --id 42 --title "Scope narrowed" "Was two screens, now one: the second moved to ID 57."
+```
+
+It is stored as `2026-Nov-3 · Scope narrowed: Was two screens…`. The dashboard's card shows each entry as its own block:
+
+- the date and a label (Closure, Note, Carried, Pulled in, Split, Outside sprint), with the title as the entry's heading;
+- a long entry folded to its first line, the newest one open;
+- the closure note pinned, with *What happened*, *AC* and *Follow-up* as sections and a verdict badge on each criterion;
+- an `ID n` in the text linking to that card. One named with its project first (`P12 ID 41`) is another register's and stays text.
+
+The acceptance criteria show one per line, numbered. On a closed row, each criterion shows the verdict its closure note gives it. A number starts a criterion only when it continues the sequence, so an ID in brackets inside a criterion isn't one; the Verification tab counts criteria the same way.
 
 **Starting work the sprint never committed to asks first.** Moving a row to `Implementing` or `Done` (through `set` or `add`) is refused when the sprint running today has not committed to it: not planned or carried into it, not pulled in already, and not under a parent that is. **A parent counts only when it is committed itself:** a committed child does not make it so, since a parent's own acceptance criteria can stay unmet when every child is done. When a sprint means to close a parent (a goal naming a key deliverable), commit the parent at planning too; otherwise its close is asked like any other row. Ask the user which of two it is, then pass the answer:
 
