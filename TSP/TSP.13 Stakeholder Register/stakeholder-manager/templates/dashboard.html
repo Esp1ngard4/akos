@@ -72,8 +72,8 @@ td.nowrap { white-space: nowrap; }
 .inactive td { color: #999; }
 
 /* A stakeholder's name opens their detail. */
-.person { cursor: pointer; }
-.person:hover { color: #2F5496; text-decoration: underline; }
+.person, .comm { cursor: pointer; }
+.person:hover, .comm:hover { color: #2F5496; text-decoration: underline; }
 .header .edition { color: #666; font-size: 12px; margin-top: 4px; }
 .switch { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #444; cursor: pointer; }
 .switch[hidden] { display: none; }
@@ -88,10 +88,20 @@ td.nowrap { white-space: nowrap; }
 .drawer dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 12px; }
 .drawer dt { color: #888; }
 .drawer .item { font-size: 12px; padding: 6px 0; border-bottom: 1px solid #eef0f4; line-height: 1.45; }
-.entry { font-size: 12px; padding: 8px 0; border-bottom: 1px solid #eef0f4; line-height: 1.5; }
-.entry .when { color: #888; font-size: 11px; }
-.entry .title { font-weight: 600; }
-.entry summary { cursor: pointer; }
+.drawer .when { color: #888; font-size: 11px; }
+/* Notes: one block per entry, as the WBS card shows a row's comments. */
+.cm { border-left: 3px solid #e5e7eb; padding: 7px 10px 8px; margin: 8px 0; border-radius: 0 6px 6px 0; }
+.cm-legacy { border-left-style: dashed; }
+.cm-head { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-size: 12px; color: #374151; }
+summary.cm-head { cursor: pointer; list-style: none; }
+summary.cm-head::-webkit-details-marker { display: none; }
+summary.cm-head::before { content: "\25B8"; color: #9ca3af; font-size: 11px; width: 10px; }
+details[open] > summary.cm-head::before { content: "\25BE"; }
+details[open] .cm-snip { display: none; }
+.cm-date { font-weight: 700; color: #1a1a2e; }
+.cm-title { font-weight: 600; color: #2F5496; }
+.cm-snip { color: #666; }
+.cm-body { font-size: 13px; line-height: 1.5; margin-top: 3px; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -171,7 +181,12 @@ const groupName = id => (GROUPS.find(g => g.ID === id) || {}).Name || id;
 const personName = id => (PEOPLE.find(p => p.ID === id) || {}).Name || id;
 const person = (id, label, cls = "") => PEOPLE.some(p => p.ID === id)
   ? `<span class="person ${cls}" data-id="${esc(id)}">${esc(label == null ? personName(id) : label)}</span>` : esc(label == null ? id : label);
+const commName = id => (COMMS.find(c => c.ID === id) || {}).What || id;
+const comm = (id, label) => COMMS.some(c => c.ID === id)
+  ? `<span class="comm" data-id="${esc(id)}">${esc(label == null ? commName(id) : label)}</span>` : esc(label == null ? id : label);
 const ref = id => id.startsWith("G.") ? esc(groupName(id)) : person(id);
+// An ID in the Findings or the change log: a stakeholder or communication opens its detail.
+const rowLink = id => !id ? "" : id.startsWith("C.") ? comm(id, id) : person(id, id);
 const STATE_LABEL = {overdue: "Overdue", due: "Due", ok: "On track", event: "On event", inactive: "Inactive"};
 
 document.getElementById("title").textContent = "Stakeholders · " + SCOPE;
@@ -240,7 +255,7 @@ function renderTables() {
   document.getElementById("comms").innerHTML = cs.length ? `<table><thead><tr>
     <th>ID</th><th>Communication</th><th>Status</th><th>Next due</th><th>Last done</th><th>Cadence</th><th>Audience</th><th>Channel</th><th>Share</th></tr></thead><tbody>` +
     cs.map(c => `<tr class="${active(c) ? "" : "inactive"}"><td class="id">${esc(c.ID)}</td>
-      <td><div class="name">${esc(c.What)}</div><div class="sub">${esc([c.Mode, c.Report, c.Owner].filter(Boolean).join(" · "))}</div></td>
+      <td><div class="name">${comm(c.ID, c.What)}</div><div class="sub">${esc([c.Mode, c.Report, c.Owner].filter(Boolean).join(" · "))}</div></td>
       <td><span class="pill st-${c.state}">${STATE_LABEL[c.state] || c.state}</span></td>
       <td class="nowrap">${esc(c.due || "—")}</td>
       <td class="nowrap">${esc(c["Last Done"] || "never")}</td>
@@ -255,7 +270,7 @@ function renderTables() {
     gs.map(gr => `<tr class="${active(gr) ? "" : "inactive"}"><td class="id">${esc(gr.ID)}</td>
       <td><div class="name">${esc(gr.Name)}</div><div class="sub">${esc(gr.Purpose || "")}</div></td>
       <td>${PEOPLE.filter(p => active(p) && (p.Groups || []).includes(gr.ID)).map(p => `<span class="chip">${person(p.ID, p.Name)}</span>`).join("") || `<span class="muted">nobody</span>`}</td>
-      <td>${COMMS.filter(c => keep(c) && (c.Audience || []).includes(gr.ID)).map(c => `<span class="chip">${esc(c.What)}</span>`).join("") || `<span class="muted">none</span>`}</td></tr>`).join("") +
+      <td>${COMMS.filter(c => keep(c) && (c.Audience || []).includes(gr.ID)).map(c => `<span class="chip">${comm(c.ID, c.What)}</span>`).join("") || `<span class="muted">none</span>`}</td></tr>`).join("") +
     `</tbody></table>` : `<div class="empty">No ${GROUPS.length ? "active " : ""}groups.</div>`;
 }
 
@@ -268,30 +283,40 @@ renderTables();
 
 // Findings and log.
 document.getElementById("findings").innerHTML = FINDINGS.length ? `<table><thead><tr><th>Severity</th><th>Item</th><th>Finding</th></tr></thead><tbody>` +
-  FINDINGS.map(f => `<tr><td><span class="sev ${f.Severity}">${f.Severity}</span></td><td class="id">${f.Item ? person(f.Item, f.Item) : ""}</td><td>${esc(f.Finding)}</td></tr>`).join("") +
+  FINDINGS.map(f => `<tr><td><span class="sev ${f.Severity}">${f.Severity}</span></td><td class="id">${rowLink(f.Item)}</td><td>${esc(f.Finding)}</td></tr>`).join("") +
   `</tbody></table>` : `<div class="empty">The audit is clean.</div>`;
 document.getElementById("log").innerHTML = CHANGES.length ? `<table><thead><tr><th>Date</th><th>Item</th><th>Change</th><th>Reason</th></tr></thead><tbody>` +
-  [...CHANGES].reverse().map(c => `<tr><td class="nowrap">${esc(c["Changed On"])}</td><td class="id">${person(c.Item, c.Item)}</td><td>${esc(c.Change)}</td><td>${esc(c.Reason || "")}</td></tr>`).join("") +
+  [...CHANGES].reverse().map(c => `<tr><td class="nowrap">${esc(c["Changed On"])}</td><td class="id">${rowLink(c.Item)}</td><td>${esc(c.Change)}</td><td>${esc(c.Reason || "")}</td></tr>`).join("") +
   `</tbody></table>` : `<div class="empty">No changes yet.</div>`;
 
-// A stakeholder's detail.
+// A row's detail: a stakeholder's or a communication's.
 // Notes is a log, newest first: "2026-11-04 · Title: text" or "2026-11-04: text", a blank line between.
+// An entry without a date was written before the log and is shown as such.
 function noteEntries(text) {
   return String(text || "").split(/\n\s*\n/).map(e => e.trim()).filter(Boolean).map(e => {
     const m = e.match(/^(\d{4}-\d{2}-\d{2})(?: · ([^:\n]+))?: ([\s\S]*)$/);
-    return m ? {when: m[1], title: m[2] || "", text: m[3]} : {when: "", title: "", text: e};
+    return m ? {when: m[1], title: m[2] || "", text: m[3]} : {when: "", title: "", text: e, legacy: true};
   });
 }
 
-function renderNotes(p) {
+// An S.n or C.n in a note opens that row, when the register holds it.
+const linkRefs = s => esc(s).replace(/\b[SC]\.\d+\b/g, id =>
+  (id[0] === "S" ? PEOPLE : COMMS).some(r => r.ID === id) ? rowLink(id) : id);
+
+const NOTE_FOLD = 280;
+function noteBlock(e, open) {
+  if (e.legacy) return `<div class="cm cm-legacy"><div class="cm-body">${linkRefs(e.text)}</div></div>`;
+  const head = `<b class="cm-date">${esc(e.when)}</b>${e.title ? `<span class="cm-title">${esc(e.title)}</span>` : ""}`;
+  if (e.text.length <= NOTE_FOLD) return `<div class="cm"><div class="cm-head">${head}</div><div class="cm-body">${linkRefs(e.text)}</div></div>`;
+  const snip = e.title ? "" : `<span class="cm-snip">${esc(e.text.slice(0, 120).replace(/\s+\S*$/, ""))}…</span>`;
+  return `<details class="cm"${open ? " open" : ""}><summary class="cm-head">${head}${snip}</summary><div class="cm-body">${linkRefs(e.text)}</div></details>`;
+}
+
+function renderNotes(r) {
   if (EDITION !== "notes") return `<div class="muted">This copy carries no notes; they are in Stakeholder Dashboard.html.</div>`;
-  const entries = noteEntries(p.Notes);
+  const entries = noteEntries(r.Notes);
   if (!entries.length) return `<div class="muted">No notes.</div>`;
-  return entries.map((e, i) => {
-    const head = `<span class="when">${esc(e.when || "undated")}</span>${e.title ? ` · <span class="title">${esc(e.title)}</span>` : ""}`;
-    if (e.text.length <= 160) return `<div class="entry">${head}<div>${esc(e.text)}</div></div>`;
-    return `<details class="entry"${i === 0 ? " open" : ""}><summary>${head} — ${esc(e.text.slice(0, 90))}…</summary><div>${esc(e.text)}</div></details>`;
-  }).join("");
+  return entries.map((e, i) => noteBlock(e, i === 0)).join("");
 }
 
 function reaching(p) {
@@ -299,44 +324,77 @@ function reaching(p) {
   return COMMS.filter(c => active(c) && (c.Audience || []).some(id => id === p.ID || groups.includes(id)));
 }
 
+const field = (label, value) => value ? `<dt>${label}</dt><dd>${value}</dd>` : "";
+const sharePill = level => `<span class="pill ${level === "external" ? "ext" : "own"}">${esc(level || "owner")}</span>`;
+
+// What every detail ends with: findings, notes, then changes (a note's own "Note added" row left out).
+function detailTail(r) {
+  const found = FINDINGS.filter(f => f.Item === r.ID);
+  const log = CHANGES.filter(c => c.Item === r.ID && !/^Note added/.test(c.Change || "")).reverse();
+  return `<h4>Findings</h4>
+    ${found.length ? found.map(f => `<div class="item"><span class="sev ${f.Severity}">${f.Severity}</span> ${esc(f.Finding)}</div>`).join("") : `<div class="muted">None.</div>`}
+    <h4>Notes</h4>${renderNotes(r)}
+    <h4>Changes</h4>
+    ${log.length ? log.map(c => `<div class="item"><span class="when">${esc(c["Changed On"])}</span> ${esc(c.Change)}${c.Reason ? `<div class="sub">${esc(c.Reason)}</div>` : ""}</div>`).join("") : `<div class="muted">None.</div>`}`;
+}
+
+const heading = (r, name) => `<h2>${esc(name)}</h2>
+    <div class="sub">${esc(r.ID)}${active(r) ? "" : ` · <span class="pill st-inactive">Inactive</span>`}</div>`;
+
+function personDetail(p) {
+  const comms = reaching(p);
+  return heading(p, p.Name) + `
+    <h4>Who</h4><dl>
+      ${field("Role", esc(p.Role))}${field("Organisation", esc(p.Organisation))}
+      ${field("Groups", (p.Groups || []).map(gid => `<span class="chip">${esc(groupName(gid))}</span>`).join(""))}
+      ${field("Share level", sharePill(p["Share Level"]))}
+    </dl>
+    <h4>Where they stand</h4><dl>
+      ${field("Power / interest", esc([p.Power || "?", p.Interest || "?"].join(" / ")))}
+      ${field("Quadrant", esc(p.quadrant || "not placed"))}
+      ${field("Engagement", `<span class="pill ${p.gap > 0 ? "gap-yes" : "gap-no"}">${esc(p.Current || "?")} → ${esc(p.Desired || "?")}${p.gap > 0 ? " · gap " + p.gap : ""}</span>`)}
+      ${field("Stake", esc(p.Stake))}${field("Engagement action", esc(p["Engagement Action"]))}
+    </dl>
+    <h4>What reaches them</h4>
+    ${comms.length ? comms.map(c => `<div class="item"><span class="pill st-${c.state}">${STATE_LABEL[c.state] || c.state}</span> ${comm(c.ID, c.What)}<div class="sub">${esc([c.Cadence, c.Channel, c.due ? "next due " + c.due : ""].filter(Boolean).join(" · "))}</div></div>`).join("") : `<div class="muted">No active communication reaches them.</div>`}
+    ` + detailTail(p);
+}
+
+function commDetail(c) {
+  const audience = c.Audience || [];
+  return heading(c, c.What) + `
+    <h4>What</h4><dl>
+      ${field("Report", esc(c.Report))}${field("Mode", esc(c.Mode))}${field("Owner", esc(c.Owner))}
+      ${field("Share", c.public ? `<span class="pill st-event">public</span>` : sharePill(c.share_level))}
+    </dl>
+    <h4>When</h4><dl>
+      ${field("State", `<span class="pill st-${c.state}">${STATE_LABEL[c.state] || c.state}</span>`)}
+      ${field("Next due", esc(c.due))}${field("Last done", esc(c["Last Done"] || "never"))}
+      ${field("Cadence", esc(c.Cadence))}${field("Channel", esc(c.Channel))}
+    </dl>
+    <h4>Who it reaches</h4>
+    ${audience.length ? `<div>${audience.map(id => `<span class="chip" title="${esc(id)}">${ref(id)}</span>`).join("")}</div>` : `<div class="muted">No audience.</div>`}
+    ${c.recipients != null ? `<div class="sub">${c.recipients} ${c.recipients === 1 ? "person" : "people"}</div>` : ""}
+    ` + detailTail(c);
+}
+
 const drawer = document.getElementById("detail");
 const backdrop = document.getElementById("backdrop");
 function openDetail(id) {
-  const p = PEOPLE.find(r => r.ID === id);
-  if (!p) return;
-  const row = (label, value) => value ? `<dt>${label}</dt><dd>${value}</dd>` : "";
-  const comms = reaching(p);
-  const found = FINDINGS.filter(f => f.Item === id);
-  const log = CHANGES.filter(c => c.Item === id).reverse();
+  const r = (id.startsWith("C.") ? COMMS : PEOPLE).find(x => x.ID === id);
+  if (!r) return;
   drawer.innerHTML = `<button class="close" id="close-detail">Close</button>
-    <h2>${esc(p.Name)}</h2>
-    <div class="sub">${esc(p.ID)}${active(p) ? "" : ` · <span class="pill st-inactive">Inactive</span>`}</div>
-    <h4>Who</h4><dl>
-      ${row("Role", esc(p.Role))}${row("Organisation", esc(p.Organisation))}
-      ${row("Groups", (p.Groups || []).map(gid => `<span class="chip">${esc(groupName(gid))}</span>`).join(""))}
-      ${row("Share level", `<span class="pill ${p["Share Level"] === "external" ? "ext" : "own"}">${esc(p["Share Level"] || "owner")}</span>`)}
-    </dl>
-    <h4>Where they stand</h4><dl>
-      ${row("Power / interest", esc([p.Power || "?", p.Interest || "?"].join(" / ")))}
-      ${row("Quadrant", esc(p.quadrant || "not placed"))}
-      ${row("Engagement", `<span class="pill ${p.gap > 0 ? "gap-yes" : "gap-no"}">${esc(p.Current || "?")} → ${esc(p.Desired || "?")}${p.gap > 0 ? " · gap " + p.gap : ""}</span>`)}
-      ${row("Stake", esc(p.Stake))}${row("Engagement action", esc(p["Engagement Action"]))}
-    </dl>
-    <h4>What reaches them</h4>
-    ${comms.length ? comms.map(c => `<div class="item"><span class="pill st-${c.state}">${STATE_LABEL[c.state] || c.state}</span> ${esc(c.What)}<div class="sub">${esc([c.Cadence, c.Channel, c.due ? "next due " + c.due : ""].filter(Boolean).join(" · "))}</div></div>`).join("") : `<div class="muted">No active communication reaches them.</div>`}
-    <h4>Findings</h4>
-    ${found.length ? found.map(f => `<div class="item"><span class="sev ${f.Severity}">${f.Severity}</span> ${esc(f.Finding)}</div>`).join("") : `<div class="muted">None.</div>`}
-    <h4>Notes</h4>${renderNotes(p)}
-    <h4>Changes</h4>
-    ${log.length ? log.map(c => `<div class="item"><span class="when">${esc(c["Changed On"])}</span> ${esc(c.Change)}${c.Reason ? `<div class="sub">${esc(c.Reason)}</div>` : ""}</div>`).join("") : `<div class="muted">None.</div>`}`;
+    ` + (id.startsWith("C.") ? commDetail(r) : personDetail(r));
   drawer.hidden = backdrop.hidden = false;
+  drawer.scrollTop = 0;
   document.getElementById("close-detail").focus();
 }
 const closeDetail = () => { drawer.hidden = backdrop.hidden = true; };
+// A name opens its detail, from the page or from inside another detail.
 document.addEventListener("click", e => {
   if (e.target.closest("#close-detail") || e.target === backdrop) return closeDetail();
-  const who = e.target.closest(".person");
-  if (who && !drawer.contains(who)) openDetail(who.dataset.id);
+  const link = e.target.closest(".person, .comm");
+  if (link) { e.preventDefault(); openDetail(link.dataset.id); }
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !drawer.hidden) closeDetail(); });
 

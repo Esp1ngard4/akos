@@ -52,6 +52,7 @@ OPTIONS = {
               ("status", "Status", "status"), ("notes", "Notes", None)],
 }
 ALL_OPTS = sorted(set(o for opts in OPTIONS.values() for o, _, _ in opts))
+NOTE_HINT = 400          # past this, `note` says the detail belongs in the meeting notes
 
 
 def today(value=None):
@@ -247,6 +248,9 @@ def cmd_note(args):
     path = STK.resolve(args.register)
     data = R.load(path)
     coll, row = find_row(data, args.id)
+    if "Notes" not in S.FIELDS[coll]:
+        sys.exit("A group has no notes: what is learned belongs to its members (S.n) "
+                 "or its communications (C.n).")
     text = S.clean(args.text)
     if not text:
         sys.exit("The note is empty.")
@@ -257,6 +261,9 @@ def cmd_note(args):
     row["Notes"] = note_entry(text, on, args.title) + ("\n\n" + old if old else "")
     log_change(data, row["ID"], ["Note added" + (" · %s" % args.title.strip() if S.clean(args.title) else "")],
                args.reason, on)
+    if len(text) > NOTE_HINT:
+        print("  A long note (%d characters): a note is read in a list, so keep the detail "
+              "in the meeting notes and point to them." % len(text))
     return finish(args, path, data, "%s  note added" % row["ID"])
 
 

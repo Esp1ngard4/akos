@@ -1469,6 +1469,23 @@ def test_stakeholder_register(root, scratch):
     ok, out = run([stk, "check", "--all", "--root", project], project)
     check("check --all: active in both, they are", "Phone differs" in out, out)
 
+    # A note is written to be read in a list, and carries no contact detail.
+    ok, out = run([stk, "note", plan, "--id", "G.1", "anything"], project)
+    check("note: a group is refused, pointing at members or communications",
+          not ok and "S.n" in out and "C.n" in out, out)
+    ok, out = run([stk, "note", plan, "--id", "C.2", "x " * 220], project)
+    check("note: a hint past 400 characters, the note still written",
+          ok and "long note" in out.lower() and "meeting notes" in out, out)
+    ok, out = run([stk, "check", plan], project)
+    check("check: an ordinary note raises nothing about contacts", "looks like" not in out, out)
+    run([stk, "note", plan, "--id", "S.3", "reach them on +00 555 0100"], project)
+    ok, out = run([stk, "check", plan], project)
+    check("check: a phone number in a note warns, without the value",
+          "Notes hold what looks like a phone number" in out and "555" not in out, out)
+    run([os.path.join(scripts, "refresh_stk.py"), plan], project)
+    check("the page opens a communication's detail too",
+          "function commDetail" in io.open(dash, encoding="utf-8").read())
+
     empty = os.path.join(project, "no-register")
     os.makedirs(empty, exist_ok=True)
     code = ("import sys; sys.path.insert(0, %r); import stk_register as STK; "

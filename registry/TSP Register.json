@@ -444,6 +444,12 @@
       "Description": "Notes became a dated log (stk.py note), a stakeholder's detail opens from the dashboard, refresh writes a page with notes and one without, views are active by default with a Show inactive switch, check --all leaves inactive stakeholders out of the contacts comparison (TD.13 v1.3)",
       "ID": 74,
       "Tool": "TSP.13"
+    },
+    {
+      "Changed On": "2026-11-04",
+      "Description": "TD.13 v1.4: notes written and shown to be read in a list - SKILL.md says how to write one and note hints past 400 characters; each entry a block with date and title, a long one folded, S.n and C.n linked; a communication opens its own detail; note refuses a group; check warns on a contact detail in a note; the panel's changes leave out Note added.",
+      "ID": 75,
+      "Tool": "TSP.13"
     }
   ],
   "control_activities": [],
@@ -494,8 +500,8 @@
         ]
       }
     },
-    "updated": "2026-11-04T12:07:18",
-    "values_hash": "sha256:01b0b239a6c809bba50397c4a5edfa389adf01871a876f9c2f60116d7b3e10e9",
+    "updated": "2026-11-04T15:32:03",
+    "values_hash": "sha256:507a7da807d49b2f9e056d9a792f5e1091f1afef0b5c6d73044f3b1ec8873885",
     "version": 1
   },
   "tools": [

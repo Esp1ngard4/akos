@@ -455,6 +455,23 @@ def content_plan_exists(strategies, channel):
 
 # --- the audit -------------------------------------------------------------------------
 
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+NUMBER_RUN = re.compile(r"\+?\d[\d \-().]{7,}\d")
+
+
+def contact_like(text):
+    """What in a note looks like a contact detail: 'an email address', 'a phone number' or None.
+    A phone number is nine digits or more in one run; dates are left aside first."""
+    text = str(text or "")
+    if EMAIL.search(text):
+        return "an email address"
+    for run in NUMBER_RUN.findall(ISO_DATE.sub(" ", text)):
+        if sum(ch.isdigit() for ch in run) >= 9:
+            return "a phone number"
+    return None
+
+
 def check(data, register_path=None):
     """[(severity, item, message)] for one project: the register and its contacts."""
     found = []
@@ -471,6 +488,11 @@ def check(data, register_path=None):
             seen.add(rid)
             if row.get("Status") and row["Status"] not in S.vocabulary(data, "status"):
                 add("error", rid, "Status %r not in vocabulary" % row["Status"])
+            # Active or not: it is about what a page carries, not about managing someone.
+            what = contact_like(row.get("Notes"))
+            if what:
+                add("warning", rid, "Notes hold what looks like %s: contacts belong in the "
+                    "contacts file" % what)
 
     groups = dict((g["ID"], g) for g in R.rows(data, S.GROUPS) if g.get("ID"))
     people = dict((p["ID"], p) for p in R.rows(data, S.STAKEHOLDERS) if p.get("ID"))

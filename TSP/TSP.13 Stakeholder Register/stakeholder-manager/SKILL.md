@@ -97,13 +97,22 @@ python <skill>/scripts/stk.py set <reg> --id S.6 --status Inactive --reason "wor
 
 A gap between `Current` and `Desired` wants an `--action`: the one thing that closes it.
 
-**Notes are a log.** What is learned about a stakeholder (or a communication or group) goes in a dated entry on top, never over the last one:
+**Notes are a log.** What is learned about a stakeholder or a communication goes in a dated entry on top, never over the last one (a group has no notes; what is learned belongs to its members or its communications):
 
 ```
 python <skill>/scripts/stk.py note <reg> --id S.4 --title "Budget" "wants a monthly figure, not a quarterly one"
 ```
 
-It is stored as `2026-11-04 · Budget: …`, or `2026-11-04: …` without a title; a title is a few words with no colon. The change log records `Note added`, never the text. `add --notes` writes the first entry. `set --notes` is refused, since it would overwrite the history; `set --notes "" --reason "..."` clears the whole log, for a note that should never have been written. A conversation's record is its meeting notes (notebook-capture); a note can point to them.
+It is stored as `2026-11-04 · Budget: …`, or `2026-11-04: …` without a title; a title is a few words with no colon. The change log records `Note added`, never the text. `add --notes` writes the first entry. `set --notes` is refused, since it would overwrite the history; `set --notes "" --reason "..."` clears the whole log, for a note that should never have been written.
+
+**Write a note to be read in a list**, since the dashboard shows the log as one:
+
+- Write what changes how they are engaged: a position, a concern, a preference, something they committed to. What happened in a conversation is its meeting notes (notebook-capture); the note can point to them.
+- One sentence on what was learned, then at most one or two on what it means for engaging them. Past 400 characters `note` says so; the detail belongs in the meeting notes.
+- A title for anything that will be looked for later.
+- What they said or did, not a judgement of their character, written as something they would not mind reading: the page with notes can still travel.
+- No contact details (`check` warns on what looks like an email address or a phone number), and no health, family or money matters unless engaging them depends on it.
+- `S.n` and `C.n` in the text link to that row on the dashboard.
 
 ### Send a communication
 
@@ -132,7 +141,7 @@ python <skill>/scripts/stk.py check <reg>
 python <skill>/scripts/stk.py check --all [--root DIR]   # every project, plus contacts that disagree across projects
 ```
 
-Within a project: a register outside a Confidential folder, a `per sprint` communication with no sprint calendar found, unknown or inactive IDs in groups and audiences, a group with no active members, missing analysis fields, a gap with no engagement action, a stakeholder with no contacts row (and the reverse), a recipient with no address for the channel, a contacts file git tracks or would take, a `content:` channel whose plan cannot be found (checked against the nearest `content-system/strategies/` at or above the register; with none, a note says the pointers were not checked). Across projects: the same name or email with different details, among the stakeholders active in each, named without the values. Each finding is a decision for the user; nothing is fixed silently.
+Within a project: a register outside a Confidential folder, a `per sprint` communication with no sprint calendar found, unknown or inactive IDs in groups and audiences, a group with no active members, missing analysis fields, a gap with no engagement action, a note holding what looks like an email address or phone number (on any row, active or not), a stakeholder with no contacts row (and the reverse), a recipient with no address for the channel, a contacts file git tracks or would take, a `content:` channel whose plan cannot be found (checked against the nearest `content-system/strategies/` at or above the register; with none, a note says the pointers were not checked). Across projects: the same name or email with different details, among the stakeholders active in each, named without the values. Each finding is a decision for the user; nothing is fixed silently.
 
 ### Refresh the dashboard
 
@@ -142,7 +151,7 @@ python <skill>/scripts/refresh_stk.py <reg> [--as-of DATE]
 
 After any batch of writes; `stk.py` says when it has gone stale. It writes two pages: `Stakeholder Dashboard.html` with each row's notes, for your own use, and `Stakeholder Dashboard (no notes).html` without them, in rows or in the change log. The second still holds engagement and stakes, so who it goes to is still your call.
 
-Tabs: the power/interest grid, engagement (gaps first), communications (overdue first), groups, findings, change log. **Active rows by default:** the grid shows active stakeholders only and counts the rest; engagement, communications and groups add the inactive rows with the *Show inactive* switch. **A stakeholder's name opens their detail:** who they are, where they stand, the communications that reach them and when each is due, their findings, notes and changes. It shows a count of recipients, never an address.
+Tabs: the power/interest grid, engagement (gaps first), communications (overdue first), groups, findings, change log. **Active rows by default:** the grid shows active stakeholders only and counts the rest; engagement, communications and groups add the inactive rows with the *Show inactive* switch. **A name opens its detail.** A stakeholder's: who they are, where they stand, the communications that reach them and when each is due. A communication's: what it is, when it is due, who it reaches. Both end with findings, notes and changes. Notes show one block per entry, dated and titled, a long one folded and the newest open. It shows a count of recipients, never an address.
 
 ## In the ceremonies
 
