@@ -9,12 +9,13 @@
                                   --cadence weekly --channel email
     python stk.py set       <reg> --id S.4 --current Supportive --reason "..."
     python stk.py contact   <reg> --id S.4 --email name@example.com --phone "+00 ..."
+    python stk.py note      <reg> --id S.4 [--title "..."] "what was learned"
     python stk.py done      <reg> --id C.2 [--on 2026-10-13] [--note "..."]
     python stk.py audience  <reg> --id C.2 [--split]
     python stk.py due       <reg>... | --all [--root DIR]  [--as-of DATE] [--within DAYS] [--overdue]
     python stk.py gaps      <reg>... | --all [--root DIR]
     python stk.py check     <reg> | --all [--root DIR]
-    python stk.py list      <reg> [--what stakeholders|groups|communications|all]
+    python stk.py list      <reg> [--what stakeholders|groups|communications|all] [--inactive]
     python stk.py show      <reg> --id S.4
 
 `<reg>` is the register's JSON, or the project folder that holds it. `--all`
@@ -112,6 +113,8 @@ def referenced(data, values):
 
 
 def describe(field, old, new):
+    if field == "Notes":            # the log never repeats a note's text
+        return "Notes cleared" if new is None else "Notes changed"
     show = lambda v: ", ".join(v) if isinstance(v, list) else ("" if v is None else str(v))
     return "%s: %s -> %s" % (field, show(old) or "(none)", show(new) or "(none)")
 
@@ -134,6 +137,12 @@ def log_change(data, item, changes, reason, on):
     log = R.rows(data, S.CHANGES)
     log.append({"ID": max([c.get("ID", 0) for c in log] or [0]) + 1, "Changed On": on,
                 "Item": item, "Change": "; ".join(changes), "Reason": reason or ""})
+
+
+def note_entry(text, on, title=None):
+    """One Notes entry: '2026-11-04 · Title: text', or '2026-11-04: text'."""
+    head = "%s · %s" % (on, title.strip()) if title and title.strip() else on
+    return "%s: %s" % (head, " ".join(text.split()))
 
 
 def next_id(data, coll):
@@ -184,11 +193,13 @@ def add_row(args, coll, first_field, title):
     if coll == S.STAKEHOLDERS:
         values.setdefault("Share Level", "owner")
     referenced(data, values)
+    on = today(args.on)
+    if values.get("Notes"):
+        values["Notes"] = note_entry(values["Notes"], on)
     rid = next_id(data, coll)
     row = {"ID": rid}
     apply(row, values)
     rows.append(row)
-    on = today(args.on)
     log_change(data, rid, ["added"], args.reason or "Added.", on)
     return finish(args, path, data, "Added %s  %s" % (rid, title))
 
@@ -216,6 +227,12 @@ def cmd_set(args):
     values = values_from(args, data, coll)
     if not values:
         sys.exit("Nothing to set.")
+    if "Notes" in values:
+        # Notes is a log: a set would overwrite its history.
+        if values["Notes"]:
+            sys.exit("Notes is a log: add an entry with `stk.py note <reg> --id %s \"...\"`." % row["ID"])
+        if not S.clean(args.reason):
+            sys.exit("Clearing %s's notes log removes every entry: say why with --reason." % row["ID"])
     referenced(data, values)
     changes = apply(row, values)
     if not changes:
@@ -223,6 +240,24 @@ def cmd_set(args):
         return 0
     log_change(data, row["ID"], changes, args.reason, today(args.on))
     return finish(args, path, data, "%s\n  %s" % (row["ID"], "\n  ".join(changes)))
+
+
+def cmd_note(args):
+    """A dated entry at the top of a row's Notes. The log records that one was added, not its text."""
+    path = STK.resolve(args.register)
+    data = R.load(path)
+    coll, row = find_row(data, args.id)
+    text = S.clean(args.text)
+    if not text:
+        sys.exit("The note is empty.")
+    if args.title and ":" in args.title:
+        sys.exit("A title is a few words with no colon.")
+    on = today(args.on)
+    old = S.clean(row.get("Notes"))
+    row["Notes"] = note_entry(text, on, args.title) + ("\n\n" + old if old else "")
+    log_change(data, row["ID"], ["Note added" + (" · %s" % args.title.strip() if S.clean(args.title) else "")],
+               args.reason, on)
+    return finish(args, path, data, "%s  note added" % row["ID"])
 
 
 def cmd_done(args):
@@ -407,16 +442,26 @@ def cmd_list(args):
     path = STK.resolve(args.register)
     data = R.load(path)
     show_all = args.what == "all"
+    hidden = {}
+
+    def rows(coll):
+        """Active rows, unless --inactive; counts what it leaves out."""
+        out = R.rows(data, coll)
+        if not args.inactive:
+            hidden[coll] = sum(1 for r in out if not S.is_active(r))
+            out = [r for r in out if S.is_active(r)]
+        return out
+
     if show_all or args.what == "groups":
         print("Groups")
-        for g in R.rows(data, S.GROUPS):
+        for g in rows(S.GROUPS):
             members = [p["ID"] for p in R.rows(data, S.STAKEHOLDERS)
                        if g["ID"] in (p.get("Groups") or []) and S.is_active(p)]
             print("  %-5s %-8s %-28s %s" % (g["ID"], g.get("Status", ""), g.get("Name", "")[:28],
                                             ", ".join(members)))
     if show_all or args.what == "stakeholders":
         print("Stakeholders")
-        for p in R.rows(data, S.STAKEHOLDERS):
+        for p in rows(S.STAKEHOLDERS):
             gap = S.gap(p, data)
             print("  %-5s %-8s %-24s %-22s %-16s %-24s %s" % (
                 p["ID"], p.get("Status", ""), p.get("Name", "")[:24], p.get("Role", "")[:22],
@@ -425,12 +470,14 @@ def cmd_list(args):
     if show_all or args.what == "communications":
         print("Communications")
         sprints = STK.sprint_calendar(path)
-        for c in R.rows(data, S.COMMS):
+        for c in rows(S.COMMS):
             state, when = STK.due(c, dt.date.today(), sprints)
             print("  %-5s %-30s %-11s %-12s %-14s %s" % (
                 c["ID"], c.get("What", "")[:30], c.get("Mode", ""), c.get("Cadence", "")[:12],
                 ", ".join(c.get("Audience") or [])[:14],
                 "%s%s" % (state, " %s" % when.isoformat() if when else "")))
+    if sum(hidden.values()):
+        print("\n  %d inactive not shown - --inactive lists them" % sum(hidden.values()))
     return 0
 
 
@@ -506,6 +553,13 @@ def main():
         s.add_argument("--" + opt.replace("_", "-"))
     s.set_defaults(func=cmd_set)
 
+    s = subs.add_parser("note", help="add a dated entry to a row's notes log")
+    writes(s)
+    s.add_argument("--id", required=True)
+    s.add_argument("--title", help="a few words, no colon, for a note looked for later")
+    s.add_argument("text")
+    s.set_defaults(func=cmd_note)
+
     s = subs.add_parser("done", help="a communication happened: stamp Last Done")
     s.add_argument("register")
     s.add_argument("--id", required=True)
@@ -554,6 +608,7 @@ def main():
     s = subs.add_parser("list", help="list the register")
     s.add_argument("register")
     s.add_argument("--what", default="all", choices=["all", "groups", "stakeholders", "communications"])
+    s.add_argument("--inactive", action="store_true", help="include inactive rows")
     s.set_defaults(func=cmd_list)
 
     s = subs.add_parser("show", help="one row in full, with what is derived")

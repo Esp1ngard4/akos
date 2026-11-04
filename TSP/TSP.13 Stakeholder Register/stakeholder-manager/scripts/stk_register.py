@@ -573,14 +573,19 @@ def check(data, register_path=None):
 
 
 def check_all(root):
-    """The same person with different details in two projects' contacts files.
-    Named, never fixed: the owner settles it."""
+    """The same person with different details in two projects' contacts files,
+    among the stakeholders active in each. Named, never fixed: the owner
+    settles it."""
     by_key = {}
     for reg in all_registers(root):
         data = R.load(reg)
         scope = data["meta"].get("scope", "")
         contacts, _, _ = read_contacts(contacts_path(reg, data))
+        # Someone who has left a scope is not managed there: their details are not compared.
+        gone = set(p["ID"] for p in R.rows(data, S.STAKEHOLDERS) if p.get("ID") and not S.is_active(p))
         for sid, row in contacts.items():
+            if sid in gone:
+                continue
             for key in (("email", row.get("Email", "").lower()),
                         ("name", re.sub(r"\s+", " ", row.get("Name", "")).strip().casefold())):
                 if key[1]:

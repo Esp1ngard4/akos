@@ -6,9 +6,11 @@
 
 Reads the register, runs the same checks as `stk.py check`, works out what is
 derived (quadrant, gap, when each communication is due, how many people an
-audience reaches), and injects it into templates/dashboard.html. Writes
-`Stakeholder Dashboard.html` beside the register unless --out says otherwise
-(a generated file: keep `* Dashboard.html` out of git).
+audience reaches), and injects it into templates/dashboard.html. Writes two
+pages beside the register: `Stakeholder Dashboard.html`, with each row's notes,
+for the author's own use, and `Stakeholder Dashboard (no notes).html`, with no
+notes on any row or in the change log. --out names the first; the second goes
+beside it (generated files: keep them out of git).
 
 **No contact details reach the page**: a dashboard is what gets
 shared, and the contacts stay in their own file. Only a count of recipients
@@ -28,6 +30,39 @@ import stk_schema as S                                          # noqa: E402
 
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir,
                         "templates", "dashboard.html")
+
+
+def without_notes(payload):
+    """The payload with no Notes on any row and no notes text in the change log."""
+    out = dict(payload)
+    for key in ("GROUPS", "STAKEHOLDERS", "COMMS"):
+        out[key] = [dict((k, v) for k, v in r.items() if k != "Notes") for r in payload[key]]
+    fields = set(f for coll in S.FIELDS.values() for f in coll) - {"Notes"}
+    log = []
+    for c in payload["CHANGES"]:
+        change = c.get("Change", "")
+        if "Notes" in change:
+            # A set --notes from before the log: "Notes: <old> -> <new>", whose text may hold "; ".
+            kept = [part for part in change.split("; ")
+                    if part.split(":", 1)[0] in fields or part in ("added",)]
+            c = dict(c, Change="; ".join(kept + ["Notes changed"]))
+        log.append(c)
+    out["CHANGES"] = log
+    return out
+
+
+def render(template, payload, edition, as_of, values_hash):
+    html = template
+    for key, records in payload.items():
+        placeholder = "{{%s}}" % key
+        if placeholder not in html:
+            raise SystemExit("Template is missing the %s placeholder." % placeholder)
+        # "</" is escaped so a note containing "</script>" cannot end the block.
+        html = html.replace(placeholder, json.dumps(records, ensure_ascii=False,
+                                                    default=str).replace("</", "<\\/"))
+    html = html.replace("{{EDITION}}", edition)
+    html = html.replace("{{GENERATED}}", as_of.isoformat())
+    return html.replace("{{HASH}}", values_hash)
 
 
 def main():
@@ -75,24 +110,21 @@ def main():
         raise SystemExit("Dashboard template not found: %s\nIt ships with the skill at "
                          "<skill>/templates/dashboard.html." % os.path.abspath(TEMPLATE))
     with open(TEMPLATE, encoding="utf-8") as fh:
-        html = fh.read()
-    for key, records in payload.items():
-        placeholder = "{{%s}}" % key
-        if placeholder not in html:
-            raise SystemExit("Template is missing the %s placeholder." % placeholder)
-        # "</" is escaped so a note containing "</script>" cannot end the block.
-        html = html.replace(placeholder, json.dumps(records, ensure_ascii=False,
-                                                    default=str).replace("</", "<\\/"))
-    html = html.replace("{{GENERATED}}", as_of.isoformat())
-    html = html.replace("{{HASH}}", data["meta"].get("values_hash", ""))
+        template = fh.read()
+    if "{{EDITION}}" not in template:
+        raise SystemExit("Template is missing the {{EDITION}} placeholder.")
 
     out = args.out or os.path.join(os.path.dirname(os.path.abspath(path)),
                                    "Stakeholder Dashboard.html")
-    with open(out, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(html)
+    stem, ext = os.path.splitext(out)
+    bare = stem + " (no notes)" + (ext or ".html")
+    values_hash = data["meta"].get("values_hash", "")
+    for target, page, edition in ((out, payload, "notes"), (bare, without_notes(payload), "no-notes")):
+        with open(target, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(render(template, page, edition, as_of, values_hash))
     errors = sum(1 for f in findings if f[0] == "error")
     overdue = sum(1 for c in comms if c["state"] == "overdue")
-    print("Wrote %s" % out)
+    print("Wrote %s\n      %s" % (out, bare))
     print("  %d stakeholders, %d communications (%d overdue), %d findings (%d errors)%s"
           % (len(people), len(comms), overdue, len(findings), errors,
              "" if sprints else " - no sprint calendar: per sprint read as every 14 days"))

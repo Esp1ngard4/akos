@@ -438,6 +438,12 @@
       "Description": "TD.1 v1.22: reopening a closed row with set --status needs --reopen, clears Actual End and Sprint Ended, and notes Reopened.",
       "ID": 73,
       "Tool": "TSP.1"
+    },
+    {
+      "Changed On": "2026-11-04",
+      "Description": "Notes became a dated log (stk.py note), a stakeholder's detail opens from the dashboard, refresh writes a page with notes and one without, views are active by default with a Show inactive switch, check --all leaves inactive stakeholders out of the contacts comparison (TD.13 v1.3)",
+      "ID": 74,
+      "Tool": "TSP.13"
     }
   ],
   "control_activities": [],
@@ -488,8 +494,8 @@
         ]
       }
     },
-    "updated": "2026-11-04T00:59:07",
-    "values_hash": "sha256:06549ace47f3c2a06cc9e9990caea6ac95da9c4c6899e9ebbf899e2575d87641",
+    "updated": "2026-11-04T12:07:18",
+    "values_hash": "sha256:01b0b239a6c809bba50397c4a5edfa389adf01871a876f9c2f60116d7b3e10e9",
     "version": 1
   },
   "tools": [

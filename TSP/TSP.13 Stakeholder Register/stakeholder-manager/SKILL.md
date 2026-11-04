@@ -17,8 +17,8 @@ Python 3, standard library only. Examples write `python`; on macOS/Linux use `py
 |---|---|
 | `Stakeholders <scope>.json`, in `Confidential/Stakeholder Mgm` inside the project's planning folder (numbered by its artifact register: `12. Confidential/13. Stakeholder Mgm`) | **Source of truth.** Written only through `stk.py`. Keep the Confidential folder out of git and restrict who can open it. |
 | `Contacts <scope>.csv`, beside it | How to reach each stakeholder, keyed by `S.n`. **Outside git.** Written by `stk.py contact` or by hand in a spreadsheet. |
-| `Stakeholder Dashboard.html`, beside it | Generated. Never edit by hand; keep it out of git. |
-| `scripts/stk.py` | Every read and write: `add-group`, `add`, `add-comm`, `set`, `contact`, `done`, `audience`, `due`, `gaps`, `check`, `list`, `show`. |
+| `Stakeholder Dashboard.html` and `Stakeholder Dashboard (no notes).html`, beside it | Generated, with each row's notes and without them. Never edit by hand; keep them out of git. |
+| `scripts/stk.py` | Every read and write: `add-group`, `add`, `add-comm`, `set`, `note`, `contact`, `done`, `audience`, `due`, `gaps`, `check`, `list`, `show`. |
 | `scripts/stk_register.py` | What other tools import: `load_or_default`, `audiences_for`, due dates, audience resolution, the audit. |
 | `scripts/stk_schema.py` | Fields, vocabularies, the derived quadrant and gap. |
 | `scripts/registry.py` | The JSON register format the register tools share. |
@@ -34,7 +34,7 @@ Four collections. Rows omit empty fields; dates are `YYYY-MM-DD`; nothing is del
 
 **`groups`** (`G.n`) — the audiences: `Name`, `Purpose`, `Status`. A group holds no member list.
 
-**`stakeholders`** (`S.n`) — `Name`, `Role` (in this project), `Organisation`, `Groups` (any number), `Power` and `Interest` (`High`/`Low`), `Current` and `Desired` (`Unaware`, `Resistant`, `Neutral`, `Supportive`, `Leading`), `Stake` (what's in it for them, what worries them, one line), `Engagement Action` (what closes the gap, or a RAID ref `<scope>#A.n`), `Share Level` (`owner` sees reports as they are; `external` gets the external copy), `Status`, `Notes`. A row can be a body with no particular person behind it ("the steering committee", "the regulator").
+**`stakeholders`** (`S.n`) — `Name`, `Role` (in this project), `Organisation`, `Groups` (any number), `Power` and `Interest` (`High`/`Low`), `Current` and `Desired` (`Unaware`, `Resistant`, `Neutral`, `Supportive`, `Leading`), `Stake` (what's in it for them, what worries them, one line), `Engagement Action` (what closes the gap, or a RAID ref `<scope>#A.n`), `Share Level` (`owner` sees reports as they are; `external` gets the external copy), `Status`, `Notes` (a dated log, newest first, written with `note`). A row can be a body with no particular person behind it ("the steering committee", "the regulator").
 
 **`communications`** (`C.n`) — `What`, `Report` (`status-report`, `sprint-update`, `closure`, when it carries one), `Mode` (`push` is sent, `pull` is a view they open, `interactive` is a conversation), `Audience` (group and stakeholder IDs), `Cadence` (`per sprint`, `weekly`, `monthly`, `quarterly`, `on event: <what>`), `Channel` (`email`, `chat`, `meeting`, `letter`, or `content: <scope> › <plan>`), `Owner`, `Last Done`, `Status`, `Notes`.
 
@@ -71,7 +71,7 @@ for comm, level in STK.audiences_for(data, "status-report"):           # level: 
 ### Look
 
 ```
-python <skill>/scripts/stk.py list <reg> [--what stakeholders|groups|communications]
+python <skill>/scripts/stk.py list <reg> [--what stakeholders|groups|communications] [--inactive]
 python <skill>/scripts/stk.py show <reg> --id S.4
 ```
 
@@ -96,6 +96,14 @@ python <skill>/scripts/stk.py set <reg> --id S.6 --status Inactive --reason "wor
 ```
 
 A gap between `Current` and `Desired` wants an `--action`: the one thing that closes it.
+
+**Notes are a log.** What is learned about a stakeholder (or a communication or group) goes in a dated entry on top, never over the last one:
+
+```
+python <skill>/scripts/stk.py note <reg> --id S.4 --title "Budget" "wants a monthly figure, not a quarterly one"
+```
+
+It is stored as `2026-11-04 · Budget: …`, or `2026-11-04: …` without a title; a title is a few words with no colon. The change log records `Note added`, never the text. `add --notes` writes the first entry. `set --notes` is refused, since it would overwrite the history; `set --notes "" --reason "..."` clears the whole log, for a note that should never have been written. A conversation's record is its meeting notes (notebook-capture); a note can point to them.
 
 ### Send a communication
 
@@ -124,7 +132,7 @@ python <skill>/scripts/stk.py check <reg>
 python <skill>/scripts/stk.py check --all [--root DIR]   # every project, plus contacts that disagree across projects
 ```
 
-Within a project: a register outside a Confidential folder, a `per sprint` communication with no sprint calendar found, unknown or inactive IDs in groups and audiences, a group with no active members, missing analysis fields, a gap with no engagement action, a stakeholder with no contacts row (and the reverse), a recipient with no address for the channel, a contacts file git tracks or would take, a `content:` channel whose plan cannot be found (checked against the nearest `content-system/strategies/` at or above the register; with none, a note says the pointers were not checked). Across projects: the same name or email with different details, named without the values. Each finding is a decision for the user; nothing is fixed silently.
+Within a project: a register outside a Confidential folder, a `per sprint` communication with no sprint calendar found, unknown or inactive IDs in groups and audiences, a group with no active members, missing analysis fields, a gap with no engagement action, a stakeholder with no contacts row (and the reverse), a recipient with no address for the channel, a contacts file git tracks or would take, a `content:` channel whose plan cannot be found (checked against the nearest `content-system/strategies/` at or above the register; with none, a note says the pointers were not checked). Across projects: the same name or email with different details, among the stakeholders active in each, named without the values. Each finding is a decision for the user; nothing is fixed silently.
 
 ### Refresh the dashboard
 
@@ -132,7 +140,9 @@ Within a project: a register outside a Confidential folder, a `per sprint` commu
 python <skill>/scripts/refresh_stk.py <reg> [--as-of DATE]
 ```
 
-After any batch of writes; `stk.py` says when it has gone stale. Tabs: the power/interest grid, engagement (gaps first), communications (overdue first), groups, findings, change log. It shows a count of recipients, never an address.
+After any batch of writes; `stk.py` says when it has gone stale. It writes two pages: `Stakeholder Dashboard.html` with each row's notes, for your own use, and `Stakeholder Dashboard (no notes).html` without them, in rows or in the change log. The second still holds engagement and stakes, so who it goes to is still your call.
+
+Tabs: the power/interest grid, engagement (gaps first), communications (overdue first), groups, findings, change log. **Active rows by default:** the grid shows active stakeholders only and counts the rest; engagement, communications and groups add the inactive rows with the *Show inactive* switch. **A stakeholder's name opens their detail:** who they are, where they stand, the communications that reach them and when each is due, their findings, notes and changes. It shows a count of recipients, never an address.
 
 ## In the ceremonies
 

@@ -1436,6 +1436,39 @@ def test_stakeholder_register(root, scratch):
         html = io.open(dash, encoding="utf-8").read()
         check("no address reaches the dashboard", "example.com" not in html)
 
+    # Notes are a log; the page without them carries none; inactive rows are history.
+    ok, out = run([stk, "note", plan, "--id", "S.2", "--title", "Budget", "wants a monthly figure", "--on", "2026-01-21"], project)
+    data = json.load(io.open(reg, encoding="utf-8"))
+    s2 = [p for p in data["stakeholders"] if p["ID"] == "S.2"][0]
+    check("note: a dated, titled entry, and the log says only that one was added",
+          ok and s2.get("Notes") == "2026-01-21 · Budget: wants a monthly figure"
+          and data["change_log"][-1]["Change"] == "Note added · Budget", out)
+    ok, out = run([stk, "set", plan, "--id", "S.2", "--notes", "overwritten"], project)
+    check("set --notes is refused, pointing at note", not ok and "stk.py note" in out, out)
+    ok, out = run([stk, "set", plan, "--id", "S.3", "--status", "Inactive", "--reason", "left"], project)
+    ok, out = run([os.path.join(scripts, "refresh_stk.py"), plan], project)
+    bare = os.path.join(plan, "Stakeholder Dashboard (no notes).html")
+    if check("refresh writes the page without notes too", ok and os.path.isfile(bare), out):
+        check("the page with notes carries them; the one without does not",
+              "monthly figure" in io.open(dash, encoding="utf-8").read()
+              and "monthly figure" not in io.open(bare, encoding="utf-8").read())
+    ok, out = run([stk, "list", plan, "--what", "stakeholders"], project)
+    check("list leaves inactive rows out, and counts them",
+          ok and "Finance Office" not in out and "1 inactive not shown" in out, out)
+    ok, out = run([stk, "list", plan, "--what", "stakeholders", "--inactive"], project)
+    check("list --inactive shows them", ok and "Finance Office" in out, out)
+    other = os.path.join(project, "other-planning")
+    os.makedirs(other)
+    run([os.path.join(scripts, "create_stk.py"), other, "--scope", "Borealis"], project)
+    run([stk, "add", other, "Finance Office"], project)
+    run([stk, "contact", other, "--id", "S.1", "--name", "Finance Office", "--phone", "+00 555 0222"], project)
+    run([stk, "contact", plan, "--id", "S.3", "--name", "Finance Office", "--phone", "+00 555 0111"], project)
+    ok, out = run([stk, "check", "--all", "--root", project], project)
+    check("check --all: an inactive stakeholder's contacts are not compared", "Phone differs" not in out, out)
+    run([stk, "set", plan, "--id", "S.3", "--status", "Active", "--reason", "back"], project)
+    ok, out = run([stk, "check", "--all", "--root", project], project)
+    check("check --all: active in both, they are", "Phone differs" in out, out)
+
     empty = os.path.join(project, "no-register")
     os.makedirs(empty, exist_ok=True)
     code = ("import sys; sys.path.insert(0, %r); import stk_register as STK; "
