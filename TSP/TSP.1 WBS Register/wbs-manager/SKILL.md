@@ -231,6 +231,12 @@ It goes at the **top** of `Comments` as `Closure 2026-Sep-26 (Done): …` — ne
 
 If the work was also tracked as a task, its closure comment can say the same — but a task's comment goes out of view once the task is completed, and the row is what gets read afterwards. Only the transition asks: correcting a date on a row that is already closed needs no new note, and `--closure` on a row that is not closing is refused.
 
+**Reopening a closed row asks why, the way closing it asks what happened.** Moving a `Done` or `Cancelled` row back to an open status is refused without `--reopen "<why>"`. With it, the row's `Actual End` and `Sprint Ended` are cleared, so the roadmap and the sprint metrics stop counting it finished, and a `Reopened` note records why. The closure note stays; closing again adds a second one above it. `Done` to `Cancelled` is not a reopen.
+
+```bash
+python <skill-path>/scripts/wbs.py set "<register>" --id 42 --status Implementing --reopen "AC 2 failed in real use"
+```
+
 **Every other entry in `Comments` goes through `note`:**
 
 ```bash

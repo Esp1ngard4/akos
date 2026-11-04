@@ -426,6 +426,18 @@
       "Description": "TD.5 v1.8: a register records its root, relative to itself (artifact.py root, checked), and artifact.py path resolves a row by its Parent Digital chain; --root optional everywhere; rename, move and retire find by the chain, with a scan outside managed folders as fallback; move of the register's own folder saves at its new path; install.py init passes the project as the root; TSP.13's lookup reads it.",
       "ID": 71,
       "Tool": "TSP.5"
+    },
+    {
+      "Changed On": "2026-11-04",
+      "Description": "TD.5 v1.9: repad renames only the register's own artifacts, by their chain, never inside a managed folder; one off its chain is reported.",
+      "ID": 72,
+      "Tool": "TSP.5"
+    },
+    {
+      "Changed On": "2026-11-04",
+      "Description": "TD.1 v1.22: reopening a closed row with set --status needs --reopen, clears Actual End and Sprint Ended, and notes Reopened.",
+      "ID": 73,
+      "Tool": "TSP.1"
     }
   ],
   "control_activities": [],
@@ -476,8 +488,8 @@
         ]
       }
     },
-    "updated": "2026-11-03T22:53:06",
-    "values_hash": "sha256:be5a8d5027ecd9d2b775f9b3ad8d7ebd2f86b6f0b662a56826f54256eed0ecbd",
+    "updated": "2026-11-04T00:59:07",
+    "values_hash": "sha256:06549ace47f3c2a06cc9e9990caea6ac95da9c4c6899e9ebbf899e2575d87641",
     "version": 1
   },
   "tools": [

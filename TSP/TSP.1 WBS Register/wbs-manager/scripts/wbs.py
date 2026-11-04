@@ -585,16 +585,35 @@ def closed_chain(data, parent):
     return chain, cur
 
 
-def reopen(row, why, changed):
-    """Back to Implementing, its finish undone, the reason noted. The closure
+def reopen(row, why, changed, status="Implementing", was=None):
+    """Back to an open status, its finish undone, the reason noted. The closure
     note stays: closing again adds a second one above it."""
-    was = row.get("Status")
-    row["Status"] = "Implementing"
+    was = was or row.get("Status")
+    row["Status"] = status
     for field in ("Actual End", "Sprint Ended"):
         row.pop(field, None)
     add_note(row, "Was %s. %s" % (was, why.strip()), "Reopened")
     changed.append("item %s reopened (was %s): Actual End and Sprint Ended cleared"
                    % (row.get("ID"), was))
+
+
+def apply_reopen(row, args, changed, was):
+    """A closed row moved back to an open status: the mirror of a close. It
+    asks why, as a close asks what happened, and undoes the finish, or the
+    roadmap and the sprint metrics go on showing it finished."""
+    why = getattr(args, "reopen", None)
+    if why is not None and not why.strip():
+        sys.exit("--reopen is empty. Say why the row is open again.")
+    reopening = was in CLOSED and args.status and args.status not in CLOSED
+    if reopening and not why:
+        sys.exit("Reopening item %s (was %s) needs --reopen \"<why>\": what showed "
+                 "it was not finished. Its finish date and sprint are cleared."
+                 % (row.get("ID"), was))
+    if why and not reopening:
+        sys.exit("--reopen goes with moving a Done or Cancelled row back to an "
+                 "open status; item %s is %s." % (row.get("ID"), was))
+    if why:
+        reopen(row, why, changed, args.status, was)
 
 
 def place_under_parent(data, row, args, changed):
@@ -855,6 +874,7 @@ def cmd_set(args):
     apply_sprints(data, row, args, changed)
     commit_status(row, args, changed)
     apply_closure(row, args, changed, was)
+    apply_reopen(row, args, changed, was)
     clear_horizon_on_close(row, args, changed)
     stamp_actuals(data, row, args, changed)
     stamp_sprint_ended(data, row, args, changed)
@@ -2287,6 +2307,9 @@ def main():
     s.add_argument("--id", required=True)
     s.add_argument("--title")
     fields(s)
+    s.add_argument("--reopen", metavar="WHY",
+                   help="moving a Done or Cancelled row back to an open status: why. "
+                        "Clears its Actual End and Sprint Ended")
     s.set_defaults(func=cmd_set)
 
     s = subs.add_parser("note", help="add a dated entry to Comments, newest on "

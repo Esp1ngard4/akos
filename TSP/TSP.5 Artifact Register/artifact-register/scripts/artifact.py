@@ -373,29 +373,34 @@ def cmd_repad(args):
                  "Re-run with --width %d, or padding would sort wrongly above "
                  "10^%d." % (widest, width, widest, width))
 
-    plan = []
-    prefixed = {}
+    # Only the register's own artifacts, each found by its chain as `path`
+    # finds it: a scan of the whole scope would also renumber what a managed
+    # folder holds under its own numbering.
+    plan, found, off = [], 0, []
     if args.root:
-        prefixed, _ = S.scan_folder(args.root)
-        known = set(S.clean(r.get("ID")) for r in rows)
-        for rid in sorted(prefixed, key=int):
-            if rid not in known:
+        for row in rows:
+            rid = S.clean(row.get("ID"))
+            if (S.clean(row.get("Status")) == "Retired" or not S.parent_of(row)[0]
+                    or not rid.isdigit()):
                 continue
-            for rel in prefixed[rid]:
-                path = os.path.abspath(os.path.join(args.root,
-                                                    rel.replace("/", os.sep)))
-                current = os.path.basename(path)
-                match = S.ID_PREFIX.match(current)
-                sep = current[match.end(1):match.end()]
-                want = "%s%s%s" % (S.format_id(rid, width), sep,
-                                   current[match.end():])
-                if current != want:
-                    plan.append((path, want))
+            try:
+                path = os.path.abspath(S.resolve(args.root, rows, rid))
+            except ValueError as why:
+                off.append("ID %s: %s" % (rid, why))
+                continue
+            found += 1
+            current = os.path.basename(path)
+            match = S.ID_PREFIX.match(current)
+            sep = current[match.end(1):match.end()]
+            want = "%s%s%s" % (S.format_id(rid, width), sep, current[match.end():])
+            if current != want:
+                plan.append((path, want))
 
     for path, want in plan:
         print("  %s -> %s" % (os.path.basename(path), want))
-    print("\n  %d to rename, %d already correct"
-          % (len(plan), sum(len(v) for v in prefixed.values()) - len(plan)))
+    print("\n  %d to rename, %d already correct" % (len(plan), found - len(plan)))
+    for msg in off:
+        print("  not renamed, off its chain (audit shows it): %s" % msg)
     if args.dry_run:
         print("  dry run - nothing written.")
         return 0

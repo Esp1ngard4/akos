@@ -160,7 +160,10 @@ python artifact.py repad  <register> [--width 3]
   is before the row changes, and a register moved with its folder is saved at
   its new path with its root rewritten.
 
-- **`repad`** brings every filename up to the register's ID width. Needed once
+- **`repad`** brings every filename up to the register's ID width. It renames
+  only the register's own artifacts, each found by its chain, so a managed
+  folder's own numbering is never touched; one off its chain is reported, not
+  renamed. Needed once
   when a register adopts padding, and again if the width is raised. **Only the
   number changes** — name, separator and extension are left exactly as they are,
   because rebuilding names from the register would quietly rewrite filenames that

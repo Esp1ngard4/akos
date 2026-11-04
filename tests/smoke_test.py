@@ -935,6 +935,26 @@ def test_register_root(root, scratch):
     ok, out = art("rename", reg, "--id", "3", "--name", "Again")
     check("root: off its chain with two matches, refused", not ok and "entries carry it" in out, out)
 
+    # repad renumbers only the register's own artifacts, found by their chain.
+    rp = os.path.join(scratch, "root-repad")
+    os.makedirs(rp)
+    rreg = os.path.join(rp, "00. Register.json")
+    run_raw([os.path.join(scripts, "create_artifact_register.py"), rreg, "Repad"], scratch)
+    write(os.path.join(rp, "Doc.md"))
+    art("add", rreg, os.path.join(rp, "Doc.md"), "--name", "Doc", "--parent-digital", "Main")
+    os.makedirs(os.path.join(rp, "Execution", "01. Input"))
+    art("add", rreg, os.path.join(rp, "Execution"), "--name", "Execution", "--type", "Folder",
+        "--parent-digital", "Main", "--managed-by", "TSP.17")
+    write(os.path.join(rp, "Notes.md"))
+    art("add", rreg, os.path.join(rp, "Notes.md"), "--name", "Notes", "--parent-digital", "Main")
+    shutil.move(os.path.join(rp, "03. Notes.md"), os.path.join(rp, "02. Execution", "03. Notes.md"))
+    ok, out = art("repad", rreg, "--width", "3")
+    check("root: repad renumbers the register's own artifacts, not a managed folder's",
+          ok and os.path.isfile(os.path.join(rp, "001. Doc.md")) and os.path.isfile(os.path.join(rp, "000. Register.json"))
+          and os.path.isdir(os.path.join(rp, "002. Execution", "01. Input")), out)
+    check("root: repad reports an artifact off its chain, and leaves it",
+          "off its chain" in out and os.path.isfile(os.path.join(rp, "002. Execution", "03. Notes.md")), out)
+
     # TSP.13 starts from the stored root; climbing would reach the decoy first.
     os.makedirs(os.path.join(deep, "00. PrjMgm", "05. Stakeholder Mgm"))
     data = load(reg)
@@ -2219,6 +2239,39 @@ def test_sync_commands(root, scratch):
           ok and "Check the old tool" not in out, out[:300])
 
 
+def test_reopen_by_hand(root, scratch):
+    """A closed row moved back to an open status asks why and undoes its finish."""
+    import json
+    print("\nReopening a row by hand")
+    work = os.path.join(scratch, "reopen")
+    os.makedirs(work, exist_ok=True)
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs = os.path.join(scripts, "wbs.py")
+    reg = os.path.join(work, "WBS Atlas.json")
+    ok, out = run_raw([os.path.join(scripts, "create_wbs.py"), reg, "Atlas"], work)
+    if not check("reopen: create", ok, out):
+        return
+    data = json.load(io.open(reg, encoding="utf-8"))
+    data["items"] = [
+        {"ID": 50, "Title": "Finished story", "Type": "Story", "Status": "Done", "Actual End": "2026-Jan-5",
+         "Sprint Ended": "S1", "Comments": "Closure 2026-Jan-5 (Done): done."},
+        {"ID": 51, "Title": "Another finished story", "Type": "Story", "Status": "Done", "Actual End": "2026-Jan-5"},
+    ]
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data, indent=2))
+    row = lambda rid: [r for r in json.load(io.open(reg, encoding="utf-8"))["items"] if r["ID"] == rid][0]
+    ok, out = run_raw([wbs, "set", reg, "--id", "50", "--status", "Not Started"], work)
+    check("reopen: refused without --reopen", not ok and "needs --reopen" in out, out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "50", "--status", "Not Started", "--reopen", "AC 2 failed in use"], work)
+    r = row(50)
+    check("reopen: the finish undone and why noted, the closure note kept",
+          ok and r["Status"] == "Not Started" and "Actual End" not in r and "Sprint Ended" not in r
+          and "Reopened" in r.get("Comments", "") and "Closure 2026-Jan-5" in r.get("Comments", ""), out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "50", "--priority", "Must", "--reopen", "x"], work)
+    check("reopen: --reopen on a row not reopening is refused", not ok and "goes with moving" in out, out)
+    ok, out = run_raw([wbs, "set", reg, "--id", "51", "--status", "Cancelled"], work)
+    check("reopen: Done to Cancelled is not a reopen", ok, out)
+
+
 def test_under_a_parent(root, scratch):
     """Placing an open row under a parent asks what the work means: reopen a
     closed parent or file elsewhere; in, pulled into or later than the sprint
@@ -2862,6 +2915,7 @@ def main():
         test_effort_and_splits(root, scratch)
         test_pull_ins(root, scratch)
         test_under_a_parent(root, scratch)
+        test_reopen_by_hand(root, scratch)
         test_migrate_vocabulary(root, scratch)
         test_numbered_layout(root, scratch)
         test_installer_docs(root, scratch)

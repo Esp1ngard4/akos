@@ -94,7 +94,7 @@ folder sits at a different path on every machine and a scope can move as a
 whole. Setting it is checked: the register's own row has to lead back to the
 register from there, so a wrong root is refused rather than stored.
 
-Every lookup follows the chain: `path`, `rename`, `move`, `retire`, and other
+Every lookup follows the chain: `path`, `rename`, `move`, `retire`, `repad`, and other
 tools finding an artifact through the register. The chain is the register's
 claim, so a lookup checks that claim instead of searching around it. Searching
 for the shallowest entry carrying a number also reaches into folders another
@@ -234,8 +234,8 @@ and leave rows pointing at nothing.
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.9 | 2026-11-04 | **`repad` renames only the register's own artifacts, by their chain.** It scanned the whole scope, so a managed folder's own numbering was repadded wherever a number matched a register ID. An artifact off its chain is reported, not renamed. |
 | v1.8 | 2026-11-03 | **A register records its root, and an artifact is found by its chain.** `meta.settings.root`, relative to the register, written by `create` (`--root` for a planned layout, which `install.py init` passes) and set by `artifact.py root`, which checks the register leads back to itself. `artifact.py path` resolves a row. `--root` is optional everywhere. `rename`, `move` and `retire` find by the chain instead of the shallowest prefix, which could reach a managed folder's own `NN.`; the scan stays as a fallback. A bug fixed: `move` of the register's own folder saved to the old path. TSP.13's lookup reads the root and climbs only without one. |
 | v1.7 | 2026-11-02 | **The ignore default follows the installer's lock:** `tool.lock.json`, one in each installed tool's folder (TD.4 v1.11), where it was `tools.lock.json`, one per folder installed into. A register made before keeps its own list; it needs the new name only where a tool's folder is scanned. |
-| v1.6 | 2026-10-28 | **`add --new-id N` claims a planned number.** IDs come from the highest plus one, so a register whose own row is 02 could not number the folders above it 00 and 01. `--new-id` registers under a number no row holds; a retired row stays in the register, so such a number was never used, and claiming it reuses nothing. |
 
 Earlier versions are in this file's git history.
