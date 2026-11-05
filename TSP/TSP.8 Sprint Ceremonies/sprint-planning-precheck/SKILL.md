@@ -42,14 +42,22 @@ Then recommend one action per closed row:
 
 Each recommendation should leave the user a yes or no on a concrete proposal, with the lookup already done.
 
-For each committed row **still open**, offer a lean and ask the user to classify it:
-- **Spillover**: it is `Implementing`, or was updated recently.
-- **Abandoned**: still `Not Started` with no `Actual Start` all sprint.
-- **Finished but not closed**: the user says it is done; close it with a note.
+The close-out decides where each unfinished row goes and records it on the row (`sprint-facilitator`, close-out step 4). Confirm nothing was left undecided:
+
+```bash
+python <skills>/wbs-manager/scripts/wbs.py closeouts --sprint <closing sprint>
+```
+
+For each row reading `undecided`, offer a lean and ask the user to decide:
+- **Spillover wanted soon**: it is `Implementing`, or was updated recently. Carry it, or land it on a named later sprint.
+- **Abandoned**: still `Not Started` with no `Actual Start` all sprint. Park it, or drop it.
+- **Finished but not closed**: the user says it is done; close it with a note, and it counts as delivered.
+
+The decision is recorded with `wbs.py closeout`, as the close-out step says; this check only reads.
 
 ### 3. Is the next sprint ready?
 
-**Start from the grooming draft.** The current record's `Next sprint - draft` is the bounded list grooming took on, with each row's refinement state. That list is the denominator. Then list every row with `Horizon` `Next` as a check: if the pool is much larger than the draft, grooming shortlisted only a fraction of what was ripe, and the report should say so.
+**Start from the grooming draft.** The current record's `Next sprint - draft` is the bounded list grooming took on, with each row's refinement state. That list is the denominator. Then list every row with `Horizon` `Next` as a check: if the pool is much larger than the draft, grooming shortlisted only a fraction of what was ripe, and the report should say so. Add the rows the close-out sent to the sprint being planned (`wbs.py closeouts --target <next sprint>`): carried and landed work counts against capacity too.
 
 - **Capacity.** Sum the `Est.` hours on draft rows marked `ready`, and only those; an estimate on an unrefined item is a guess about work nobody has described. Compare the sum with the thresholds in `sprint-facilitator` (*Defaults*):
   - **Below the minimum:** not enough plannable work. Recommend another grooming slot.
@@ -90,7 +98,7 @@ One report, not a series of questions. Everything above the last section is evid
 
 ### What closed
 <per closed row: the recommendation>
-<per open committed row: spillover / abandoned / not closed, with the lean>
+<per undecided row: spillover / abandoned / not closed, with the lean>
 
 ### Next sprint candidate pool
 - Grooming draft: N listed, M ready (completion M/N)

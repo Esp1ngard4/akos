@@ -173,6 +173,58 @@ def build_schedule(items, log, sprints=None):
     return payload
 
 
+OUTCOME_LABEL = {"carry": "carried", "land": "landed", "park": "parked", "drop": "dropped"}
+
+
+def sprint_state(W, register, row, sid):
+    """Where a card stood in one sprint, not where it stands today.
+
+    Done means done there. A card the sprint let go is closed out, with what
+    was decided: the close-out's outcome or, for sprints before the closeout
+    rule, what became of it - finished in a later sprint, or moved on to one.
+    Anything else is placed by its status, as the running sprint is."""
+    ended = row.get("Sprint Ended")
+    if row.get("Status") == "Done" and ended == sid:
+        return {"st": "done"}
+    out = W.closeout_for(row, sid)
+    if out:
+        word = OUTCOME_LABEL.get(out.get("Outcome"), out.get("Outcome") or "")
+        return {"st": "out", "ok": out.get("Outcome"),
+                "oc": "%s → %s" % (word, out["Target"]) if out.get("Target") else word}
+    # A Done parent carries no Sprint Ended (its children's are its own), so
+    # there is no telling where it closed: its status places it.
+    if row.get("Status") == "Done" and ended:
+        return {"st": "out", "ok": "later", "oc": "done in %s" % ended}
+    latest = W.latest_held(register, row)
+    if latest and latest != sid and row.get("Status") != "Cancelled":
+        return {"st": "out", "ok": "moved", "oc": "in %s" % latest}
+    return {}
+
+
+def journey(W, row, order):
+    """`S1 carried → S2 · S2 parked · S3 done`: the sprints a row went
+    through and how each ended for it, when there was more than one."""
+    held = set(W.held_sprints(row))
+    if row.get("Sprint Ended"):
+        held.add(row["Sprint Ended"])
+    if len(held) < 2 and not W.closeouts(row):
+        return []
+    steps = []
+    seq = sorted(held, key=lambda x: order.index(x) if x in order else len(order))
+    for s in seq:
+        out = W.closeout_for(row, s)
+        if out:
+            word = OUTCOME_LABEL.get(out.get("Outcome"), out.get("Outcome") or "")
+            steps.append("%s %s" % (s, "%s → %s" % (word, out["Target"]) if out.get("Target") else word))
+        elif row.get("Status") == "Done" and row.get("Sprint Ended") == s:
+            steps.append("%s done" % s)
+        elif row.get("Status") not in ("Done", "Cancelled") and s == seq[-1]:
+            steps.append("%s open" % s)
+        else:
+            steps.append("%s not finished" % s)
+    return steps
+
+
 def build_boards(register, sprints):
     """Each sprint's cards and figures, for the Current Sprint tab.
 
@@ -188,15 +240,22 @@ def build_boards(register, sprints):
     boards = {}
     for s in sprints:
         sid = s["Sprint"]
-        cards = {str(c["id"]): {"r": c["role"], "l": c["lane"], "p": c["path"],
-                                 "h": c["hours"], "pa": c["parent"]}
-                 for c in W.sprint_board(rows, sid)}
+        by_id = {str(r.get("ID")): r for r in rows}
+        cards = {}
+        for c in W.sprint_board(rows, sid):
+            card = {"r": c["role"], "l": c["lane"], "p": c["path"],
+                    "h": c["hours"], "pa": c["parent"]}
+            card.update(sprint_state(W, register, by_id[str(c["id"])], sid))
+            cards[str(c["id"])] = card
         if not cards:
             continue
         m = W.sprint_metrics(register, sid)
         boards[sid] = {"cards": cards,
-                       "m": {k: m[k] for k in ("committed", "pulled_in",
-                                               "delivered", "carryover")}}
+                       # Held to the closeout rule: once ended, a card still in
+                       # To do or Doing was not decided.
+                       "rule": s["Ends"] >= W.CLOSEOUT_RULE_FROM,
+                       "m": {k: m[k] for k in ("committed", "pulled_in", "delivered",
+                                               "carryover", "pulled_unfinished")}}
     return boards
 
 
@@ -319,6 +378,7 @@ ENTRY_HEAD = re.compile(r"(\d{4}-(?:[A-Za-z]{3}|\d{2})-\d{1,2})(?: · ([^:\n]+?)
 CLOSURE_ENTRY = re.compile(r"Closure (\d{4}-[A-Za-z]{3}-\d{1,2}) \((Done|Cancelled)\):\s*(.*)", re.S)
 CLOSURE_SECTION = re.compile(r"\b(What happened|Why|AC(?: status)?|Acceptance criteria|Follow-up)\s*:", re.I)
 ENTRY_KINDS = (("Carried into", "carried"), ("Pulled into", "pulled in"),
+               ("Closed out of", "closed out"),
                ("Worked outside the sprint", "outside sprint"), ("Split", "split"))
 VERDICT_TAIL = re.compile(r"\s*[-–—]\s*(?:met|dropped|n/a)\.?\s*$", re.I)
 
@@ -711,6 +771,7 @@ details[open] .cm-snip{display:none}
 .tag-pulled-in{background:#fef3c7;color:#92400e}
 .tag-carried{background:#fee2e2;color:#991b1b}
 .tag-split{background:#e0e7ff;color:#3730a3}
+.tag-closed-out{background:#f3e8ff;color:#6b21a8}
 .tag-outside-sprint{background:#f3e8ff;color:#6b21a8}
 .cm-date{font-weight:700;color:#1a1a2e}
 .cm-title{font-weight:600;color:#1a1a2e}
@@ -750,6 +811,14 @@ details[open] .cm-snip{display:none}
 .kb-cell+.kb-cell{border-left:1px dashed #e5e7eb}
 .kb-card{background:#fff;border:1px solid #e5e7eb;border-left:4px solid #e5e7eb;border-radius:6px;padding:7px 9px;font-size:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .kb-card.cx{opacity:.55}.kb-card.cx .kb-title{text-decoration:line-through}
+.kb-cols.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.kb-out{display:inline-block;margin-top:5px;font-size:11px;font-weight:700;padding:1px 7px;border-radius:8px;background:#f1f5f9;color:#475569}
+.kb-out.o-carry{background:#dbeafe;color:#1e40af}.kb-out.o-land{background:#ccfbf1;color:#115e59}
+.kb-out.o-park{background:#fef3c7;color:#92400e}.kb-out.o-drop{background:#e5e7eb;color:#374151}
+.kb-out.o-later{background:#dcfce7;color:#166534}
+.kb-progress{margin:6px 0 10px;padding:6px 10px;border-radius:6px;font-size:12px;background:#fef3c7;color:#92400e}
+.kb-progress.done{background:#dcfce7;color:#166534}
+.journey{font-size:12px;color:#374151;margin:6px 0 2px}.journey b{color:#6b7280;font-weight:600;margin-right:6px}
 .kb-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
 .kb-title{font-weight:600;margin:3px 0 2px;line-height:1.35}
 /* A card names its direct parent only, on one line; the full chain is in the details. */
@@ -762,7 +831,7 @@ details[open] .cm-snip{display:none}
 .kb-empty{color:#d1d5db;font-size:11px;text-align:center;padding:8px 0}
 @media (max-width:700px){
   body{padding:16px}
-  .kb-cols{grid-template-columns:1fr}
+  .kb-cols,.kb-cols.four{grid-template-columns:1fr}
   .kb-colheads{display:none}
   .kb-cell+.kb-cell{border-left:none;border-top:1px dashed #e5e7eb}
   .kb-cell::before{content:attr(data-col);font-size:10px;font-weight:700;color:#4472C4;text-transform:uppercase;letter-spacing:.05em}
@@ -881,7 +950,7 @@ function linkIds(s){
   return esc(s).replace(/(P\\d+\\s+)?\\b(IDs?)\\s+(\\d+(?![A-Za-z\\d])(?:(?:,\\s*|\\s+and\\s+|\\s*&amp;\\s*)\\d+(?![A-Za-z\\d]))*)/g,(m,proj,w,nums)=>
     proj?m:w+' '+nums.replace(/\\d+/g,n=>byId.has(n)?`<button class="idlink" onclick="openDetail(${n})" title="Open ID ${n}">${n}</button>`:n));
 }
-const CM_TAG={'closure':'Closure','note':'Note','carried':'Carried','pulled in':'Pulled in','outside sprint':'Outside sprint','split':'Split'};
+const CM_TAG={'closure':'Closure','note':'Note','carried':'Carried','pulled in':'Pulled in','closed out':'Closed out','outside sprint':'Outside sprint','split':'Split'};
 const CM_FOLD=280;
 function commentEntry(e,open){
   if(e.k==='legacy')return `<div class="cm cm-legacy"><div class="cm-body">${linkIds(e.t)}</div></div>`;
@@ -1007,6 +1076,7 @@ function openDetail(id,viaHash){
           ${chip('Owner',d.o)}${chip('Category',d.cat)}${chip('Phase',d.ph)}
           ${chip('Planned',d.sp)}${chip('Carried',(d.sc||[]).join(', '))}${chip('Added',d.sa)}${chip('Ended',d.se)}
         </div>
+        ${(d.jr||[]).length?`<div class="journey" title="The sprints this card went through, and how each ended for it"><b>Journey</b>${d.jr.map(esc).join(' &middot; ')}</div>`:''}
         <div class="datebox">
           ${dbox('Baseline start',d.dbs)}${dbox('Baseline end',d.dbe)}
           ${dbox('Planned start',d.dps)}${dbox('Planned end',d.dpe)}
@@ -1215,7 +1285,7 @@ function renderBoard(){
       <span class="twisty">${open?'&#9662;':'&#9656;'}</span><div class="sprint-name">${s.Sprint}</div>
       <div class="sprint-meta">${kbWhen(s)}${s.Sprint===RUNNING?' &middot; current':''}</div></div>${kbFigures(b.m)}`;
     if(open){
-      const cards=Object.entries(b.cards).map(([id,x])=>({d:byId.get(id),role:x.r,h:x.h,pa:x.pa})).filter(c=>c.d&&visible(c.d));
+      const cards=Object.entries(b.cards).map(([id,x])=>({d:byId.get(id),role:x.r,h:x.h,pa:x.pa,oc:x.oc,ok:x.ok,st:x.st})).filter(c=>c.d&&(visible(c.d)||c.st==='out'));
       SP_ROLES.forEach(role=>{
         const cs=cards.filter(c=>c.role===role).sort((a,b)=>byCode(a.d,b.d));
         if(!cs.length)return;
@@ -1225,7 +1295,7 @@ function renderBoard(){
           const d=c.d,a=ancestors(d.id),p=a[a.length-1];
           const parent=p?`<div class="kb-path" title="${esc(a.map(x=>x.t||x.id).join(' > '))}"><span>&rsaquo;</span><button class="idbtn" onclick="openDetail(${p.id})">${esc(p.t)||esc(p.id)}</button></div>`:'';
           h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td>
-            <td><div>${esc(d.t)||'<em class="warn">(no title)</em>'}</div>${parent}</td><td>${badge(d.s)}</td>
+            <td><div>${esc(d.t)||'<em class="warn">(no title)</em>'}</div>${parent}</td><td>${badge(d.s)}${c.oc?` <span class="kb-out o-${esc(c.ok||'')}" title="What became of it in this sprint">${esc(c.oc)}</span>`:''}</td>
             <td>${c.pa?(c.h?c.h+'h in sprint':'-'):(d.e?d.e+'h':'-')}</td><td>${d.ty||'-'}</td><td>${d.o||'-'}</td></tr>`;
         });
         h+=`</table>`;
@@ -1260,16 +1330,33 @@ function fullPath(c){
   return lane&&String(lane.id)!==String(c.d.id)?[lane.t,...c.path]:c.path;
 }
 const KB_COLS=[['todo','To do'],['doing','Doing'],['done','Done']];
-function kbCol(d){return d.s==='Implementing'?'doing':(d.s==='Done'||d.s==='Cancelled')?'done':'todo';}
+// An ended sprint, or one whose close-out has begun, shows a fourth column:
+// the cards it let go, each with what was decided.
+const KB_OUT=['out','Closed out'];
+let kbCols=KB_COLS,kbAsk=false;
+// Where the card stood in the sprint shown, not where it stands today: the
+// state comes from wbs.py; without one, the status places it.
+function kbCol(c){
+  if(c.st==='out')return 'out';
+  if(c.st==='done')return 'done';
+  const d=c.d;return d.s==='Implementing'?'doing':(d.s==='Done'||d.s==='Cancelled')?'done':'todo';
+}
 // Leaves only: a parent card's hours are its children's, already on the board.
-const kbHours=cs=>Math.round(cs.reduce((a,c)=>a+(c.d.s==='Cancelled'||c.pa?0:(c.d.e||0)),0)*100)/100;
+// A card dropped at the close-out keeps its hours: they were committed here.
+const kbHours=cs=>Math.round(cs.reduce((a,c)=>a+((c.d.s==='Cancelled'&&c.st!=='out')||c.pa?0:(c.d.e||0)),0)*100)/100;
 
 function kbCard(c,laned){
-  const d=c.d,path=laned?c.path:fullPath(c);
+  const d=c.d,path=laned?c.path:fullPath(c),col=kbCol(c);
   const tag=c.role==='Committed'?'':`<span class="kb-tag${c.role==='Pulled in'?' pull':''}">${c.role}</span>`;
-  // A committed card still in the backlog is a status nobody moved at planning.
-  const flag=(d.s==='Portfolio Backlog'||d.s==='Funnel')
+  // A committed card still in the backlog is a status nobody moved at planning;
+  // a parked one is in the backlog because the close-out sent it there.
+  let flag=(d.s==='Portfolio Backlog'||d.s==='Funnel')&&c.st!=='out'
     ?`<div class="kb-flag" title="Committed to the sprint, but Status is ${esc(d.s)} - a commitment means Not Started">&#9873; still ${esc(d.s)}</div>`:'';
+  if(kbAsk&&(col==='todo'||col==='doing'))
+    flag=kbAsk==='today'
+      ?`<div class="kb-flag" title="The close-out is under way: finish it in the sprint, or decide where it goes (wbs.py closeout)">&#9873; to decide</div>`
+      :`<div class="kb-flag" title="The sprint has ended and the close-out has not decided where this card goes: wbs.py closeout">&#9873; no decision</div>`;
+  const out=c.oc?`<div class="kb-out o-${esc(c.ok||'')}" title="What the close-out decided">${esc(c.oc)}</div>`:'';
   return `<div class="kb-card${d.s==='Cancelled'?' cx':''}" style="border-left-color:${SCOL[d.s]||'#e5e7eb'}">
     <div class="kb-top"><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button>${tag}</div>
     <div class="kb-title">${esc(d.t)||'<em class="warn">(no title)</em>'}</div>
@@ -1278,11 +1365,11 @@ function kbCard(c,laned){
       if(!p||(laned&&String(p.id)===String(c.lane)))return '';
       const chain=a.map(x=>x.t||x.id).join(' > ');
       return `<div class="kb-path" title="${esc(chain)}"><span>&rsaquo;</span><button class="idbtn" onclick="openDetail(${p.id})">${esc(p.t)||esc(p.id)}</button></div>`;})()}
-    <div class="kb-meta">${[d.ty,c.pa?(c.h?c.h+'h in sprint':'no work in sprint'):(d.e?d.e+'h':'no estimate'),d.p].filter(Boolean).map(esc).join(' &middot; ')}</div>${flag}</div>`;
+    <div class="kb-meta">${[d.ty,c.pa?(c.h?c.h+'h in sprint':'no work in sprint'):(d.e?d.e+'h':'no estimate'),d.p].filter(Boolean).map(esc).join(' &middot; ')}</div>${out}${flag}</div>`;
 }
 function kbCells(cards,laned){
-  return `<div class="kb-cols">${KB_COLS.map(([k,l])=>{
-    const cs=cards.filter(c=>kbCol(c.d)===k).sort((a,b)=>byCode(a.d,b.d));
+  return `<div class="kb-cols${kbCols.length>3?' four':''}">${kbCols.map(([k,l])=>{
+    const cs=cards.filter(c=>kbCol(c)===k).sort((a,b)=>byCode(a.d,b.d));
     return `<div class="kb-cell" data-col="${l}">${cs.map(c=>kbCard(c,laned)).join('')||'<div class="kb-empty">&mdash;</div>'}</div>`;
   }).join('')}</div>`;
 }
@@ -1305,7 +1392,11 @@ function kbFigures(m){
   parts.push(`<span>Delivered <b>${dl.n}</b> &middot; ${dl.h}h</span>`);
   parts.push(c.n?`<span>Completion <b>${pc(dl.n,c.n)}</b> of items, <b>${pc(dl.h,c.h)}</b> of hours</span>`
                 :`<span class="warn">No completion figure: nothing carries Sprint Planned = this sprint</span>`);
-  if(co.n)parts.push(`<span>Committed, not yet delivered <b>${co.n}</b> &middot; ${co.h}h</span>`);
+  const oc=o=>{const w={carry:'carried',land:'landed',park:'parked',drop:'dropped'};
+    return Object.entries(o||{}).map(([k,n])=>`${w[k]||k} ${n}`).join(', ');};
+  if(co.n)parts.push(`<span>Committed, not yet delivered <b>${co.n}</b> &middot; ${co.h}h${co.by_outcome?` (${oc(co.by_outcome)})`:''}</span>`);
+  const pu=m.pulled_unfinished;
+  if(pu&&pu.n)parts.push(`<span>Pulled in, not finished <b>${pu.n}</b> &middot; ${pu.h}h (${oc(pu.by_outcome)})</span>`);
   if(c.n&&c.estimated<c.n)parts.push(`<span class="warn">${c.n-c.estimated} committed row(s) have no estimate</span>`);
   return `<div class="kb-figs">${parts.join('')}</div>`;
 }
@@ -1321,10 +1412,26 @@ function renderCurrent(){
     <span class="btn${boardLanes?' on':''}" onclick="boardLanes=!boardLanes;render()" title="Group the cards by the deliverable they serve">By deliverable</span></div>
     ${kbFigures(b.m)}`;
   if(!RUNNING)h+=`<p class="muted">No sprint in this register's calendar runs today, so this is ${boardSprint}, the latest sprint with cards.</p>`;
-  const cards=Object.entries(b.cards).map(([id,x])=>({d:byId.get(id),role:x.r,lane:x.l,path:x.p,h:x.h,pa:x.pa})).filter(c=>c.d&&visible(c.d));
+  // A card dropped at this sprint's close-out stays on its board whatever the
+  // Cancelled toggle says: the sprint committed it and let it go.
+  const cards=Object.entries(b.cards).map(([id,x])=>({d:byId.get(id),role:x.r,lane:x.l,path:x.p,h:x.h,pa:x.pa,st:x.st,ok:x.ok,oc:x.oc}))
+    .filter(c=>c.d&&(visible(c.d)||c.st==='out'));
   if(!cards.length)return h+`<p class="muted">No card from this project is in ${boardSprint}.</p>`;
-  h+=`<div class="kb-cols kb-colheads">${KB_COLS.map(([k,l])=>{
-    const cs=cards.filter(c=>kbCol(c.d)===k);
+  // The close-out runs on the sprint's last day, or earlier when the day
+  // calls for it: its first decision is the sign it began. From then the
+  // board shows what it has let go and what is still to decide.
+  const started=cards.some(c=>c.st==='out'&&['carry','land','park','drop'].includes(c.ok));
+  const closing=s&&(TODAY>=s.Ends||started);
+  kbCols=closing||cards.some(c=>c.st==='out')?[...KB_COLS,KB_OUT]:KB_COLS;
+  kbAsk=closing&&b.rule?(TODAY>s.Ends?'ended':'today'):false;
+  if(kbAsk){
+    const open=cards.filter(c=>['todo','doing'].includes(kbCol(c))).length;
+    const decided=cards.filter(c=>c.st==='out'&&['carry','land','park','drop'].includes(c.ok)).length;
+    h+=open?`<div class="kb-progress">Close-out: <b>${decided} of ${decided+open}</b> unfinished card(s) decided &middot; <b>${open}</b> to go</div>`
+           :`<div class="kb-progress done">Close-out complete: every unfinished card is decided${decided?` (${decided})`:''}.</div>`;
+  }
+  h+=`<div class="kb-cols kb-colheads${kbCols.length>3?' four':''}">${kbCols.map(([k,l])=>{
+    const cs=cards.filter(c=>kbCol(c)===k);
     return `<div class="kb-colhead">${l}<span>${cs.length} &middot; ${kbHours(cs)}h</span></div>`;}).join('')}</div>`;
   if(!boardLanes)return h+`<div class="kb-lane flat">${kbCells(cards,false)}</div>`;
   const lanes=new Map();
@@ -1336,7 +1443,7 @@ function renderCurrent(){
   // Largest share of the sprint first; the
   // cards with no deliverable last, where the gap is read as one.
   [...lanes.values()].sort((a,b)=>(a.lane?0:1)-(b.lane?0:1)||kbHours(b.cards)-kbHours(a.cards)).forEach(g=>{
-    const l=g.lane,done=g.cards.filter(c=>c.d.s==='Done');
+    const l=g.lane,done=g.cards.filter(c=>kbCol(c)==='done'&&c.d.s==='Done');
     const head=l
       ?`<button class="idbtn" onclick="openDetail(${l.id})" title="Open the full record">${l.id}</button>
          <div class="t">${esc(l.t)}${l.kd==='Y'?' <span class="kdtag" title="Key Deliverable">&#9733; KEY</span>':''}</div>
@@ -1597,6 +1704,8 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None,
     below - substituted in dependency order, since JS is injected into SHELL
     and carries placeholders of its own.
     """
+    import wbs as W
+    order = [s['Sprint'] for s in (sprints or [])]
     compact = []
     for it in items:
         compact.append({
@@ -1609,6 +1718,8 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None,
             'e': it.get('Estimated Effort (h)', 0) or 0,
             'sp': str(it.get('Sprint Planned', '') or ''),
             'sc': [str(s) for s in carried(it)],
+            # The sprints it went through and how each ended for it.
+            'jr': journey(W, it, order),
             'sa': str(it.get('Sprint Added', '') or ''),
             'se': str(it.get('Sprint Ended', '') or ''),
             'ty': str(it.get('Type', '') or ''),

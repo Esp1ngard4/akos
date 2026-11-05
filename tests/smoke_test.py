@@ -666,6 +666,83 @@ def test_readable_card(root, scratch):
           and "(P\\d+\\s+)?\\b(IDs?)" in page and "\x08" not in page, out[-200:])
 
 
+def test_closeout(root, scratch):
+    """The close-out records where each unfinished row goes, on the row.
+
+    carry, land, park and drop are written by `wbs.py closeout`; the closed
+    sprint still counts the row, a later carry takes the close-out's reason,
+    `closeouts` lists the decisions, and the board places each card where it
+    stood in its sprint.
+    """
+    import importlib
+    from datetime import date, timedelta
+    print("\nClose-out")
+    scripts = os.path.join(root, "TSP", "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs, refresh = os.path.join(scripts, "wbs.py"), os.path.join(scripts, "refresh_wbs.py")
+    work = os.path.join(scratch, "closeout")
+    os.makedirs(work, exist_ok=True)
+    reg, html = os.path.join(work, "WBS Close.json"), os.path.join(work, "WBS Dashboard.html")
+    run([os.path.join(scripts, "create_wbs.py"), reg, "Close"], work)
+    data = json.load(io.open(reg, encoding="utf-8"))
+    t, iso = date.today(), lambda d: d.isoformat()
+    data["sprints"] = [{"Sprint": "S1", "Starts": iso(t - timedelta(28)), "Ends": iso(t - timedelta(15))},
+                       {"Sprint": "S2", "Starts": iso(t - timedelta(14)), "Ends": iso(t + timedelta(5))},
+                       {"Sprint": "S3", "Starts": iso(t + timedelta(6)), "Ends": iso(t + timedelta(19))},
+                       {"Sprint": "S4", "Starts": iso(t + timedelta(20)), "Ends": iso(t + timedelta(33))}]
+    row = lambda i, title, **kw: dict({"ID": i, "Title": title, "Type": "Story", "Status": "Not Started",
+                                       "Estimated Effort (h)": 2, "Sprint Planned": "S1"}, **kw)
+    data["items"] = [row(1, "Carry me"), row(2, "Park me"), row(3, "Land me"), row(4, "Drop me"),
+                     row(5, "Finished", Status="Done", **{"Sprint Ended": "S1", "Actual End": "2026-Jan-5"}),
+                     row(6, "Running", **{"Sprint Planned": "S3"})]
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data, indent=2))
+
+    ok, out = run_raw([wbs, "closeout", reg, "--id", "1", "--sprint", "S1", "--outcome", "carry"], work)
+    check("closeout: a decision without a reason is refused", not ok and "needs --reason" in out, out)
+    ok, out = run_raw([wbs, "closeout", reg, "--id", "6", "--sprint", "S3", "--outcome", "park", "--reason", "x"], work)
+    check("closeout: a sprint not yet started is refused", not ok and "nothing to close out yet" in out, out)
+    ok, out = run_raw([wbs, "closeout", reg, "--id", "5", "--sprint", "S1", "--outcome", "park", "--reason", "x"], work)
+    check("closeout: a Done row is closed, not closed out", not ok and "is Done" in out, out)
+    ok, out = run_raw([wbs, "closeout", reg, "--id", "1", "--sprint", "S1", "--outcome", "carry",
+                       "--reason", "the vendor was late"], work)
+    check("closeout: carry targets the next sprint and prints the record line",
+          ok and "| Close 1 Carry me | carry | S2 | the vendor was late |" in out, out)
+    ok1, _ = run_raw([wbs, "closeout", reg, "--id", "2", "--sprint", "S1", "--outcome", "park", "--reason", "not now"], work)
+    ok2, _ = run_raw([wbs, "closeout", reg, "--id", "3", "--sprint", "S1", "--outcome", "land",
+                      "--target", "S4", "--reason", "after the launch"], work)
+    ok3, _ = run_raw([wbs, "closeout", reg, "--id", "4", "--sprint", "S1", "--outcome", "drop",
+                      "--closure", "No longer wanted."], work)
+    rows = {r["ID"]: r for r in json.load(io.open(reg, encoding="utf-8"))["items"]}
+    check("closeout: park, land and drop write their outcome",
+          ok1 and ok2 and ok3 and rows[2]["Status"] == "Portfolio Backlog"
+          and rows[3]["Sprint Closeouts"][0]["Target"] == "S4" and rows[4]["Status"] == "Cancelled")
+    ok, out = run_raw([wbs, "set", reg, "--id", "1", "--sprint-carried", "S2"], work)
+    check("closeout: a carry at planning takes the close-out's reason",
+          ok and "Carried into S2: the vendor was late" in json.dumps(json.load(io.open(reg, encoding="utf-8"))), out)
+
+    sys.path.insert(0, scripts)
+    try:
+        for name in ("wbs", "refresh_wbs"):
+            sys.modules.pop(name, None)
+        W = importlib.import_module("wbs")
+        rw = importlib.import_module("refresh_wbs")
+    finally:
+        sys.path.pop(0)
+    data = json.load(io.open(reg, encoding="utf-8"))
+    m = W.sprint_metrics(data, "S1")
+    check("closeout: the closed sprint still counts each row, the dropped one too",
+          m["carryover"]["n"] == 4 and m["committed"]["n"] == 5
+          and set(m["carryover"]["by_outcome"]) == {"carry", "park", "land", "drop"}, m["carryover"])
+    ok, out = run_raw([wbs, "closeouts", reg, "--target", "S4"], work)
+    check("closeouts: --target lists what planning looks at again",
+          ok and "Land me" in out and "Park me" not in out, out)
+    state = rw.sprint_state(W, data, W.find(data, 3), "S1")
+    check("board: a closed-out card sits in Closed out with its outcome",
+          state.get("st") == "out" and state.get("oc") == "landed → S4", state)
+    ok, out = run([refresh, reg, html, "Close"], work)
+    page = io.open(html, encoding="utf-8").read() if ok else ""
+    check("board: the page carries the Closed out column", "KB_OUT=['out','Closed out']" in page, out[-200:])
+
+
 def test_shared_modules(root, scratch):
     """Modules copied into every skill folder must be identical.
 
@@ -2974,6 +3051,7 @@ def main():
         test_concurrent_save(root, scratch)
         test_execution_layout(root, scratch)
         test_readable_card(root, scratch)
+        test_closeout(root, scratch)
         test_content_system(root, scratch)
         test_notebook_manager(root, scratch)
         test_sprint_ceremonies(root, scratch)

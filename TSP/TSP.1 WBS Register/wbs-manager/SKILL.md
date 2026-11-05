@@ -131,6 +131,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Horizon | No | `Next` / `Future` — how soon this is wanted. Not a status and not a priority: an item can be `Could` and `Next`, or `Must` and `Future`. Cleared by a real sprint or by closure; `check` enforces both. |
 | Sprint Planned / Added / Ended | No | Sprint IDs from the register's `sprints` calendar (e.g. `S26.Q3.5`), and nothing else. `check` rejects an ID the calendar does not hold. |
 | Sprint Carried | No | A **list** of the sprints the row was committed to again after `Sprint Planned` — spillover, or the next slice of a deliverable worked across sprints. `set --sprint-carried S --reason "…"` adds one and notes `Carried into S: …` in Comments — refused without the reason; `--sprint-carried ""` clears the list. Never repeats `Sprint Planned`. For a row with nothing done; **partly done work is split instead** (operation 4b). |
+| Sprint Closeouts | No | A **list** of what each close-out decided for the row when it left a sprint unfinished: `Sprint`, `Outcome` (carry / land / park / drop), `Target` (carry and land), `Reason`, `On`. Written only by `closeout` (operation 4c); the sprint fields are never touched by it. |
 | Key Dependencies | No | IDs of blocking items |
 | Control Approach | No | How the deliverable is verified (review, functional test, ...) |
 | Control Tool | No | Where that verification happens |
@@ -309,6 +310,9 @@ And it holds commitments to the work they name:
 - **An open row under a closed parent** — a warning: reopen the parent, or move the row (operation 2).
 - **An open parent committed to a sprint with none of its children in it** — a warning. A committed parent takes its hours from its children in the sprint, so with none there the work that finishes it is not named: a refinement gap. `refined` reports the same before planning.
 - **An open row carried into two or more sprints** — a warning: re-scope it, break it down, or drop it out loud. A split's rest inherits the commitment history, so a remainder pushed again is caught too.
+- **An open row still in a sprint that has ended, with no closeout** — a warning: the close-out did not decide where it goes (operation 4c). Only sprints ending from 7-Nov-2026 are held to it.
+
+**A closed-out row is no longer live in its sprint.** The rules that read a sprint field as a current commitment (Horizon alongside Sprint Planned, a committed row in Portfolio Backlog, a committed parent with no children in the sprint, Sprint Planned against Planned End) leave it alone, so a parked row can sit in Portfolio Backlog and be groomed `Next` again.
 
 Run it before a planning ceremony and after any hand-edit.
 
@@ -338,7 +342,36 @@ python <skill-path>/scripts/wbs.py split "<register>" --id 42 --delivered 6 --sp
 - **Both carry the row's commitment history** (`Sprint Planned`, `Sprint Added`, `Sprint Carried`), so every sprint that committed to the work still counts it, and the delivered hours land where they were done.
 - **Splitting a piece again** closes that piece with what was delivered and adds the rest beside it, under the same parent: a split cuts by sprint, not by meaning, so it adds no layer. Add layers yourself wherever they represent the work.
 - Refused on a row with children (close or carry them instead), a closed row, and a row never in the sprint.
-- It says what to change in the task tracker: the open task now serves the rest piece, with the hours left. Planning then carries the rest piece with `--sprint-carried`, and the parent only when the deliverable is promised again.
+- It says what to change in the task tracker: the open task now serves the rest piece, with the hours left. The rest piece is then closed out (operation 4c) like any unfinished row, and planning carries it with `--sprint-carried`, the parent only when the deliverable is promised again.
+
+### 4c. Close out unfinished rows
+
+At the close-out, every row the sprint held (committed or pulled in) that did not finish gets a decision, recorded on the row:
+
+```bash
+python <skill-path>/scripts/wbs.py closeout "<register>" --id 42 --sprint S26.Q4.2 --outcome carry --reason "why it did not finish"
+python <skill-path>/scripts/wbs.py closeout "<register>" --id 42 --sprint S26.Q4.2 --outcome land --target S26.Q4.5 --reason "..."
+python <skill-path>/scripts/wbs.py closeout "<register>" --id 42 --sprint S26.Q4.2 --outcome park --reason "..."
+python <skill-path>/scripts/wbs.py closeout "<register>" --id 42 --sprint S26.Q4.2 --outcome drop --closure "why dropped, where anything went"
+```
+
+| Outcome | Means | What it writes |
+|---|---|---|
+| `carry` | Wanted in the next sprint | Target = the calendar's next sprint |
+| `land` | Wanted again in a named later sprint: the sprint whose planning looks at it again, not a commitment | `--target`, later than the next sprint |
+| `park` | Back to the backlog, no sprint in view | Status → `Portfolio Backlog`, Horizon cleared; a leaf's `Actual Start` moves into the note |
+| `drop` | Not going to be done | Status → `Cancelled`, with the closure note `--closure` gives |
+
+Each appends to `Sprint Closeouts`, notes `Closed out of S, <outcome>: <why>` on the row, and prints the line for the record's Carryover table. The commitment history is left as it is, so the closed sprint still counts the row as committed and not delivered. Refused: no reason (no closure, for a drop); a Done or Cancelled row; a sprint the row was never in, or that has not started; a sprint the row has moved on from; a second closeout of the same sprint. Before the sprint's last day it is an **early close-out**, allowed and said so: the first decision is what tells the board the close-out began. A row closed out early and then finished in the sprint after all is simply Done there. A finished row never relabelled is closed with `set --closure`, not closed out. The row's task leaves the closed sprint in the team's tracker too.
+
+**Planning takes the why from the closeout.** `set --sprint-carried S` with no `--reason` uses the reason of the closeout that targeted S, and says so.
+
+```bash
+python <skill-path>/scripts/wbs.py closeouts [<register>...] --sprint S26.Q4.2 [--json]   # the close-out's view
+python <skill-path>/scripts/wbs.py closeouts [<register>...] --target S26.Q4.3 [--json]   # planning's view
+```
+
+`--sprint` lists the sprint's unfinished rows with their outcome, `undecided`, or what became of them before the rule (`done in`, `in`, `cancelled`), as the record's table lines. `--target` lists the open rows whose latest closeout sends them to that sprint: planning's candidates beside `Horizon Next`. With no register given, both read every WBS register under the current folder.
 
 The schedule dates hang off these same moments rather than forming a separate routine — see **When each date is written** below for which field belongs to which. Committing to a sprint is also when a story's **baseline** is set, and it is set once.
 
@@ -353,6 +386,7 @@ Generates a self-contained HTML file with:
   - **Which rows are in the sprint, and the header's figures, come from `wbs.py`** (`sprint_board`, `sprint_metrics`), embedded per sprint at generation. `sprint_board()` decides each card's role, lane and path once; a report that shows the sprint as a board should use it too, so a card sits in the same lane everywhere. The header therefore reads the same as `wbs.py metrics --sprint` for that sprint; never recompute them in the page.
   - **Which sprint is current is decided when the page opens**, from the calendar, like the Roadmap's Today line, so it stays right between refreshes. A picker shows any other sprint. While today's sprint has cards, the dashboard opens on this tab.
   - **Read-only**, like the rest of the dashboard: a card moves through `wbs.py set`. One project per dashboard: a sprint that spans several projects is a cross-project report's job, not the dashboard's.
+  - **A card sits where it stood in the sprint shown, not where it stands today.** Done means done in that sprint. Once the close-out has begun (the first decision recorded for the sprint, even a day early) or from the sprint's last day, whichever comes first, the board adds a fourth column, **Closed out**: the cards it let go, each with a badge saying what became of them (*carried → S*, *landed → S*, *parked*, *dropped*; for sprints before the closeout rule, *done in S* or *in S*). A card dropped there stays on that board, struck through, whatever the Cancelled toggle says; a parked card raises no Portfolio Backlog flag. For a sprint held to the rule, a card still in To do or Doing is flagged *to decide* while the close-out runs and *no decision* once the sprint has ended, and a line above the board counts the close-out's progress (*3 of 8 unfinished cards decided · 5 to go*, then *Close-out complete*). Regenerate the dashboard as the close-out goes to watch it. The card's detail shows its **journey** across sprints (`S1 carried → S2 · S2 parked · S3 done`). Placement comes from `refresh_wbs.sprint_state`, from the register, never recomputed in the page.
 - **Sprints tab** — the history view: every sprint with work, newest first, the running one open and older ones folded to their figures; each header is the Current Sprint strip from `wbs.py metrics`, rows grouped Committed / Carried in / Pulled in / Closed here with a link to the parent
 - **Breakdown tab: effort rolls up bottom-up.** A parent's effort is its leaves' sum and its progress is over its leaves - never its own estimate added on top. Where a parent carries its own estimate it shows as the original one, with the difference (*est. 10h → 27h (+17h)*); unestimated leaves are counted (*2 of 7 unestimated*), never filled in.
 - **Verification tab** — every requirement (Feature and Story) with the deliverable and parent it traces to, how many acceptance criteria it states, and its verification read from its closure note: *verified*, *partly met*, *not met*, *no verdict*, *open*, or *referred* (a row split from another keeps its verdict there). A gap shows where its follow-up went. Flags: committed or staged with no AC; closed with no AC verdict (since the register's `meta.settings.closure_notes_from` date, where set); partly or not met with no follow-up. This is a traceability matrix's verified column, read from the closure notes rather than kept by hand, and the drill-down behind the status report's *On Quality*.
@@ -509,7 +543,7 @@ Four populations, and the first two are kept apart deliberately — the gap betw
 | **Committed** | `Sprint Planned` = the sprint, or the sprint is in `Sprint Carried`. What planning agreed to. |
 | **Pulled in** | `Sprint Added` = the sprint but the row is not committed to it. Scope that arrived mid-sprint. |
 | **Delivered** | `Sprint Ended` = the sprint and `Status` is `Done`. |
-| **Carried over** | Committed, not delivered. Listed by ID, so the retro can discuss items rather than a number. |
+| **Carried over** | Committed, not delivered. Listed by ID, so the retro can discuss items rather than a number, and broken down by what the close-out decided (carried, landed, parked, dropped, undecided; *not recorded* for sprints before the closeout rule). Unfinished pull-ins get the same breakdown on a line of their own. |
 
 These definitions live in `sprint_populations()`, and the dashboard's Current Sprint board draws from the same function.
 
@@ -527,7 +561,7 @@ python <skill-path>/scripts/wbs.py metrics "<register A>" "<register B>" --sprin
 
 Totals come first, with a per-project split underneath — capacity belongs to the person, not to any one register. Three details make that safe: **item IDs are qualified by scope** (`Atlas#4`), since an ID is unique within a register and not across them; **a combined median is computed from the raw spans**, never by averaging medians; and **registers whose calendars disagree about the sprint are refused**, because the same ID over different dates describes a sprint that never happened. That last check is only possible — and only necessary — because projects share one cadence.
 
-**Cancelled rows are excluded throughout.** Work that will not happen should neither flatter a sprint nor punish it.
+**Cancelled rows are excluded throughout**, with one exception. Work that will not happen should neither flatter a sprint nor punish it, but a row dropped at a sprint's close-out was committed there and not delivered: it stays in that sprint's committed and carried-over figures, or dropping it would raise the sprint's completion after the fact. Every other sprint leaves it out.
 
 **There is no effort-variance metric, deliberately.** It would need hours *spent*, and nothing records those — not the register, not the task tracker. Committed-against-delivered compares two numbers that exist and measures the thing a retro can act on.
 

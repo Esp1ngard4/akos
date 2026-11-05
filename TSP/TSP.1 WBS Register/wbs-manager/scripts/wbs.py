@@ -8,6 +8,8 @@
     python wbs.py check   <register>
     python wbs.py rebaseline <register> --id 42 --baseline-end Q2-26 --reason "..."
     python wbs.py metrics <register>... --sprint S26.Q3.5
+    python wbs.py closeout <register> --id 42 --sprint S26.Q3.5 --outcome park --reason "..."
+    python wbs.py closeouts [<register>...] --sprint S26.Q3.5 | --target S26.Q3.6
     python wbs.py pullins [--root <folder>] [--sprint S26.Q3.5] [--records <folder>]
     python wbs.py migrate <register> [--apply]
     python wbs.py sprints seed   <conventions.json> --scope "Project name" --year 2026
@@ -99,6 +101,60 @@ def sprint_ids(row):
 def committed_to(row, sprint):
     """Planned into it at the start, or committed to it again later."""
     return row.get("Sprint Planned") == sprint or sprint in carried(row)
+
+
+# What the close-out decided for a row the sprint held and did not finish:
+# carried to the next sprint, landed on a named later one, parked in
+# the backlog, or dropped. A list, one entry per sprint closed out, because a
+# row can leave several sprints unfinished and each keeps its own decision.
+# The commitment fields are never touched: they are what each sprint promised.
+CLOSEOUTS = "Sprint Closeouts"
+OUTCOMES = ("carry", "land", "park", "drop")
+OUTCOME_WORDS = {"carry": "carried", "land": "landed", "park": "parked",
+                 "drop": "dropped", "undecided": "undecided",
+                 "not recorded": "not recorded"}
+# Sprints ending from this date, when the closeout came into AKOS, are held
+# to the rule. Earlier close-outs decided in their records only, and flagging
+# them would bury the real gaps.
+CLOSEOUT_RULE_FROM = "2026-11-07"
+
+
+def closeouts(row):
+    return list(row.get(CLOSEOUTS) or [])
+
+
+def closeout_for(row, sprint):
+    return next((c for c in closeouts(row) if c.get("Sprint") == sprint), None)
+
+
+def held_sprints(row):
+    """The sprints a row was committed or pulled into."""
+    return [s for s in [row.get("Sprint Planned")] + carried(row)
+            + [row.get("Sprint Added")] if s]
+
+
+def sprint_order(data):
+    """The calendar's sprint IDs, earliest first."""
+    known = sprint_calendar(data)
+    return sorted(known, key=lambda s: known[s][0] or s)
+
+
+def latest_held(data, row):
+    order = sprint_order(data)
+    held = held_sprints(row)
+    return max(held, key=lambda s: (order.index(s), s) if s in order else (-1, s)) if held else None
+
+
+def open_sprint(data, row):
+    """The sprint a row is live in: the latest it was committed or pulled
+    into, unless the close-out has already decided where it goes from there."""
+    latest = latest_held(data, row)
+    return None if latest is None or closeout_for(row, latest) else latest
+
+
+def closed_out(data, row):
+    latest = latest_held(data, row)
+    return latest is not None and closeout_for(row, latest) is not None
 # Only these levels name a thing rather than an activity, so only these can be
 # put in front of a sponsor as a deliverable. Key Deliverable is curation, not
 # classification - it marks what earns a line in an executive report, which is
@@ -493,12 +549,22 @@ def apply_sprints(data, row, args, changed):
     # row is what gets read once the sprint's record is closed - the same
     # bargain as a moved date's --reason and a closure's --closure.
     reason = (getattr(args, "reason", None) or "").strip()
+    # The close-out settled the why when it carried or landed the row here,
+    # so planning does not ask it twice.
+    settled = next((c for c in reversed(closeouts(row)) if c.get("Target") == value), None)
+    if not reason and settled:
+        reason = settled.get("Reason", "")
+        changed.append("reason taken from the %s close-out" % settled.get("Sprint"))
     if not reason:
         sys.exit("Carrying a row into %s needs --reason: why it did not finish "
                  "where it was committed." % value)
     row[CARRIED] = now + [value]
     add_note(row, "Carried into %s: %s" % (value, reason))
     changed.append("%s += %s (reason noted in Comments)" % (CARRIED, value))
+    # A parked row groomed back to Next is committed again: the commitment
+    # supersedes the intention, as it does for Sprint Planned.
+    if row.pop("Horizon", None):
+        changed.append("Horizon cleared (a sprint supersedes it)")
 
 
 # Statuses that mean "not committed yet". Committing a row to a sprint ends
@@ -1082,6 +1148,211 @@ def cmd_split(args):
     return finish(args, data, "\n  ".join(lines))
 
 
+# --------------------------------------------------------------------------- #
+# Closing out unfinished rows. The close-out decides, for each row the
+# sprint held and did not finish, where it goes: on to the next sprint, onto a
+# named later one, back to the backlog, or out. The decision is recorded on the
+# row, not in a tracker, so it reads the same whichever tracker a team uses.
+
+def closeout_line(data, row, entry):
+    """The row's line for the record's Carryover table."""
+    entry = entry or {}
+    return "| %s %s | %s | %s | %s |" % (
+        row_ref(data, row["ID"]), row.get("Title", ""),
+        entry.get("Outcome") or "**undecided**", entry.get("Target", ""),
+        entry.get("Reason", ""))
+
+
+def cmd_closeout(args):
+    """Record where a row the sprint held, and did not finish, goes next.
+
+    One decision per row per sprint, made at the close-out while the why is
+    fresh. The row's commitment history stays as it is, so the closed sprint
+    still counts it as committed and not delivered; what changes is that the
+    row is no longer live in that sprint, so `check` stops asking about it and
+    planning finds it only where its target says.
+    """
+    data = R.load(args.register)
+    row = find(data, args.id)
+    if row is None:
+        sys.exit("No item with ID %s." % args.id)
+    rid, sprint, outcome = row.get("ID"), args.sprint, args.outcome
+    known = sprint_calendar(data)
+    if not known:
+        sys.exit("This register has no sprint calendar.\n  run: wbs.py sprints import")
+    if sprint not in known:
+        sys.exit("%r is not a sprint in this register's calendar." % sprint)
+    status = row.get("Status")
+    if status == "Done":
+        sys.exit("Item %s is Done: a finished row is closed, not closed out. Finished "
+                 "and never relabelled, it counts as delivered already." % rid)
+    if status == "Cancelled":
+        sys.exit("Item %s is Cancelled already: there is nothing left to decide." % rid)
+    if sprint not in held_sprints(row):
+        sys.exit("Item %s was never in %s: neither committed nor pulled in." % (rid, sprint))
+    # The close-out belongs on the sprint's last day, but it can start earlier
+    # when the day calls for it; only a sprint not yet begun has nothing to
+    # close. The first decision is what tells the board the close-out began.
+    starts, ends = known[sprint]
+    today = date.today().isoformat()
+    if starts and today < starts:
+        sys.exit("%s starts on %s: there is nothing to close out yet." % (sprint, starts))
+    early = bool(ends) and today < ends
+    done = closeout_for(row, sprint)
+    if done:
+        sys.exit("Item %s was closed out of %s already: %s on %s. Its decision stands; "
+                 "a later change is the next sprint's." % (rid, sprint, done.get("Outcome"), done.get("On")))
+    latest = latest_held(data, row)
+    if latest != sprint:
+        sys.exit("Item %s is in %s, later than %s: close it out of that one." % (rid, latest, sprint))
+
+    reason = (args.reason or "").strip()
+    closure = args.closure
+    if outcome == "drop":
+        if not (closure or "").strip():
+            sys.exit("Dropping item %s needs --closure: why it was dropped and where "
+                     "anything it held went. It becomes the row's closure note." % rid)
+        if reason:
+            sys.exit("--reason goes with carry, land and park; a drop's why is its --closure.")
+        reason = closure.strip()
+    else:
+        if closure is not None:
+            sys.exit("--closure goes with --outcome drop.")
+        if not reason:
+            sys.exit("Closing item %s out of %s needs --reason: why it did not finish there."
+                     % (rid, sprint))
+
+    order = sprint_order(data)
+    at = order.index(sprint)
+    nxt = order[at + 1] if at + 1 < len(order) else None
+    target = None
+    if outcome == "carry":
+        if args.target:
+            sys.exit("A carry goes to the next sprint (%s). For a later one: --outcome land "
+                     "--target <sprint>." % (nxt or "none in the calendar"))
+        if not nxt:
+            sys.exit("The calendar holds no sprint after %s: import the next sprints first." % sprint)
+        target = nxt
+    elif outcome == "land":
+        if not args.target:
+            sys.exit("Landing needs --target: the sprint whose planning looks at it again.")
+        if args.target not in known:
+            sys.exit("%r is not a sprint in this register's calendar." % args.target)
+        if order.index(args.target) <= at:
+            sys.exit("%s is not after %s." % (args.target, sprint))
+        if args.target == nxt:
+            sys.exit("%s is the next sprint: that is --outcome carry." % nxt)
+        target = args.target
+    elif args.target:
+        sys.exit("--target goes with carry and land: a %s row has no sprint in view." % outcome)
+
+    changed, extra = [], ""
+    entry = {"Sprint": sprint, "Outcome": outcome}
+    if target:
+        entry["Target"] = target
+    entry["Reason"] = one_paragraph(reason)
+    entry["On"] = date.today().isoformat()
+    row[CLOSEOUTS] = closeouts(row) + [entry]
+    changed.append("%s += %s %s%s" % (CLOSEOUTS, sprint, outcome, " -> %s" % target if target else ""))
+    if outcome == "park":
+        if row.pop("Horizon", None):
+            changed.append("Horizon cleared")
+        if status not in UNCOMMITTED:
+            row["Status"] = "Portfolio Backlog"
+            changed.append("Status=Portfolio Backlog (was %s)" % status)
+        # Parked work is not under way. The date goes into the note, so the
+        # fact that it was started is kept where it is read.
+        if row.get("Actual Start") and not has_children(data, rid):
+            extra = " Started %s." % row.pop("Actual Start")
+            changed.append("Actual Start cleared (kept in the note)")
+    if outcome == "drop":
+        ns = argparse.Namespace(status="Cancelled", closure=closure,
+                                actual_end=None, actual_start=None)
+        row["Status"] = "Cancelled"
+        changed.append("Status=Cancelled (was %s)" % status)
+        apply_closure(row, ns, changed, status)
+        clear_horizon_on_close(row, ns, changed)
+        stamp_actuals(data, row, ns, changed)
+    what = {"carry": "carried to %s" % target, "land": "landed on %s" % target,
+            "park": "parked in the backlog", "drop": "dropped"}[outcome]
+    add_note(row, "Closed out of %s, %s: %s%s" % (
+        sprint, what, "see the closure note." if outcome == "drop" else entry["Reason"], extra))
+    changed.append("note added")
+
+    if early:
+        changed.append("an early close-out: %s runs until %s" % (sprint, ends))
+    code = finish(args, data, "Item %s closed out of %s: %s\n  %s"
+                  % (rid, sprint, what, "\n  ".join(changed)))
+    print("\n  Add to the sprint record's Carryover table:\n  " + closeout_line(data, row, entry))
+    print("  And take its task out of %s in the team's tracker." % sprint)
+    return code
+
+
+def cmd_closeouts(args):
+    """A sprint's unfinished rows with what the close-out decided, or the
+    rows the close-out sent to a sprint, for its planning to look at again."""
+    if bool(args.sprint) == bool(args.target):
+        sys.exit("One of --sprint (what a close-out decided) or --target (what "
+                 "planning looks at again).")
+    paths = args.registers or wbs_registers(os.path.abspath(args.root or os.getcwd()))
+    found = []
+    for path in paths:
+        data = R.load(path)
+        for row in R.rows(data, ITEMS):
+            if args.sprint:
+                s = args.sprint
+                if s not in held_sprints(row):
+                    continue
+                if row.get("Status") == "Done" and row.get("Sprint Ended") == s:
+                    continue
+                entry = closeout_for(row, s)
+                if entry:
+                    state = entry.get("Outcome")
+                elif row.get("Status") == "Done":
+                    state = "done in %s" % (row.get("Sprint Ended") or "?")
+                elif row.get("Status") == "Cancelled":
+                    state = "cancelled"
+                elif latest_held(data, row) != s:
+                    state = "in %s" % latest_held(data, row)
+                else:
+                    state = "undecided"
+            else:
+                if row.get("Status") in CLOSED or open_sprint(data, row):
+                    continue
+                entry = closeout_for(row, latest_held(data, row)) or {}
+                if entry.get("Target") != args.target:
+                    continue
+                state = entry.get("Outcome")
+            found.append({"scope": data.get("meta", {}).get("scope", path), "id": row.get("ID"),
+                          "ref": "%s %s" % (row_ref(data, row["ID"]), row.get("Title", "")),
+                          "state": state, "hours": row.get("Estimated Effort (h)"),
+                          "entry": entry, "line": closeout_line(data, row, entry)})
+    if args.json:
+        print(json.dumps([{k: v for k, v in f.items() if k != "line"} for f in found], indent=2))
+        return 0
+    if args.target:
+        if not found:
+            print("No row was carried or landed on %s." % args.target)
+            return 0
+        print("%d row(s) the close-out sent to %s, for its planning:" % (len(found), args.target))
+        for f in found:
+            e = f["entry"]
+            print("  %s  (%s from %s%s): %s" % (
+                f["ref"], OUTCOME_WORDS[e["Outcome"]], e["Sprint"],
+                ", %gh" % f["hours"] if f["hours"] is not None else "", e.get("Reason", "")))
+        return 0
+    if not found:
+        print("Every row %s held finished there: no carryover to decide." % args.sprint)
+        return 0
+    undecided = [f for f in found if f["state"] == "undecided"]
+    print("%d row(s) %s held did not finish there; %d undecided." % (len(found), args.sprint, len(undecided)))
+    print("Carryover table (| Item | Outcome | Target | Why it did not finish |):")
+    for f in found:
+        decided = f["state"] in OUTCOMES or f["state"] == "undecided"
+        print("  " + (f["line"] if decided else "| %s | %s |  |  |" % (f["ref"], f["state"])))
+    return 0
+
+
 def cmd_check(args):
     data = R.load(args.register)
     items = R.rows(data, ITEMS)
@@ -1145,7 +1416,9 @@ def cmd_check(args):
             if row.get("Status") in HORIZON_CLEARS_ON:
                 errors.append("item %s: Horizon=%s on a %s row - closing the "
                               "row supersedes it" % (rid, horizon, row.get("Status")))
-            if row.get("Sprint Planned"):
+            # A closed-out row is no longer live in its sprint: a parked one
+            # may be groomed Next again.
+            if row.get("Sprint Planned") and not closed_out(data, row):
                 errors.append("item %s: Horizon=%s and Sprint Planned=%s - a "
                               "commitment supersedes an intention"
                               % (rid, horizon, row.get("Sprint Planned")))
@@ -1169,6 +1442,24 @@ def cmd_check(args):
             if value == row.get("Sprint Planned"):
                 errors.append("item %s: %s repeats Sprint Planned %s"
                               % (rid, CARRIED, value))
+        raw = row.get(CLOSEOUTS)
+        if raw is not None and not isinstance(raw, list):
+            errors.append("item %s: %s must be a list, not %r" % (rid, CLOSEOUTS, raw))
+        for entry in closeouts(row):
+            if not isinstance(entry, dict):
+                errors.append("item %s: %s holds %r, not an entry" % (rid, CLOSEOUTS, entry))
+                continue
+            if entry.get("Outcome") not in OUTCOMES:
+                errors.append("item %s: closed out of %s as %r, not one of %s"
+                              % (rid, entry.get("Sprint"), entry.get("Outcome"), ", ".join(OUTCOMES)))
+            for field in ("Sprint", "Target"):
+                value = entry.get(field)
+                if value and known_sprints and value not in known_sprints:
+                    errors.append("item %s: a closeout's %s %r is not a sprint in the calendar"
+                                  % (rid, field, value))
+            if entry.get("Outcome") in ("carry", "land") and not entry.get("Target"):
+                errors.append("item %s: closed out of %s as %s with no Target"
+                              % (rid, entry.get("Sprint"), entry.get("Outcome")))
 
         # Schedule dates. Two answers to whether something finished is one
         # too many, so the dates and the Status have to agree.
@@ -1192,16 +1483,26 @@ def cmd_check(args):
                                                   "Funnel"):
             errors.append("item %s: Actual Start is set but Status is %r"
                           % (rid, status))
-        if status in UNCOMMITTED and (row.get("Sprint Planned") or carried(row)):
+        gone = closed_out(data, row)
+        if status in UNCOMMITTED and (row.get("Sprint Planned") or carried(row)) and not gone:
             warnings.append("item %s: committed to %s but Status is %r - a "
                             "commitment means Not Started"
                             % (rid, (carried(row) or [row.get("Sprint Planned")])[-1],
                                status))
+        # The close-out decides where each unfinished row goes. An open row
+        # still live in a sprint that has ended was not looked at.
+        live = latest_held(data, row)
+        if live and status not in CLOSED and not gone and live in sprint_window:
+            ends = sprint_window[live][1]
+            if ends and CLOSEOUT_RULE_FROM <= ends < date.today().isoformat():
+                warnings.append("item %s: in %s, which ended %s, with no closeout - "
+                                "decide where it goes: wbs.py closeout --id %s --sprint %s "
+                                "--outcome carry|land|park|drop" % (rid, live, ends, rid, live))
         # A committed parent counts as an item and takes its hours
         # from its children in the sprint, so with none of them there the
         # work that finishes it is not named - a refinement gap.
         latest = (carried(row) or [row.get("Sprint Planned")])[-1]
-        if latest and status not in CLOSED and has_children(data, rid):
+        if latest and status not in CLOSED and has_children(data, rid) and not gone:
             below = [r for r in items if str(r.get("ID")) in subtree_ids(items, rid)
                      and r.get("Status") != "Cancelled"]
             if not any(committed_to(r, latest) or latest in (r.get("Sprint Added"),
@@ -1239,9 +1540,10 @@ def cmd_check(args):
                                 % (rid, ", ".join(stored)))
 
         # Usually a stale field rather than a mistake, so a warning (R22).
+        # A closed-out row has moved on from the sprint it was planned into.
         planned = resolved.get("Planned End")
         sprint_id = row.get("Sprint Planned")
-        if planned and sprint_id and sprint_id in sprint_window:
+        if planned and sprint_id and sprint_id in sprint_window and not closeouts(row):
             window = sprint_window[sprint_id]
             if window[1] and (planned["end"] < window[0] or planned["start"] > window[1]):
                 warnings.append("item %s: Sprint Planned %s (%s..%s) and Planned "
@@ -1625,13 +1927,27 @@ def sprint_metrics(data, sprint):
     over-commitment shows: a sprint that delivered its plan and absorbed
     more is not the same as one that merely hit its number.
     """
-    live = [r for r in R.rows(data, ITEMS) if r.get("Status") != "Cancelled"]
+    # A row dropped at this sprint's close-out was committed here and not
+    # delivered: dropping it must not raise the sprint's completion after the
+    # fact. Every other sprint leaves it out, as any Cancelled row.
+    live = [r for r in R.rows(data, ITEMS) if r.get("Status") != "Cancelled"
+            or (closeout_for(r, sprint) or {}).get("Outcome") == "drop"]
     committed, pulled, delivered = sprint_populations(live, sprint)
     carried = [r for r in committed if r not in delivered]
+    unfinished = [r for r in pulled if r not in delivered]
     spans = sorted(d for d in (cycle_days(r) for r in delivered) if d is not None)
     scope = data.get("meta", {}).get("scope", "?")
     # Hours come from leaves only: a parent counts as an item.
     parents = parent_ids(live)
+    ends = sprint_calendar(data).get(sprint, (None, None))[1]
+    unset = "undecided" if not ends or ends >= CLOSEOUT_RULE_FROM else "not recorded"
+
+    def by_outcome(rows):
+        out = {}
+        for r in rows:
+            key = (closeout_for(r, sprint) or {}).get("Outcome", unset)
+            out[key] = out.get(key, 0) + 1
+        return out
 
     return {
         "sprint": sprint,
@@ -1646,7 +1962,13 @@ def sprint_metrics(data, sprint):
         # IDs are unique within a register, not across them, so a combined
         # report has to say which project each one belongs to.
         "carryover": {"n": len(carried), "h": hours(carried, parents),
-                      "ids": ["%s#%s" % (scope, r.get("ID")) for r in carried]},
+                      "ids": ["%s#%s" % (scope, r.get("ID")) for r in carried],
+                      "by_outcome": by_outcome(carried)},
+        # Pull-ins count as commitment, so the close-out decides theirs too;
+        # they keep their own line, as pulled_in keeps its own from committed.
+        "pulled_unfinished": {"n": len(unfinished), "h": hours(unfinished, parents),
+                              "ids": ["%s#%s" % (scope, r.get("ID")) for r in unfinished],
+                              "by_outcome": by_outcome(unfinished)},
         "cycle_time": {"median_days": median_of(spans), "measured": len(spans),
                        "of": len(delivered), "days": spans},
     }
@@ -1673,10 +1995,16 @@ def combine(parts):
     for group in ("committed", "pulled_in", "delivered"):
         total[group] = {k: round(sum(p[group].get(k, 0) for p in parts), 2)
                         for k in parts[0][group]}
-    total["carryover"] = {
-        "n": sum(p["carryover"]["n"] for p in parts),
-        "h": round(sum(p["carryover"]["h"] for p in parts), 2),
-        "ids": [i for p in parts for i in p["carryover"]["ids"]]}
+    for group in ("carryover", "pulled_unfinished"):
+        outcomes = {}
+        for p in parts:
+            for k, n in p[group]["by_outcome"].items():
+                outcomes[k] = outcomes.get(k, 0) + n
+        total[group] = {
+            "n": sum(p[group]["n"] for p in parts),
+            "h": round(sum(p[group]["h"] for p in parts), 2),
+            "ids": [i for p in parts for i in p[group]["ids"]],
+            "by_outcome": outcomes}
     days = [d for p in parts for d in p["cycle_time"]["days"]]
     total["cycle_time"] = {"median_days": median_of(days), "measured": len(days),
                            "of": sum(p["cycle_time"]["of"] for p in parts),
@@ -1686,6 +2014,13 @@ def combine(parts):
 
 def pct(part, whole):
     return None if not whole else round(part / whole * 100)
+
+
+def outcome_text(counts):
+    """`carried 2, parked 1, undecided 3`: the close-out's decisions, in order."""
+    order = list(OUTCOMES) + ["undecided", "not recorded"]
+    return ", ".join("%s %d" % (OUTCOME_WORDS.get(k, k), counts[k])
+                     for k in sorted(counts, key=lambda k: order.index(k) if k in order else 99))
 
 
 def cmd_metrics(args):
@@ -1764,8 +2099,14 @@ def cmd_metrics(args):
     if co["n"]:
         print("  Carryover       %d item(s), %gh  (IDs %s)"
               % (co["n"], co["h"], ", ".join(str(i) for i in co["ids"])))
+        print("                  %s" % outcome_text(co["by_outcome"]))
     elif c["n"]:
         print("  Carryover       none")
+    pu = m["pulled_unfinished"]
+    if pu["n"]:
+        print("  Pulled in, open %d item(s), %gh not finished  (IDs %s)"
+              % (pu["n"], pu["h"], ", ".join(str(i) for i in pu["ids"])))
+        print("                  %s" % outcome_text(pu["by_outcome"]))
     if ct["measured"]:
         print("  Cycle time      %g days median, over %d of %d delivered item(s)"
               % (ct["median_days"], ct["measured"], ct["of"]))
@@ -2341,6 +2682,33 @@ def main():
                    help="when the delivered part finished (default: today)")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_split)
+
+    s = subs.add_parser("closeout", help="at the close-out: where a row the sprint held, "
+                                         "and did not finish, goes next")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("--sprint", required=True, metavar="SPRINT",
+                   help="the sprint being closed out")
+    s.add_argument("--outcome", required=True, choices=OUTCOMES,
+                   help="carry: the next sprint. land: a later one, --target. "
+                        "park: back to the backlog. drop: Cancelled, --closure")
+    s.add_argument("--target", metavar="SPRINT",
+                   help="land only: the sprint whose planning looks at it again")
+    s.add_argument("--reason", help="why it did not finish (carry, land, park)")
+    s.add_argument("--closure", metavar="NOTE",
+                   help="drop only: why it was dropped and where anything it held went")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_closeout)
+
+    s = subs.add_parser("closeouts", help="a sprint's unfinished rows and their outcomes, "
+                                          "or the rows sent to a sprint")
+    s.add_argument("registers", nargs="*",
+                   help="default: every WBS register in the workspace")
+    s.add_argument("--sprint", metavar="ID", help="the close-out's view: what it decided")
+    s.add_argument("--target", metavar="ID", help="planning's view: what to look at again")
+    s.add_argument("--root", help="the folder whose WBS registers are read (default: the current one)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_closeouts)
 
     s = subs.add_parser("check", help="validate IDs, parents and vocabularies")
     s.add_argument("register")

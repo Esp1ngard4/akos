@@ -73,13 +73,13 @@ Their order is not arbitrary: each hands the next something it needs.
 
 **Purpose:** establish what the closing sprint actually delivered, before committing to anything new. Its capacity, its carryover and its unmet goals are inputs to the sprint that follows.
 
-**Cadence:** the sprint's last day, before the retro, and not on planning day. Its second half checks readiness, and a check with no gap before planning leaves no time to act on what it finds.
+**Cadence:** the sprint's last day, before the retro, and not on planning day. It may start a day or so earlier when the calendar calls for it; its first decision on an unfinished row is what marks it begun. Its second half checks readiness, and a check with no gap before planning leaves no time to act on what it finds.
 
 **It answers four questions:**
 
 - **What did we deliver?** Velocity, completion against commitment and cycle time, computed by `wbs.py metrics` rather than recalled, with effort per register.
 - **Did we meet the iteration goals?** Each goal is answered. A goal nobody marks is a commitment nobody checks.
-- **What carries over, and what is dropped?** Each unfinished row is genuine spillover, quietly abandoned, or finished and never closed.
+- **What carries over, and what is dropped?** Each row the sprint held, committed or pulled in, that did not finish is decided here and nowhere later: **carried** to the next sprint, **landed** on a named later sprint (the one whose planning looks at it again: a revisit, not a commitment), **parked** back in the backlog, or **dropped**. One finished and never closed is closed, and counts as delivered. **The decision is recorded on the WBS row, not in a tracker** (`wbs.py closeout`), with why it did not finish, so it reads the same whatever tracker a team keeps; the row's task then leaves the closed sprint in the tracker too. The closed sprint still counts the row as committed and not delivered, since the commitment history is never rewritten, and a drop does not raise its completion after the fact. A decided row is told apart from one nobody looked at: a row still in an ended sprint with no decision is flagged. Planning finds the work where the decision sent it, with its why already written. Partly done work is split first, and the rest decided like any other row.
 - **Is it ready to plan?** This is the precheck: the candidate pool against the thresholds, the gaps, the deliverables and the controls. **A gap is a flag, never a veto.**
 
 **What it is not:** it inspects the *result*. How the work was done is the retro's question. *Scrum calls this the Sprint Review. The name is not borrowed because that event is a stakeholder demonstration, and only its inspect-the-outcome half is here. A team that demonstrates to stakeholders adds that to its copy.*
@@ -98,9 +98,9 @@ Their order is not arbitrary: each hands the next something it needs.
 
 **It decides:**
 
-- **What is committed**, as a prioritised list, top first, from grooming's ready candidates and the previous sprint's spillover.
+- **What is committed**, as a prioritised list, top first, from grooming's ready candidates and the rows the close-out carried or landed on this sprint. Parked rows come back only through grooming.
 - **Capacity**: hours available against hours planned, recorded as they are. Going over can be a deliberate stretch on the no-AI baseline.
-- **Two or three iteration goals.**
+- **One to three iteration goals**: the outcomes to **protect if everything else had to drop**. That is the test a goal must pass, and the reason goals exist: when the sprint runs short, they say what is kept and what goes first. A goal that restates the committed work fails it, however accurate, since a summary of everything protects nothing. So most committed rows serve no goal, which is legitimate; the goals are a choice made against the commitment, not drawn from it.
 - **Confidence**, as a fist of five per participant.
 - **Controls**: the due control activities to commit, when a TSP register is in use.
 
@@ -112,7 +112,7 @@ One Markdown file per sprint, named for its ID. It holds the sprint as one arc: 
 
 - **`Noticed`**: anything worth acting on, written when it is noticed. Each row records *what* and *where it was routed*, never the item itself. A row with an empty `Routed to` is an admission.
 - **`Next sprint - draft`**: the shortlist for the sprint after, accumulated as the sprint runs and drained at grooming. It is the **denominator** that makes grooming measurable. Without a named list the pool has no edge, and no figure can come out of it.
-- **`Draft goals`**: goals worth proposing, written whenever they occur. Planning carries them in marked `draft:`, and the session decides.
+- **`Draft goals`**: goals worth proposing, written whenever they occur, held to the same test: what would be protected if the rest dropped. Planning carries them in marked `draft:`, and the session decides.
 
 **Records are found by shape, not by a configured path**: a file named for a sprint ID whose first line is `# Sprint `. The folder can move without anything breaking.
 
@@ -197,6 +197,7 @@ What is **not** tested is whether the agent runs a ceremony well. No test assert
 
 | Version | Date | Changes |
 |---|---|---|
+| v1.6 | 2026-11-05 | **The close-out decides where each unfinished row goes, on the row, and a sprint goal is what to protect.** Carry, land on a named later sprint, park or drop, with why it did not finish, through TSP.1's `closeout` (TD.1 v1.23), pull-ins included; before, planning gathered every unfinished row as carryover, so a row meant to be parked came back and an undecided row looked like a decided one. The closed sprint keeps counting the row, planning gathers by the decision's target, the record's carryover table becomes *Item / Outcome / Target / Why it did not finish*, and a close-out may start early. And the iteration goals are one to three outcomes to protect if everything else had to drop, chosen against the commitment rather than summarised from it; planning asks that before proposing any. |
 | v1.5 | 2026-10-28 | **The team's board, where there is one** (TSP.15): planning's last step sets up the sprint's board, the close-out consolidates it before anything else, and a pull-in or a cancellation reaches it the same day. Each is a step only where the tool is installed. |
 | v1.4 | 2026-10-27 | **A pull-in states its effect, and the WBS tool asks for it.** Work taken in after planning gets its line in *Committed items* the day it is pulled in, with `effect:` either `displaces nothing` or the committed item it delays; `wbs.py` refuses to start an uncommitted row until it is answered (TD.1 v1.10), and `pullins` finds any line the record lacks. The close-out reads the effects first, so a slipped item's why names the pull-in that took its time, and a pull-in with no effect is recorded as `effect not stated` for the retro. Planning commits a parent a goal means to close, at `0h`. The close-out ends with the communications the stakeholder register (TSP.13) says are due, sent by the user, external ones through `report.py export --comm`. |
 | v1.3 | 2026-10-22 | **Partly done spillover is split at the close-out.** Step 4 asks of each unfinished leaf whether any of it was delivered: if so it is split (`wbs.py split`, TD.1 v1.9), the delivered part closing in the sprint and the rest carried at planning; if not it is carried whole. Planning carries a split's rest, and its parent only when the deliverable is promised again. |

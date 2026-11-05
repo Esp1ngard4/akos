@@ -55,6 +55,8 @@ Confidence in the plan, per participant. Solo: one row.
 
 ### Iteration goals
 
+One to three outcomes to protect if everything else in the sprint had to
+drop: a choice made against the commitment, not a summary of it.
 `ID` is G1, G2... within this sprint. `Bet` names the bet or objective from a
 longer planning cycle that the goal serves (a quarter's bet, an OKR), or
 nothing. `Carried from` names the earlier goal this one continues
@@ -107,8 +109,8 @@ through rather than quietly deleted.
 
 ### Draft goals
 
-Goals worth proposing at the next planning, written whenever they occur.
-Planning carries them into its goals table marked `draft:`; the session
+Goals worth proposing at the next planning, written whenever they occur: what
+you would protect if the rest of the sprint had to drop. Planning carries them into its goals table marked `draft:`; the session
 confirms, rewords or drops each.
 
 -
@@ -174,14 +176,17 @@ keeps working.
 
 ### Carryover and closure
 
-Each committed item that did not finish is spillover, quietly abandoned, or
-finished and never closed. Deciding which makes the next planning session
-honest about where it starts. For spillover, the reason it did not finish is
-settled here and written on its WBS row when planning carries it.
+Each item the sprint held (committed or pulled in) that did not finish gets
+an outcome: carry (the next sprint), land (a named later sprint, whose
+planning looks at it again), park (back to the backlog) or drop. One finished
+and never closed is closed instead, and counts as delivered. The outcome and
+why it did not finish are recorded on the row (`wbs.py closeout`), whose
+`closeouts --sprint` prints these lines; work with no WBS row is written by
+hand in the same shape.
 
-| Item | Spillover / Abandoned / Not closed | Action |
-|---|---|---|
-|  |  |  |
+| Item | Outcome | Target | Why it did not finish |
+|---|---|---|---|
+|  |  |  |  |
 """
 
 RETRO_TEMPLATE = """
