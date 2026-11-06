@@ -1089,7 +1089,7 @@ def cmd_status(args):
     told = told_views(wbs, as_of, rec["audiences"])
     if told:
         rec["told"] = told
-        rec["facts"]["focus"] = {cid: {"what": v["what"], "tells": v["titles"]} for cid, v in told.items()}
+        rec["facts"]["focus"] = {cid: {"what": v["what"], "tells": v.get("titles", [])} for cid, v in told.items()}
     if prev:
         rec["previous"] = {"file": prev[0], "as_of": prev[1]["as_of"],
                            "ratings": {k: v.get("confirmed") for k, v in prev[1]["signals"].items()}}
@@ -1262,21 +1262,7 @@ def cmd_sprint(args):
             projects.append({"scope": w.scope, "overall": last[1] if last else None,
                              "as_of": last[0] if last else None,
                              "trend": trend_level(hist[-2][1], last[1]) if len(hist) > 1 else None})
-    maps = [milestone_map(w, as_of) for w in wbss]
-    for w, mm in zip(wbss, maps):
-        for col in mm["months"]:
-            for it in col["items"]:
-                it["scope"] = w.scope
-        for it in mm["unscheduled"] + mm["earlier"] + mm.get("later", []):
-            it["scope"] = w.scope
-    roadmap = maps[0]
-    for mm in maps[1:]:
-        for a, b in zip(roadmap["months"], mm["months"]):
-            a["items"] += b["items"]
-        roadmap["unscheduled"] += mm["unscheduled"]
-        roadmap["earlier"] += mm["earlier"]
-        roadmap["later"] = roadmap.get("later", []) + mm.get("later", [])
-    roadmap.get("later", []).sort(key=lambda d: d.get("due_sort", ""))
+    roadmap = merge_maps([scoped_map(w, as_of) for w in wbss])
 
     last = {"sprint": prev, "goals": g_prev.get("goals", []), "highlights": g_prev.get("highlights"),
             "metrics": m_prev, "delivered": [d for w in wbss for d in _done_in(w, prev)]}
@@ -1293,6 +1279,11 @@ def cmd_sprint(args):
            "board": sprint_board(wbss, sprint),
            "summary": {"text": None, "confirmed_on": None}}
     rec["facts"] = update_facts(last, this, committed, wbss, raid, risks, facts)
+    # What each communication carrying the update was given to tell.
+    told = sprint_told(wbss, folders, as_of)
+    if told:
+        rec["told"] = told
+        rec["facts"]["focus"] = {cid: {"what": v["what"], "tells": v["titles"]} for cid, v in told.items()}
     # Beside the sprint records by default: the update is the sprint's, and
     # the sprint spans projects, so no one project's Reports folder owns it.
     out_dir = reports_dir(args.out_dir or reports_root(os.path.dirname(records)),
@@ -1450,10 +1441,14 @@ def cmd_export(args):
     stem = args.record[:-5]
     # A communication with a focus tells it in place of the key deliverables.
     view = (rec.get("told") or {}).get(args.comm) if args.comm else None
-    if view:
-        rec = dict(rec, milestones=view["milestones"], journeys=view["journeys"], focused=True)
+    # A sprint update keeps its map under roadmap, a status report under milestones.
+    key = "roadmap" if rec["kind"] == "sprint-update" else "milestones"
+    if view and view.get(key):
+        rec = dict(rec, journeys=view["journeys"], focused=True, **{key: view[key]})
         stem += " %s" % args.comm
         print("  %s tells its focus: %s" % (args.comm, ", ".join(str(x) for x in view["items"])))
+    elif view:
+        print("  %s's focus is not in this %s: it tells the key deliverables" % (args.comm, rec["kind"]))
     if args.audience == "external":
         # An outside reader gets what the owner agreed, never a proposal.
         open_ = [k for k, sg in (rec.get("signals") or {}).items() if not sg.get("confirmed")]
@@ -1618,6 +1613,9 @@ td { padding:6px 8px; border-bottom:1px solid var(--grid); vertical-align:top; f
 .risk-parts details summary { cursor:pointer; color:var(--muted); font-size:11px; margin-top:2px; }
 @media (max-width:600px) { .risk-parts { grid-template-columns:1fr; } .risk-parts dt { padding-top:6px; } }
 .stale { font-size:11px; color:var(--muted); font-style:italic; white-space:nowrap; }
+.lanes { display:grid; gap:14px; }
+.lane { border-top:1px solid var(--grid); padding-top:8px; }
+.lane-name { font-size:12px; font-weight:700; color:var(--ink); margin:0 0 6px; }
 .months { display:grid; gap:10px; align-items:start; grid-template-columns:repeat(var(--cols, 4), minmax(0,1fr)); }
 @media (max-width:760px) { .months { grid-template-columns:1fr; } }
 .month { border:1px solid var(--border); border-radius:8px; padding:10px; min-width:0; }
@@ -1864,10 +1862,29 @@ def risks_html(risks, empty="No open risks or issues."):
     return "".join(out)
 
 
-def roadmap_html(ms, with_scope=False, compact=False, ids=True):
+def roadmap_html(ms, with_scope=False, compact=False, ids=True, order=None):
     """Month columns: last month, now, the next two, then anything undated.
-    The edge columns hold whatever falls outside the window, with its date."""
-    cols = ms["months"] + ([{"label": "Unscheduled", "current": False, "items": ms["unscheduled"]}] if ms["unscheduled"] else [])
+    A map holding more than one project lays each in a lane of its own, with
+    its own folds, so each project's story reads on its own."""
+    every = [it for c in ms["months"] for it in c["items"]] + ms["unscheduled"] +         (ms.get("earlier") or []) + (ms.get("later") or [])
+    scopes = list(dict.fromkeys(it["scope"] for it in every if it.get("scope")))
+    # In the order the report lists its projects, where it gives one.
+    scopes.sort(key=lambda s: (order or []).index(s) if s in (order or []) else len(order or []))
+    if not (with_scope and len(scopes) > 1):
+        return month_grid(ms, with_scope, compact, ids, bool(ms["unscheduled"]))
+    pick = lambda items, s: [it for it in items or [] if it.get("scope") == s]
+    lanes = "".join(
+        '<div class="lane"><h3 class="lane-name">%s</h3>%s</div>' % (e(s), month_grid(
+            {"months": [dict(c, items=pick(c["items"], s)) for c in ms["months"]],
+             "unscheduled": pick(ms["unscheduled"], s), "earlier": pick(ms.get("earlier"), s),
+             "later": pick(ms.get("later"), s)}, False, compact, ids, bool(ms["unscheduled"])))
+        for s in scopes)
+    return '<div class="lanes">%s</div>' % lanes
+
+
+def month_grid(ms, with_scope, compact, ids, unscheduled):
+    """One set of month columns; the edge columns hold the folds."""
+    cols = ms["months"] + ([{"label": "Unscheduled", "current": False, "items": ms["unscheduled"]}] if unscheduled else [])
 
     def ref(it):
         """The scope and the row ID; an outside reader gets the scope alone.
@@ -1934,25 +1951,131 @@ FOCUS_INFO = ("What this report was set to tell: the work and the milestones (ma
               "listed under the last column, with its date.")
 
 
-def told_views(wbs, as_of, audiences):
-    """For each communication with a focus: the map and journeys it tells, and
-    what it names that the WBS does not hold."""
+# A focus item: a row or milestone ID, qualified by a register's scope when it
+# lives in another project (P12#77, Atlas#M1). A bare ID is the
+# communication's own project's.
+FOCUS_REF = re.compile(r"^(?:(.+?)#)?(\d+|M\d+)$")
+
+
+def focus_refs(focus):
+    """[(scope or None, ref)], ref an int row ID or a milestone ID."""
+    out = []
+    for x in focus or []:
+        m = FOCUS_REF.match(str(x).strip())
+        if m:
+            ref = m.group(2)
+            out.append(((m.group(1) or "").strip() or None, int(ref) if ref.isdigit() else ref))
+    return out
+
+
+def scope_names(scope):
+    """What a register answers to in a focus, case-insensitively: its scope,
+    and its leading code (P12 for "P12 Website", P7 for "P.7 Intranet")."""
+    s = (scope or "").strip().lower()
+    head = s.split(" ")[0] if s else ""
+    return {n for n in (s, head, head.replace(".", "")) if n}
+
+
+def focus_for(wbs, refs, own):
+    """The refs that point into this register: the bare ones when it is the
+    communication's own project, and those qualified with its name."""
+    names = scope_names(wbs.scope)
+    return [r for s, r in refs if (s is None and own) or (s is not None and s.lower() in names)]
+
+
+def focus_unknown(wbss, refs, own):
+    """What a focus names that none of these registers holds."""
     import wbs as WBS
-    data = getattr(wbs, "data", None) or {}
-    known_ms = {m.get("ID"): m for m in WBS.milestones(data)} if data else {}
+    out = []
+    for s, r in refs:
+        regs = [w for w in wbss if (s is None and w is own) or (s is not None and s.lower() in scope_names(w.scope))]
+        held = any((r in w.items) if isinstance(r, int) else
+                   any(m.get("ID") == r for m in WBS.milestones(getattr(w, "data", None) or {})) for w in regs)
+        if regs and not held:
+            out.append(("%s#%s" % (s, r)) if s else str(r))
+    return out
+
+
+def focus_titles(wbs, mine):
+    import wbs as WBS
+    ms = {m.get("ID"): m for m in WBS.milestones(getattr(wbs, "data", None) or {})}
+    return [wbs.items[r]["Title"] for r in mine if isinstance(r, int) and r in wbs.items] + \
+           [ms[r].get("Title", r) for r in mine if not isinstance(r, int) and r in ms]
+
+
+def told_views(wbs, as_of, audiences):
+    """For each communication with a focus in this project: the map and journeys
+    it tells here, what it names elsewhere (told in a sprint update spanning
+    those projects) and what the WBS does not hold."""
     out = {}
     for c in (audiences or {}).get("comms") or []:
-        focus = c.get("focus") or []
-        if not focus:
+        refs = focus_refs(c.get("focus"))
+        if not refs:
             continue
-        rows, ms = focus_split(focus)
-        out[c["id"]] = {
-            "what": c.get("what"), "items": focus, "set_on": c.get("focus_set"),
-            "milestones": milestone_map(wbs, as_of, focus=focus),
-            "journeys": journeys_for(wbs, [r for r in rows if r in wbs.items]),
-            "titles": [wbs.items[r]["Title"] for r in rows if r in wbs.items]
-                      + [known_ms[m].get("Title", m) for m in ms if m in known_ms],
-            "unknown": [str(r) for r in rows if r not in wbs.items] + [m for m in ms if m not in known_ms]}
+        mine = focus_for(wbs, refs, own=True)
+        elsewhere = [("%s#%s" % (s, r)) for s, r in refs if s is not None and s.lower() not in scope_names(wbs.scope)]
+        view = {"what": c.get("what"), "items": c.get("focus"), "set_on": c.get("focus_set"),
+                "elsewhere": elsewhere, "unknown": focus_unknown([wbs], refs, wbs)}
+        if mine:
+            view.update(milestones=milestone_map(wbs, as_of, focus=mine),
+                        journeys=journeys_for(wbs, [r for r in mine if isinstance(r, int) and r in wbs.items]),
+                        titles=focus_titles(wbs, mine))
+        out[c["id"]] = view
+    return out
+
+
+def scoped_map(wbs, as_of, focus=None):
+    """A register's map with every card carrying the register's scope."""
+    mm = milestone_map(wbs, as_of, focus=focus)
+    for col in mm["months"]:
+        for it in col["items"]:
+            it["scope"] = wbs.scope
+    for it in mm["unscheduled"] + mm["earlier"] + mm.get("later", []):
+        it["scope"] = wbs.scope
+    return mm
+
+
+def merge_maps(maps):
+    """Several registers' maps as one: the same months, every card keeping its
+    scope, so a view can lay each project in a lane of its own."""
+    roadmap = maps[0]
+    for mm in maps[1:]:
+        for a, b in zip(roadmap["months"], mm["months"]):
+            a["items"] += b["items"]
+        roadmap["unscheduled"] += mm["unscheduled"]
+        roadmap["earlier"] += mm["earlier"]
+        roadmap["later"] = roadmap.get("later", []) + mm.get("later", [])
+    roadmap.get("later", []).sort(key=lambda d: d.get("due_sort", ""))
+    return roadmap
+
+
+def sprint_told(wbss, folders, as_of):
+    """For each communication carrying the sprint update with a focus, in any of
+    the update's projects: the focused rows and milestones across them, as one
+    map, and their delivery journeys."""
+    out = {}
+    for folder, own in zip(folders, wbss):
+        for c in audiences(folder, own.scope, "sprint-update").get("comms") or []:
+            refs = focus_refs(c.get("focus"))
+            if not refs:
+                continue
+            maps, journeys, titles = [], [], []
+            for w in wbss:
+                mine = focus_for(w, refs, own=(w is own))
+                if not mine:
+                    continue
+                maps.append(scoped_map(w, as_of, focus=mine))
+                journeys += [dict(j, scope=w.scope) for j in
+                             journeys_for(w, [r for r in mine if isinstance(r, int) and r in w.items])]
+                titles += focus_titles(w, mine)
+            named = [s for s, _ in refs if s]
+            missing = [s for s in dict.fromkeys(named) if not any(s.lower() in scope_names(w.scope) for w in wbss)]
+            key = c["id"] if c["id"] not in out else "%s (%s)" % (c["id"], own.scope)
+            out[key] = {"what": c.get("what"), "project": own.scope, "items": c.get("focus"),
+                        "set_on": c.get("focus_set"), "titles": titles,
+                        "roadmap": merge_maps(maps) if maps else None, "journeys": journeys,
+                        "unknown": focus_unknown(wbss, refs, own)
+                                   + ["%s (no such project in this update)" % s for s in missing]}
     return out
 
 
@@ -2049,10 +2172,11 @@ def audiences_html(rec):
         v = told.get(c["id"])
         if not v:
             return "tells the key deliverables"
-        items = ", ".join(("◆ %s" % x) if not str(x).isdigit() else "#%s" % x for x in v["items"])
+        items = ", ".join(str(x) for x in v["items"])
         miss = (" · not in the WBS: %s" % ", ".join(v["unknown"])) if v.get("unknown") else ""
-        return "tells %s · set %s - still the story? (stk.py focus --id %s)%s" % (
-            items, v.get("set_on") or "-", c["id"], miss)
+        away = (" · told in the sprint update, not here: %s" % ", ".join(v["elsewhere"])) if v.get("elsewhere") else ""
+        return "tells %s · set %s - still the story? (stk.py focus --id %s)%s%s" % (
+            items, v.get("set_on") or "-", c["id"], away, miss)
     rows = "".join('<div class="ex-row"><span class="ex-name">%s %s</span><span class="small">%s · %s</span>'
                    '<span class="small">%s</span><span class="small">%s</span></div>'
                    % (e(c["id"]), e(c["what"]), e(c.get("cadence") or "no cadence"), e(c["share_level"]),
@@ -2139,7 +2263,7 @@ def render_status(rec):
              % ('<div class="card">%s</div>' % left if left else "",
                 lst(rec["decisions"], "No change request is waiting for a decision."), help_html))
     # A communication given a focus tells it, under its own heading.
-    head, info = (("In focus", FOCUS_INFO) if rec.get("focused") else ("Key deliverables", ROADMAP_INFO))
+    head, info = (("Roadmap · in focus", FOCUS_INFO) if rec.get("focused") else ("Roadmap", ROADMAP_INFO))
     milestones = ('<section class="card"><h2>%s%s</h2>%s</section>' % (head, info_tip(e(info)), roadmap_html(rec["milestones"], ids=not external))
                   + journeys_html(rec.get("journeys"), ids=not external))
     risks = '<section class="card"><h2>Top risks and issues</h2>%s</section>' % risks_html(
@@ -2261,8 +2385,20 @@ def render_update(rec):
                trend_chip(legacy_level(p.get("trend")), "the previous confirmed status"),
                ("confirmed %s" % e(p["as_of"])) if p.get("as_of") else "")
             for p in rec["projects"])
-    roadmap = '<section class="card"><h2>Key deliverables%s</h2>%s</section>' % (info_tip(e(ROADMAP_INFO)), roadmap_html(rec["roadmap"], with_scope=len(rec["projects_spanned"]) > 1, compact=True,
-                                                                                   ids=rec.get("audience") != "external"))
+    # A communication given a focus tells it, with its journeys; the owner's copy
+    # says what each communication tells.
+    external = rec.get("audience") == "external"
+    head, info = ("Roadmap · in focus", FOCUS_INFO) if rec.get("focused") else ("Roadmap", ROADMAP_INFO)
+    many = len(rec["projects_spanned"]) > 1
+    told = "" if external or rec.get("focused") else "".join(
+        '<div class="small" style="margin-top:6px">%s %s tells %s · set %s - still the story? (stk.py focus --id %s)%s</div>'
+        % (e(cid), e(v.get("what") or ""), e(", ".join(str(x) for x in v.get("items") or [])), e(v.get("set_on") or "-"),
+           e(cid.split(" ")[0]), e(" · not found: %s" % ", ".join(v["unknown"])) if v.get("unknown") else "")
+        for cid, v in (rec.get("told") or {}).items())
+    roadmap = ('<section class="card"><h2>%s%s</h2>%s%s</section>' % (head, info_tip(e(info)), roadmap_html(
+        rec["roadmap"], with_scope=many, compact=True, ids=not external, order=rec["projects_spanned"]), told)
+               + journeys_html([dict(j, title=("%s · %s" % (j["scope"], j["title"])) if many and j.get("scope") else j["title"])
+                                for j in rec.get("journeys") or []], ids=not external))
 
     hrows = []
     for h in rec.get("history", []):

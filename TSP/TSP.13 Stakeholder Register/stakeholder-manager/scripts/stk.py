@@ -284,7 +284,9 @@ def cmd_done(args):
     return finish(args, path, data, "%s  %s - done %s" % (row["ID"], row.get("What"), on))
 
 
-FOCUS_ITEM = re.compile(r"^(\d+|M\d+)$")
+# A row or milestone ID; qualified by a register's scope when it lives in
+# another project (P12#77, Atlas#M1). A bare ID is the communication's own.
+FOCUS_ITEM = re.compile(r"^(?:[^#,]+#)?(\d+|M\d+)$")
 
 
 def cmd_focus(args):
@@ -305,7 +307,8 @@ def cmd_focus(args):
     items = [x.strip() for x in args.items.split(",") if x.strip()]
     bad = [x for x in items if not FOCUS_ITEM.match(x)]
     if bad:
-        sys.exit("A focus item is a WBS row ID (201) or a milestone ID (M1), not %s." % ", ".join(bad))
+        sys.exit("A focus item is a WBS row ID (201) or a milestone ID (M1), qualified by a register's "
+                 "scope when it is another project's (P12#77, Atlas#M1); not %s." % ", ".join(bad))
     on = today(args.on)
     changes = apply(row, {"Focus": items, "Focus Set": on if items else ""})
     if not changes:
@@ -603,8 +606,9 @@ def main():
     s = subs.add_parser("focus", help="what a communication's report tells: WBS rows and milestones")
     writes(s)
     s.add_argument("--id", required=True)
-    s.add_argument("--items", metavar="201,M1,M2",
-                   help="WBS row and milestone IDs, comma-separated; '' clears; none prints the focus")
+    s.add_argument("--items", metavar="201,M1,P12#77",
+                   help="WBS row and milestone IDs, comma-separated, another project's qualified by its "
+                        "register's scope (P12#77); '' clears; none prints the focus")
     s.set_defaults(func=cmd_focus)
 
     s = subs.add_parser("done", help="a communication happened: stamp Last Done")

@@ -837,6 +837,32 @@ def test_milestones(root, scratch):
     comm = [c for c in json.load(io.open(sreg, encoding="utf-8"))["communications"] if c["ID"] == "C.1"]
     check("stakeholders: a communication's focus is set and dated",
           ok and comm and comm[0].get("Focus") == ["5", "M2"] and comm[0].get("Focus Set") == "2026-11-06", out)
+    ok, out = run_raw([stk, "focus", sreg, "--id", "C.1", "--items", "5,Atlas#1,Atlas#M1"], work)
+    check("stakeholders: another project's work is named by its register's scope", ok, out)
+
+    # A sprint spanning two projects: the focus told across them, each in a lane.
+    areg = os.path.join(work, "WBS Atlas.json")
+    run([os.path.join(scripts, "create_wbs.py"), areg, "Atlas"], work)
+    run([wbs, "milestone", "add", areg, "Atlas live", "--baseline", "Dec-26"], work)
+    run([wbs, "add", areg, "Platform", "--type", "Deliverable", "--status", "Not Started", "--key-deliverable", "Y",
+         "--planned-end", "2026-Dec-10", "--milestone", "M1"], work)
+    atlas = report.Wbs(areg)
+    real = report.audiences
+    report.audiences = lambda folder, scope, kind: ({"comms": [{"id": "C.2", "what": "Steering",
+                                                              "focus": ["5", "Atlas#1", "atlas#M1", "Zed#3"]}]}
+                                                    if folder == "pm" else {"comms": []})
+    try:
+        told2 = report.sprint_told([report.Wbs(reg), atlas], ["pm", "atlas"], date(2026, 11, 6)).get("C.2") or {}
+    finally:
+        report.audiences = real
+    shown = sorted((it["scope"], str(it["id"])) for c in (told2.get("roadmap") or {}).get("months", []) for it in c["items"])
+    shown += sorted((it["scope"], str(it["id"])) for it in (told2.get("roadmap") or {}).get("later", []))
+    check("report: the sprint update tells a focus across its projects",
+          ("Atlas", "1") in shown and ("Atlas", "M1") in shown and ("PM", "5") in shown
+          and any("Zed" in u for u in told2.get("unknown", [])), str((shown, told2.get("unknown"))))
+    lanes = re.findall(r'<h3 class="lane-name">([^<]*)</h3>',
+                       report.roadmap_html(told2["roadmap"], with_scope=True, order=["PM", "Atlas"]))
+    check("report: several projects read in lanes, in the update's order", lanes == ["PM", "Atlas"], str(lanes))
 
 
 def test_shared_modules(root, scratch):

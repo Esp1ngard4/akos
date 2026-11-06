@@ -124,7 +124,8 @@ python <skill>/scripts/stk.py focus <reg> --id C.2                       # print
 python <skill>/scripts/stk.py focus <reg> --id C.2 --items ""            # clear: the report tells the key deliverables
 ```
 
-- Its report (`report.py export --comm C.2`) tells the focus under *In focus*, with each focused row's delivery journey, in place of the key deliverables. **With no focus, the report tells the key deliverables**, as it always has.
+- **Another project's row or milestone is named by its register's scope**: `P12#77`, `Atlas#M1` (the scope as the register gives it, or its leading code, in any case). A bare `201` or `M1` is the communication's own project. A project without a portfolio number is named the same way, by its register's scope.
+- Its report (`report.py export --comm C.2`) tells the focus under *Roadmap · in focus*, with each focused row's delivery journey, in place of the key deliverables. A **status report** tells the items in its own project and notes the rest as told elsewhere; a **sprint update** tells them across all the projects it spans, each in a lane of its own. **With no focus, the report tells the key deliverables**, as it always has.
 - **The focus is not `Key Deliverable`.** A key deliverable is a lasting fact the planning checks rely on; a focus changes from report to report and differs by audience, so it belongs to the communication, not the row.
 - **It is dated, so it is revisited:** the owner's status report lists each communication's focus with its date and asks whether it is still the story. Change it when the story moves; clear it when the key deliverables say enough.
 
