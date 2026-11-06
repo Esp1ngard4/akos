@@ -33,8 +33,10 @@ FIELDS = {
     STAKEHOLDERS: ["ID", "Name", "Role", "Organisation", "Groups", "Power", "Interest",
                    "Current", "Desired", "Stake", "Engagement Action", "Share Level",
                    "Status", "Notes"],
+    # Focus: what the communication's report tells - WBS row IDs and milestone
+    # IDs - dated by Focus Set, so each report can ask whether it is still the story.
     COMMS: ["ID", "What", "Report", "Mode", "Audience", "Cadence", "Channel", "Owner",
-            "Last Done", "Status", "Notes"],
+            "Last Done", "Focus", "Focus Set", "Status", "Notes"],
     CHANGES: ["ID", "Changed On", "Item", "Change", "Reason"],
 }
 
@@ -53,8 +55,8 @@ VOCABULARIES = {
     "report": ["status-report", "sprint-update", "closure"],
 }
 
-LIST_FIELDS = ("Groups", "Audience")
-DATE_FIELDS = ("Last Done",)
+LIST_FIELDS = ("Groups", "Audience", "Focus")
+DATE_FIELDS = ("Last Done", "Focus Set")
 
 # Power x Interest -> how the stakeholder is managed. Derived, never stored.
 QUADRANT = {("High", "High"): "Manage closely", ("High", "Low"): "Keep satisfied",

@@ -114,6 +114,20 @@ It is stored as `2026-11-04 · Budget: …`, or `2026-11-04: …` without a titl
 - No contact details (`check` warns on what looks like an email address or a phone number), and no health, family or money matters unless engaging them depends on it.
 - `S.n` and `C.n` in the text link to that row on the dashboard.
 
+### What a communication's report tells: its focus
+
+A communication carrying a report may be given a **focus**: the WBS rows (any level) and milestones its readers should hear about now, because they care about them or because they tell the story at this point.
+
+```bash
+python <skill>/scripts/stk.py focus <reg> --id C.2 --items "201,M1,M2"   # set, dated (Focus Set) and logged
+python <skill>/scripts/stk.py focus <reg> --id C.2                       # print it
+python <skill>/scripts/stk.py focus <reg> --id C.2 --items ""            # clear: the report tells the key deliverables
+```
+
+- Its report (`report.py export --comm C.2`) tells the focus under *In focus*, with each focused row's delivery journey, in place of the key deliverables. **With no focus, the report tells the key deliverables**, as it always has.
+- **The focus is not `Key Deliverable`.** A key deliverable is a lasting fact the planning checks rely on; a focus changes from report to report and differs by audience, so it belongs to the communication, not the row.
+- **It is dated, so it is revisited:** the owner's status report lists each communication's focus with its date and asks whether it is still the story. Change it when the story moves; clear it when the key deliverables say enough.
+
 ### Send a communication
 
 1. `python <skill>/scripts/stk.py audience <reg> --id C.2 [--split]` — the people, each once, with the address for the channel (falling back to the person's preferred channel), anyone with no address, and the share level. `external` means anyone in the audience is external: the external copy goes to all of them, or `--split` gives the two lists for two sends.

@@ -143,7 +143,8 @@ def audiences(prjmgm, scope, kind):
         people = resolve_people(data, comm)
         level = "external" if any(lv == "external" for _n, lv in people) else "owner"
         comms.append({"id": comm.get("ID"), "what": comm.get("What"), "cadence": comm.get("Cadence"),
-                      "share_level": level, "recipients": [n for n, _lv in people]})
+                      "share_level": level, "recipients": [n for n, _lv in people],
+                      "focus": [str(x) for x in comm.get("Focus") or []], "focus_set": comm.get("Focus Set")})
     return {"default": bool(data["meta"].get("default")), "comms": comms}
 SPRINT_RECORD = os.path.join(sibling("sprint-facilitator"), "scripts", "sprint_record.py")
 # One folder per report type under a Reports folder, so reports stay findable
@@ -320,6 +321,27 @@ def is_open(e):
     return R.clean(e.get("Status")) != "Closed"
 
 
+def log_notes(e, keep=6):
+    """The Action Log's updates, newest first: each its note, or what changed
+    when it has none. A long field rewritten is named, not quoted."""
+    out = []
+    for x in e.get("Action Log") or []:
+        if not isinstance(x, dict):
+            continue
+        note = R.clean(x.get("note"))
+        if not note:
+            moves = []
+            for field, change in (x.get("changed") or {}).items():
+                old, new = (list(change) + ["", ""])[:2] if isinstance(change, list) else ("", change)
+                moves.append("%s revised" % field if len(str(old)) > 40 or len(str(new)) > 40
+                             else "%s: %s → %s" % (field, old or "-", new or "-"))
+            note = "; ".join(moves)
+        if note:
+            out.append({"on": x.get("on"), "t": note})
+    out.sort(key=lambda u: u["on"] or "", reverse=True)
+    return out[:keep]
+
+
 def raid_card(e, as_of):
     upd = latest_log(e)
     stale = (as_of - date.fromisoformat(upd)).days if upd else None
@@ -328,6 +350,7 @@ def raid_card(e, as_of):
             "description": e.get("Description", ""), "plan": e.get("Action Plan", ""),
             "dri": e.get("DRI"), "priority": priority(e), "moscow": e.get("MoSCoW"),
             "trend": raid_level(e.get("Trend")), "days_since_update": stale,
+            "updates": log_notes(e),
             # Opt-in: only Y reaches a reader outside the work (export).
             "sharable": R.clean(e.get("Sharable")) or None}
 
@@ -867,12 +890,42 @@ def months_window(as_of, back=1, ahead=2):
     return out
 
 
-def milestone_map(wbs, as_of):
+def focus_split(focus):
+    """A communication's focus as (row IDs, milestone IDs)."""
+    rows = [int(x) for x in focus if str(x).isdigit()]
+    return rows, [x for x in focus if not str(x).isdigit()]
+
+
+def milestone_map(wbs, as_of, focus=None):
+    """The months window of key deliverables and milestones. With a focus (a
+    communication's: WBS rows of any level and milestones), it
+    tells those instead of the key deliverables."""
     cols = months_window(as_of)
     keys = ["%04d-%02d" % c for c in cols]
     buckets = {k: [] for k in keys}
     unscheduled = []
-    for kd in sorted(wbs.open_key_deliverables(), key=lambda i: i["ID"]):
+    told_rows, told_ms = focus_split(focus) if focus is not None else (None, None)
+    picked = (lambda i: i["ID"] in told_rows) if focus is not None else (lambda i: i.get("Key Deliverable") == "Y")
+    opens = ([wbs.items[r] for r in told_rows if r in wbs.items and wbs.items[r].get("Status") not in CLOSED]
+             if focus is not None else wbs.open_key_deliverables())
+    later = []
+
+    def place(card, eff):
+        """Open work by its date. In the window it is a card in its
+        month. After it, it is listed under 'due later': context, not this
+        month's story. Before it, it is overdue and stays a card in the first
+        column, flagged: the riskiest thing on the page is not folded away."""
+        key = eff["end"][:7]
+        card["overdue"] = eff["end"] < as_of.isoformat()
+        if key > keys[-1]:
+            later.append(dict(card, due=eff["text"], due_sort=eff["end"]))
+            return
+        if key < keys[0]:
+            card["cue"] = "overdue: planned %s" % eff["text"]
+            key = keys[0]
+        buckets[key].append(card)
+
+    for kd in sorted(opens, key=lambda i: i["ID"]):
         plan = wbs.plan_end(kd["ID"])
         base = D.resolve(kd.get("Baseline End"))
         eff = plan or base
@@ -882,21 +935,14 @@ def milestone_map(wbs, as_of):
         if not eff:
             unscheduled.append(card)
             continue
-        key = eff["end"][:7]
-        if key < keys[0]:
-            card["cue"] = "actually %s" % eff["text"]
-            key = keys[0]
-        elif key > keys[-1]:
-            card["cue"] = "actually %s" % eff["text"]
-            key = keys[-1]
-        buckets[key].append(card)
+        place(card, eff)
     # What was delivered belongs on it too, or the roadmap reads as if nothing
     # ever landed. Inside the window a delivered deliverable gets its card in the
     # month it landed; before the window it is listed by title only under the
     # first column, so the view is complete without filling with history.
     earlier = []
     for kd in sorted(wbs.items.values(), key=lambda i: i["ID"]):
-        if kd.get("Key Deliverable") != "Y" or kd.get("Status") != "Done":
+        if not picked(kd) or kd.get("Status") != "Done":
             continue
         actual = wbs.actual_end(kd["ID"])
         if not actual or actual["end"][:7] < keys[0]:
@@ -910,14 +956,45 @@ def milestone_map(wbs, as_of):
                                 "baseline": base["text"] if base else None, "plan": None,
                                 "delivered": actual["text"], "cue": None,
                                 "late": bool(base and D.variance(base, actual)["amount"] > 0)})
-    # The edge columns hold whatever was clamped onto them, so they are labelled
-    # as open ranges: "Dec 2026" would read as exactly December.
+    # Milestones sit beside the deliverables, placed by the same rules: reached
+    # ones where they landed, open ones by plan, else baseline. Their
+    # state is wbs.py's, never recomputed here.
+    import wbs as WBS
+    data = getattr(wbs, "data", None)
+    kids = WBS.kids_of(data) if data else {}
+    for m in (WBS.milestones(data) if data else []):
+        st = WBS.milestone_state(data, m, kids)
+        if st["state"] in ("dropped", "no work") or (focus is not None and st["id"] not in told_ms):
+            continue
+        title = ("%s: " % st["stage"] if st["stage"] else "") + st["title"]
+        late = st["against"] == "late"
+        if st["state"] == "reached":
+            actual = D.resolve(st["actual"])
+            if not actual or actual["end"][:7] < keys[0]:
+                earlier.append({"id": st["id"], "milestone": True, "title": title,
+                                "delivered": st["actual"], "sort": actual["end"] if actual else ""})
+                continue
+            buckets[min(actual["end"][:7], keys[-1])].insert(0, {
+                "id": st["id"], "milestone": True, "title": title, "status": "Done",
+                "baseline": st["baseline"], "plan": None, "delivered": st["actual"], "cue": None, "late": late})
+            continue
+        eff = D.resolve(st["plan"]) or D.resolve(m.get("Baseline"))
+        card = {"id": st["id"], "milestone": True, "title": title, "status": st["state"],
+                "baseline": st["baseline"], "plan": st["plan"], "late": late, "cue": None}
+        if not eff:
+            unscheduled.append(card)
+            continue
+        place(card, eff)
+    # The first column holds the overdue work placed onto it, so it is labelled
+    # as an open range: "Oct 2026" would read as exactly October. What is due
+    # after the window is listed apart, so the last column is its month alone.
     label = lambda k: datetime(int(k[:4]), int(k[5:]), 1).strftime("%b %Y") + (
-        " & earlier" if k == keys[0] else " & later" if k == keys[-1] else "")
+        " & earlier" if k == keys[0] else "")
     earlier.sort(key=lambda d: d.pop("sort"), reverse=True)
+    later.sort(key=lambda d: d["due_sort"])
     return {"months": [{"key": k, "label": label(k),
                         "current": k == as_of.isoformat()[:7], "items": buckets[k]} for k in keys],
-            "unscheduled": unscheduled, "earlier": earlier}
+            "unscheduled": unscheduled, "earlier": earlier, "later": later}
 
 
 def previous_record(folder, kind, before):
@@ -999,12 +1076,20 @@ def cmd_status(args):
                     and e.get("Type") in ("Risk", "Issue", "Action")
                     and e.get("_pm") and R.clean(e.get("DRI")) != e["_pm"]],
            "risks": top_risks(raid, as_of), "milestones": milestone_map(wbs, as_of),
+           "journeys": journeys_for(wbs, sorted(i["ID"] for i in wbs.open_key_deliverables())),
            "metrics": metrics, "outcome": outcome,
            "audiences": audiences(prjmgm, wbs.scope, "status-report"),
            "summary": {"text": None, "confirmed_on": None}}
     rec["facts"] = status_facts(wbs, raid, sprint, facts, rec["risks"])
     rec["facts"]["outcome"] = outcome_facts(outcome)
     rec["facts"]["sprint_progress"] = sprint_progress(window, as_of)
+    rec["facts"]["milestones"] = milestone_facts(wbs, prev[1]["as_of"] if prev else None)
+    # What each communication was given to tell: its own map and
+    # journeys, which export --comm uses in place of the key deliverables.
+    told = told_views(wbs, as_of, rec["audiences"])
+    if told:
+        rec["told"] = told
+        rec["facts"]["focus"] = {cid: {"what": v["what"], "tells": v["titles"]} for cid, v in told.items()}
     if prev:
         rec["previous"] = {"file": prev[0], "as_of": prev[1]["as_of"],
                            "ratings": {k: v.get("confirmed") for k, v in prev[1]["signals"].items()}}
@@ -1182,7 +1267,7 @@ def cmd_sprint(args):
         for col in mm["months"]:
             for it in col["items"]:
                 it["scope"] = w.scope
-        for it in mm["unscheduled"] + mm["earlier"]:
+        for it in mm["unscheduled"] + mm["earlier"] + mm.get("later", []):
             it["scope"] = w.scope
     roadmap = maps[0]
     for mm in maps[1:]:
@@ -1190,6 +1275,8 @@ def cmd_sprint(args):
             a["items"] += b["items"]
         roadmap["unscheduled"] += mm["unscheduled"]
         roadmap["earlier"] += mm["earlier"]
+        roadmap["later"] = roadmap.get("later", []) + mm.get("later", [])
+    roadmap.get("later", []).sort(key=lambda d: d.get("due_sort", ""))
 
     last = {"sprint": prev, "goals": g_prev.get("goals", []), "highlights": g_prev.get("highlights"),
             "metrics": m_prev, "delivered": [d for w in wbss for d in _done_in(w, prev)]}
@@ -1295,6 +1382,8 @@ def external_copy(rec):
     for key in ("risks", "decisions"):
         if key in x:
             x[key] = shared(x[key])
+            for c in x[key]:
+                c.pop("updates", None)      # the log is the work's, not the reader's
     if "help" in x:
         x["help"] = []
     for s in (x.get("signals") or {}).values():
@@ -1304,6 +1393,7 @@ def external_copy(rec):
     x.pop("board", None)
     x.pop("facts", None)
     x.pop("audiences", None)        # an outside reader is not shown who else receives it
+    x.pop("told", None)             # nor what the others are told
     for p in (x.get("stakeholders") or {}).get("people") or []:
         p.pop("name", None)          # a charter shows roles and groups, never names
     for c in (x.get("stakeholders") or {}).get("comms") or []:
@@ -1358,6 +1448,12 @@ def cmd_export(args):
         args.audience = level
     args.audience = args.audience or "external"
     stem = args.record[:-5]
+    # A communication with a focus tells it in place of the key deliverables.
+    view = (rec.get("told") or {}).get(args.comm) if args.comm else None
+    if view:
+        rec = dict(rec, milestones=view["milestones"], journeys=view["journeys"], focused=True)
+        stem += " %s" % args.comm
+        print("  %s tells its focus: %s" % (args.comm, ", ".join(str(x) for x in view["items"])))
     if args.audience == "external":
         # An outside reader gets what the owner agreed, never a proposal.
         open_ = [k for k, sg in (rec.get("signals") or {}).items() if not sg.get("confirmed")]
@@ -1512,6 +1608,15 @@ td { padding:6px 8px; border-bottom:1px solid var(--grid); vertical-align:top; f
 .risk-title { font-weight:600; flex:1; }
 .risk-desc { font-size:12px; color:var(--ink2); margin-top:4px; }
 .risk-desc strong { color:var(--ink); }
+.risk-parts { display:grid; grid-template-columns:72px minmax(0,1fr); gap:5px 10px; margin:8px 0 2px; font-size:12px; }
+.risk-parts dt { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); padding-top:2px; }
+.risk-parts dd { margin:0; color:var(--ink2); min-width:0; }
+.risk-parts dd p { margin:0 0 4px; } .risk-parts dd p:last-child { margin-bottom:0; }
+.risk-parts dd ul { margin:0 0 4px 16px; padding:0; }
+.risk-parts strong { color:var(--ink); }
+.risk-upd .on { font-weight:600; color:var(--ink); margin-right:6px; }
+.risk-parts details summary { cursor:pointer; color:var(--muted); font-size:11px; margin-top:2px; }
+@media (max-width:600px) { .risk-parts { grid-template-columns:1fr; } .risk-parts dt { padding-top:6px; } }
 .stale { font-size:11px; color:var(--muted); font-style:italic; white-space:nowrap; }
 .months { display:grid; gap:10px; align-items:start; grid-template-columns:repeat(var(--cols, 4), minmax(0,1fr)); }
 @media (max-width:760px) { .months { grid-template-columns:1fr; } }
@@ -1520,6 +1625,9 @@ td { padding:6px 8px; border-bottom:1px solid var(--grid); vertical-align:top; f
 .month h3 { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--ink2); margin-bottom:6px; }
 .ms { padding:5px 0; border-bottom:1px solid var(--grid); font-size:12px; }
 .ms:last-child { border-bottom:none; }
+table.jy { width:100%; border-collapse:collapse; margin:4px 0 12px; font-size:12px; }
+table.jy th, table.jy td { text-align:left; vertical-align:top; padding:5px 8px; border-bottom:1px solid var(--grid); }
+.jy-done { font-weight:600; color:var(--goodink); }
 .ms .cue { font-size:11px; color:var(--ink2); font-weight:600; }
 .list li { margin:0 0 6px 16px; }
 footer { color:var(--muted); font-size:11px; margin-top:8px; }
@@ -1647,6 +1755,83 @@ def page(title, subtitle, body, footer=None):
                            "Confirm or override ratings with report.py confirm.")))
 
 
+# ─── Risk and issue cards ────────────────────────────────────────────────────
+#
+# A card reads in labelled parts, as the WBS card does: the description
+# with its paragraphs kept, or as Cause / Risk / Effect when written in that
+# form; the response in a block of its own; the latest update with the earlier
+# ones folded. Parsed when rendered, so records written before read the same.
+
+RISK_FORM = re.compile(r"^\s*because of\s+(.+?)[,;]?\s+there is a risk that\s+(.+?)[,;]?\s+"
+                       r"which (?:may|will|is|are) result(?:ing)? in\s+(.+)$", re.I | re.S)
+ENTRY_LEAD = re.compile(r"(?:^|(?<=\s))(\d{4}-\d{2}-\d{2}|\d{4}-[A-Z][a-z]{2}-\d{1,2}|\d{1,2}-[A-Z][a-z]{2}(?:-\d{2,4})?)"
+                        r"\s*[:–—-]\s+")
+LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+
+
+def entry_key(on):
+    """A dated entry's date as ISO where it can be read, for newest first."""
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", on or ""):
+        return on
+    r = D.resolve(on) if on else None
+    return r["start"] if r else None
+
+
+def text_parts(text):
+    """A field's text as blocks: {'p': text} with its line breaks, {'ul': items}
+    for a list, or {'entries': [{'on', 't'}]} - dated comments written into the
+    field, newest first."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    leads = list(ENTRY_LEAD.finditer(text))
+    if len(leads) >= 2:
+        entries = [{"on": m.group(1), "t": text[m.end(): leads[i + 1].start() if i + 1 < len(leads) else len(text)].strip()}
+                   for i, m in enumerate(leads)]
+        keys = [entry_key(x["on"]) for x in entries]
+        entries = ([x for _, x in sorted(zip(keys, entries), key=lambda p: p[0], reverse=True)]
+                   if all(keys) else list(reversed(entries)))     # appended in order: the last is newest
+        head = text[:leads[0].start()].strip()
+        return ([{"p": head}] if head else []) + [{"entries": entries}]
+    # Runs of list lines are a list wherever they start; the lines around them
+    # are paragraphs, their breaks kept.
+    blocks = []
+    for para in re.split(r"\n\s*\n", text):
+        run, kind = [], None
+        for line in (l.strip() for l in para.split("\n") if l.strip()):
+            k = "ul" if LIST_LINE.match(line) else "p"
+            if k != kind and run:
+                blocks.append({"ul": run} if kind == "ul" else {"p": "\n".join(run)})
+                run = []
+            kind = k
+            run.append(LIST_LINE.sub("", line) if k == "ul" else line)
+        if run:
+            blocks.append({"ul": run} if kind == "ul" else {"p": "\n".join(run)})
+    return blocks
+
+
+def entries_html(entries, noun="update", nouns="updates"):
+    """The newest entry shown, the rest folded."""
+    one = lambda x: '<div class="risk-upd"><span class="on">%s</span>%s</div>' % (e(x.get("on") or ""), e(x["t"]))
+    rest = entries[1:]
+    return one(entries[0]) + ('<details><summary>%d earlier %s</summary>%s</details>'
+                              % (len(rest), noun if len(rest) == 1 else nouns, "".join(one(x) for x in rest))
+                              if rest else "")
+
+
+def blocks_html(blocks):
+    cue = lambda t: CUES.sub(lambda m: "<strong>%s</strong>" % m.group(1), e(t)).replace("\n", "<br>")
+    out = []
+    for b in blocks:
+        if "p" in b:
+            out.append("<p>%s</p>" % cue(b["p"]))
+        elif "ul" in b:
+            out.append("<ul>%s</ul>" % "".join("<li>%s</li>" % cue(i) for i in b["ul"]))
+        else:
+            out.append(entries_html(b["entries"], "entry", "entries"))
+    return "".join(out)
+
+
 def risks_html(risks, empty="No open risks or issues."):
     if not risks:
         return '<p class="muted">%s</p>' % e(empty)
@@ -1658,12 +1843,24 @@ def risks_html(risks, empty="No open risks or issues."):
             trend = '<span class="stale">no update in %dd</span>' % r["days_since_update"]
         else:
             trend = '<span class="stale">never updated</span>'
-        desc = CUES.sub(lambda m: "<strong>%s</strong>" % m.group(1), e(r["description"]))
+        desc = (r.get("description") or "").strip()
+        form = RISK_FORM.match(desc) if "\n" not in desc else None
+        if form:
+            middle = "Issue" if r.get("type") == "Issue" else "Risk"
+            parts = [("Cause", e(form.group(1).rstrip(" ,;"))), (middle, e(form.group(2).rstrip(" ,;"))),
+                     ("Effect", e(form.group(3)))]
+        else:
+            parts = [("What", blocks_html(text_parts(desc)))] if desc else []
+        if r.get("plan"):
+            parts.append(("Response", blocks_html(text_parts(r["plan"]))))
+        if r.get("updates"):
+            parts.append(("Latest", entries_html(r["updates"])))
+        dl = "".join('<dt>%s</dt><dd>%s</dd>' % (k, v) for k, v in parts)
         out.append('<div class="risk"><div class="risk-head"><span class="risk-ref">%s</span>'
-                   '<span class="risk-title">%s</span>%s</div><div class="risk-desc">%s</div>'
+                   '<span class="risk-title">%s</span>%s</div><dl class="risk-parts">%s</dl>'
                    '<div class="small" style="margin-top:4px">%s · DRI %s · priority %s%%%s</div></div>'
-                   % (e(r["ref"]), e(r["detail"]), trend, desc, e(r["scope"]), e(r.get("dri") or "-"),
-                      r["priority"], (" · plan: " + e(r["plan"])) if r.get("plan") else ""))
+                   % (e(r["ref"]), e(r["detail"]), trend, dl, e(r["scope"]), e(r.get("dri") or "-"),
+                      r["priority"], (" · %s" % e(r["moscow"])) if r.get("moscow") else ""))
     return "".join(out)
 
 
@@ -1673,8 +1870,11 @@ def roadmap_html(ms, with_scope=False, compact=False, ids=True):
     cols = ms["months"] + ([{"label": "Unscheduled", "current": False, "items": ms["unscheduled"]}] if ms["unscheduled"] else [])
 
     def ref(it):
-        """The scope and the row ID; an outside reader gets the scope alone."""
+        """The scope and the row ID; an outside reader gets the scope alone.
+        A milestone is marked ◆, the mark the WBS roadmap draws it with."""
         scope = (e(it["scope"]) + " ") if with_scope and it.get("scope") else ""
+        if it.get("milestone"):
+            return "◆ %s%s" % (scope, it["id"] if ids else "")
         return "%s#%s" % (scope, it["id"]) if ids else scope
 
     def card(it):
@@ -1683,7 +1883,8 @@ def roadmap_html(ms, with_scope=False, compact=False, ids=True):
             when = "delivered %s · baseline %s%s" % (it["delivered"], it["baseline"] or "-",
                                                      " (late)" if it["late"] else "")
         else:
-            chip = (status_chip("amber", "late") if it["late"] else status_chip("green", "on plan")) \
+            chip = status_chip("red", "overdue") if it.get("overdue") else \
+                (status_chip("amber", "late") if it["late"] else status_chip("green", "on plan")) \
                 if (it["plan"] or it["baseline"]) else status_chip(None, "no date")
             when = "baseline %s · plan %s" % (it["baseline"] or "-", it["plan"] or "-")
         return '<div class="ms">%s <strong>%s</strong> %s%s%s</div>' % (
@@ -1697,11 +1898,23 @@ def roadmap_html(ms, with_scope=False, compact=False, ids=True):
                   ref(it), e(it["title"]),
                   (" · %s" % e(it["delivered"])) if it.get("delivered") else "") for it in earlier))
               if earlier else "")
+    # What is due after the window is context, not this month's story: listed
+    # under the last month, folded like what was delivered before it.
+    later = ms.get("later") or []
+    after = ('<details class="small" style="margin-top:6px"><summary>%d due later</summary>%s</details>'
+             % (len(later), "".join('<div><strong>%s</strong> %s · %s%s</div>' % (
+                 ref(it), e(it["title"]), e(it["due"]),
+                 " (late)" if it.get("late") else "") for it in later))
+             if later else "")
+    last = len(ms["months"]) - 1
     mcols = []
     for n, c in enumerate(cols):
-        items = "".join(card(it) for it in c["items"]) or ("" if (n == 0 and before) else '<p class="muted small">Nothing due</p>')
+        items = "".join(card(it) for it in c["items"]) or (
+            "" if (n == 0 and before) or (n == last and after) else '<p class="muted small">Nothing due</p>')
         if n == 0:
             items += before
+        if n == last:
+            items += after
         mcols.append('<div class="month%s"><h3>%s%s</h3>%s</div>'
                      % (" current" if c.get("current") else "", e(c["label"]), " · now" if c.get("current") else "", items))
     # The column count is a variable, not the grid itself, so the phone rule can stack them.
@@ -1709,8 +1922,93 @@ def roadmap_html(ms, with_scope=False, compact=False, ids=True):
 
 
 ROADMAP_INFO = ("Open key deliverables are placed by their planned end, else their baseline; delivered ones by the date "
-                "they landed, and those delivered before the window are listed under the first column. The first and "
-                "last columns hold anything earlier or later, with its real date.")
+                "they landed, and those delivered before the window are listed under the first column. Milestones "
+                "(marked ◆) are placed the same way: reached ones by the date their last piece of work landed. Open "
+                "work planned before the window stays in the first column, marked overdue; work due after it is "
+                "listed under the last column, with its date.")
+
+
+FOCUS_INFO = ("What this report was set to tell: the work and the milestones (marked ◆) chosen for its readers, "
+              "placed by their planned end, else their baseline; delivered or reached ones by the date they landed. "
+              "Open work planned before the window stays in the first column, marked overdue; work due after it is "
+              "listed under the last column, with its date.")
+
+
+def told_views(wbs, as_of, audiences):
+    """For each communication with a focus: the map and journeys it tells, and
+    what it names that the WBS does not hold."""
+    import wbs as WBS
+    data = getattr(wbs, "data", None) or {}
+    known_ms = {m.get("ID"): m for m in WBS.milestones(data)} if data else {}
+    out = {}
+    for c in (audiences or {}).get("comms") or []:
+        focus = c.get("focus") or []
+        if not focus:
+            continue
+        rows, ms = focus_split(focus)
+        out[c["id"]] = {
+            "what": c.get("what"), "items": focus, "set_on": c.get("focus_set"),
+            "milestones": milestone_map(wbs, as_of, focus=focus),
+            "journeys": journeys_for(wbs, [r for r in rows if r in wbs.items]),
+            "titles": [wbs.items[r]["Title"] for r in rows if r in wbs.items]
+                      + [known_ms[m].get("Title", m) for m in ms if m in known_ms],
+            "unknown": [str(r) for r in rows if r not in wbs.items] + [m for m in ms if m not in known_ms]}
+    return out
+
+
+def journeys_for(wbs, ids):
+    """The delivery journey of each row in `ids` with milestones beneath it, as
+    wbs.py's journey() gives it."""
+    import wbs as WBS
+    out = []
+    for rid in ids:
+        j = WBS.journey(wbs.data, rid)
+        if j:
+            out.append(j)
+    return out
+
+
+def milestone_facts(wbs, since):
+    """What the summary is drafted from: the milestones reached since the last
+    report, and the next one with its state."""
+    import wbs as WBS
+    kids = WBS.kids_of(wbs.data)
+    states = [WBS.milestone_state(wbs.data, m, kids) for m in WBS.milestones(wbs.data)]
+    reached = [s for s in states if s["state"] == "reached"
+               and (not since or (D.resolve(s["actual"]) or {}).get("end", "") > since)]
+    open_ = [s for s in states if s["state"] in ("open", "in progress")]
+    open_.sort(key=lambda s: (D.resolve(s["plan"] or s["baseline"]) or {}).get("end") or "9999")
+    word = lambda s: {"milestone": s["id"], "stage": s["stage"], "title": s["title"], "against": s["against"]}
+    return {"reached_since_last_report": [dict(word(s), reached=s["actual"]) for s in reached],
+            "next": dict(word(open_[0]), plan=open_[0]["plan"], baseline=open_[0]["baseline"],
+                         rows_done="%d of %d" % (len(open_[0]["done"]), len(open_[0]["rows"]))) if open_ else None}
+
+
+def journeys_html(journeys, ids=True):
+    """Each journey as a table: the deliverable's children by stage."""
+    if not journeys:
+        return ""
+    def cell(c):
+        if c["state"] == "done":
+            return '<span class="jy-done">✓ %s</span>' % e(c.get("date") or "")
+        if c["state"] == "none":
+            return '<span class="muted">—</span>'
+        return e("%s%s" % (c["state"], " %s" % c["date"] if c.get("date") else ""))
+    def head(col):
+        sub = "<br>".join("%s · %s" % (e(m["id"]) if ids else "◆", e("reached %s" % m["actual"] if m["state"] == "reached"
+                          else " · ".join(x for x in ("baseline %s" % m["baseline"] if m["baseline"] else "", m["against"] or "") if x)))
+                          for m in col["milestones"])
+        return '<th>%s<div class="small">%s</div></th>' % (e(col["label"]), sub)
+    tables = "".join(
+        '<h3>%s%s</h3><table class="jy"><tr><th></th>%s</tr>%s</table>' % (
+            ("#%s " % j["row"]) if ids else "", e(j["title"]), "".join(head(c) for c in j["columns"]),
+            "".join("<tr><td>%s%s</td>%s</tr>" % (("#%s " % r["id"]) if ids else "", e(r["title"]),
+                                                  "".join("<td>%s</td>" % cell(c) for c in r["cells"]))
+                    for r in j["rows"]))
+        for j in journeys)
+    return ('<section class="card"><h2>Delivery journey%s</h2>%s</section>'
+            % (info_tip(e("Each item's parts by stage: done with its date, in progress or planned "
+                          "with its date, or — when that part has no work at that stage.")), tables))
 
 
 def signal_cell(rec, key, label):
@@ -1743,10 +2041,22 @@ def audiences_html(rec):
     a = rec.get("audiences") or {}
     if a.get("default") or not a.get("comms"):
         return ""
+    told = rec.get("told") or {}
+
+    def tells(c):
+        """What the communication tells, and, with a focus, whether it is still
+        the story: a focus nobody revisits goes stale."""
+        v = told.get(c["id"])
+        if not v:
+            return "tells the key deliverables"
+        items = ", ".join(("◆ %s" % x) if not str(x).isdigit() else "#%s" % x for x in v["items"])
+        miss = (" · not in the WBS: %s" % ", ".join(v["unknown"])) if v.get("unknown") else ""
+        return "tells %s · set %s - still the story? (stk.py focus --id %s)%s" % (
+            items, v.get("set_on") or "-", c["id"], miss)
     rows = "".join('<div class="ex-row"><span class="ex-name">%s %s</span><span class="small">%s · %s</span>'
-                   '<span class="small">%s</span></div>'
+                   '<span class="small">%s</span><span class="small">%s</span></div>'
                    % (e(c["id"]), e(c["what"]), e(c.get("cadence") or "no cadence"), e(c["share_level"]),
-                      e(", ".join(c["recipients"]) or "no one active"))
+                      e(", ".join(c["recipients"]) or "no one active"), e(tells(c)))
                    for c in a["comms"])
     return '<section class="card"><h2>Who receives this</h2><div class="ex-rows">%s</div></section>' % rows
 
@@ -1828,7 +2138,10 @@ def render_status(rec):
              '<div class="card"><h2>Decisions required</h2>%s%s</div></section>'
              % ('<div class="card">%s</div>' % left if left else "",
                 lst(rec["decisions"], "No change request is waiting for a decision."), help_html))
-    milestones = ('<section class="card"><h2>Key deliverables%s</h2>%s</section>' % (info_tip(e(ROADMAP_INFO)), roadmap_html(rec["milestones"], ids=not external)))
+    # A communication given a focus tells it, under its own heading.
+    head, info = (("In focus", FOCUS_INFO) if rec.get("focused") else ("Key deliverables", ROADMAP_INFO))
+    milestones = ('<section class="card"><h2>%s%s</h2>%s</section>' % (head, info_tip(e(info)), roadmap_html(rec["milestones"], ids=not external))
+                  + journeys_html(rec.get("journeys"), ids=not external))
     risks = '<section class="card"><h2>Top risks and issues</h2>%s</section>' % risks_html(
         rec["risks"], "No risks or issues shared." if external else "No open risks or issues.")
     board = rec.get("board")

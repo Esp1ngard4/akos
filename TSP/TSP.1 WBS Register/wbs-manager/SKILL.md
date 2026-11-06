@@ -75,6 +75,7 @@ A register is one JSON file: a `meta` envelope plus named collections of rows. `
 
 - **`values_hash`** fingerprints the rows, not the file — it excludes `meta`, so reindenting is not a data change. A generated dashboard stamps the hash it was built from, which is how `registry.stale_views()` can tell you a dashboard has gone stale rather than quietly showing old numbers.
 - **Rows omit their empty fields.** Do not write `null` or `""` to mean "no value"; leave the key out. `meta.settings.fields` carries the canonical field order for rendering a rectangular table.
+- **`milestones` are named, dated events beside the rows** (`ID` M1…, `Title`, `Stage`, `Baseline`, `Description`, `Status`, `Comments`), reached when the rows naming them are done: operation 4d.
 - **`schedule_log` is why a date moved**, one row per change. Structured rather than free text, because the slip count has to be countable.
 - **`sprints` is the imported calendar**, not a locally-authored one — see "Sprints" below. Absent, or empty, means the project is not run in sprints, and sprint IDs then go unvalidated rather than being rejected.
 - **A register may carry extra collections** beyond `items` and `sprints` when a project has structured data that belongs with its WBS. The dashboard reads `items` only.
@@ -131,6 +132,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Horizon | No | `Next` / `Future` — how soon this is wanted. Not a status and not a priority: an item can be `Could` and `Next`, or `Must` and `Future`. Cleared by a real sprint or by closure; `check` enforces both. |
 | Sprint Planned / Added / Ended | No | Sprint IDs from the register's `sprints` calendar (e.g. `S26.Q3.5`), and nothing else. `check` rejects an ID the calendar does not hold. |
 | Sprint Carried | No | A **list** of the sprints the row was committed to again after `Sprint Planned` — spillover, or the next slice of a deliverable worked across sprints. `set --sprint-carried S --reason "…"` adds one and notes `Carried into S: …` in Comments — refused without the reason; `--sprint-carried ""` clears the list. Never repeats `Sprint Planned`. For a row with nothing done; **partly done work is split instead** (operation 4b). |
+| Milestone | No | The milestone this row reaches (`M1`), one per row. Set with `set --milestone`; see operation 4d. |
 | Sprint Closeouts | No | A **list** of what each close-out decided for the row when it left a sprint unfinished: `Sprint`, `Outcome` (carry / land / park / drop), `Target` (carry and land), `Reason`, `On`. Written only by `closeout` (operation 4c); the sprint fields are never touched by it. |
 | Key Dependencies | No | IDs of blocking items |
 | Control Approach | No | How the deliverable is verified (review, functional test, ...) |
@@ -373,6 +375,28 @@ python <skill-path>/scripts/wbs.py closeouts [<register>...] --target S26.Q4.3 [
 
 `--sprint` lists the sprint's unfinished rows with their outcome, `undecided`, or what became of them before the rule (`done in`, `in`, `cancelled`), as the record's table lines. `--target` lists the open rows whose latest closeout sends them to that sprint: planning's candidates beside `Horizon Next`. With no register given, both read every WBS register under the current folder.
 
+### 4d. Milestones and the delivery journey
+
+A row has one end date, so a deliverable reached in stages (proven in a PoC in Feb-26, in production in Feb-27) tells only its last one. **Milestones** carry the stages. They sit beside the WBS, as PMBOK's milestone list does: a named, dated event with no effort, reached when the rows naming it are done. They are not the goals register's milestone key results, which are a different register's.
+
+```bash
+python <skill-path>/scripts/wbs.py stages "<register>" "Proven" "Pilot" "Production"   # the register's stages, in order; no names prints them
+python <skill-path>/scripts/wbs.py milestone add "<register>" "Parameter management proven" --stage Proven --baseline Feb-26
+python <skill-path>/scripts/wbs.py set "<register>" --id 42 --milestone M1                # the row reaches M1; '' clears
+python <skill-path>/scripts/wbs.py milestones "<register>" [--json]                      # each with its derived state
+python <skill-path>/scripts/wbs.py journey "<register>" --id 7 [--json]                  # a row's children by stage
+python <skill-path>/scripts/wbs.py milestone set|rebaseline|note|drop "<register>" --id M1 ...
+```
+
+- **The stages are the project's own**, an ordered vocabulary that starts empty (`Proven, Pilot, Production`, or whatever its lifecycle calls them). A milestone's stage is optional; with stages set, every deliverable in the project reads on the same columns.
+- **A row names one milestone**: the work that reaches it, usually one child per capability (*Proven in a PoC*, *Delivered to production*). A row that serves two stages is split.
+- **A milestone is derived, never marked.** It is *reached* when every row naming it is Done, on the latest of their Actual Ends; otherwise its plan is its rows' latest planned end (an open leaf with no Planned End counts its committed sprint's end). *On plan*, *late* or *early* compares that with the baseline at the coarser precision, and an unreached milestone past its baseline is late. Closing a milestone's last row says so and asks for the evidence: `milestone note --id M1 "how it was shown"`.
+- **Its baseline is written once.** `milestone set --baseline` takes only the first; `milestone rebaseline --reason` moves it and logs the move in `schedule_log`. `milestone drop --closure` abandons one.
+- **A row's journey** is its direct children by the stages named beneath it (by the milestones themselves, ordered by baseline, where they have no stage). Each cell is *done* with its date, *in progress* or *planned* with its date, or *-* when that child has no part in that stage. For a deeper tree, read the journey on the Feature's card. `journey()` computes it once; the dashboard and the status report read it.
+- **History is entered as it happened**: rows already done are added Done with their real `Actual End`.
+
+`check` adds: a row naming a milestone that does not exist, and a milestone stage outside the vocabulary (errors); a live milestone no row reaches, an unreached one past its baseline, and an open row naming a dropped one (warnings). `migrate` registers the `milestones` collection, the `Milestone` field and the empty `stage` vocabulary.
+
 The schedule dates hang off these same moments rather than forming a separate routine — see **When each date is written** below for which field belongs to which. Committing to a sprint is also when a story's **baseline** is set, and it is set once.
 
 ### 5. Generate dashboard
@@ -381,7 +405,7 @@ python <skill-path>/scripts/refresh_wbs.py "<register.json>" "<output-html-path>
 ```
 Generates a self-contained HTML file with:
 - **KPI strip** — total items, implementing, done, not started, total effort (leaves only), planned sprints
-- **A card's details** open from any ID: the path from the top row down to its parent above the title, each level a link, and its children listed with status and hours. Opening a card puts `#item=<ID>` in the address, so a link with it opens the dashboard at that card (**Copy link**), and the browser's Back returns to the card before. A sprint card's path is links too.
+- **A card's details** open from any ID: the path from the top row down to its parent above the title, each level a link, and its children listed with status and hours. Opening a card puts `#item=<ID>` in the address, so a link with it opens the dashboard at that card (**Copy link**), and the browser's Back returns to the card before. A sprint card's path is links too. A row naming a milestone shows a *Milestone* line (its stage, title and state), and a row whose children have milestones beneath them shows its **delivery journey**: the children by stage, each cell done with its date, in progress, planned, or *-* (operation 4d). Where each child names its own milestone, the Milestone lines say it all and no table is drawn.
 - **Current Sprint tab** — one sprint as a board: **lanes by the deliverable each card serves**, columns To do / Doing / Done. The lane is the card's nearest `Deliverable` ancestor, else its root; a card with no parent goes in a final *No deliverable* lane, so the gap shows. Each card shows the levels between it and its lane, and a tag when it was **carried in** or **pulled in**; a committed card still in `Portfolio Backlog` or `Funnel` is flagged. A parent card shows its hours *in sprint*, its children's on the board, and the column and lane totals add leaves only. The lane header carries the deliverable's overall progress and the sprint's hours in it. A switch drops the lanes for a plain board.
   - **Which rows are in the sprint, and the header's figures, come from `wbs.py`** (`sprint_board`, `sprint_metrics`), embedded per sprint at generation. `sprint_board()` decides each card's role, lane and path once; a report that shows the sprint as a board should use it too, so a card sits in the same lane everywhere. The header therefore reads the same as `wbs.py metrics --sprint` for that sprint; never recompute them in the page.
   - **Which sprint is current is decided when the page opens**, from the calendar, like the Roadmap's Today line, so it stays right between refreshes. A picker shows any other sprint. While today's sprint has cards, the dashboard opens on this tab.
@@ -392,6 +416,8 @@ Generates a self-contained HTML file with:
 - **Verification tab** — every requirement (Feature and Story) with the deliverable and parent it traces to, how many acceptance criteria it states, and its verification read from its closure note: *verified*, *partly met*, *not met*, *no verdict*, *open*, or *referred* (a row split from another keeps its verdict there). A gap shows where its follow-up went. Flags: committed or staged with no AC; closed with no AC verdict (since the register's `meta.settings.closure_notes_from` date, where set); partly or not met with no follow-up. This is a traceability matrix's verified column, read from the closure notes rather than kept by hand, and the drill-down behind the status report's *On Quality*.
 - **Analytics tab** — committed against delivered hours per sprint with the velocity (average delivered, last three ended sprints), then status, priority and type distributions
 - **Roadmap tab** — baseline, plan and actual as three bars per row, with a **zoom control** (day / month / quarter / sprint). **Slip is drawn, not listed** — a hatched band runs from where a row was promised to where it now lands, red when late and green when early, dashed at the promise and arrowed at the landing. It reads as the distance it is, costs no column, and appears on no row that never had a baseline to miss. A row that moved more than once carries the count; the full phrase is on hover.
+
+  **Milestones head the roadmap** in a lane of their own: a hollow diamond at the baseline, a filled one at the plan or the date reached (green reached, red late), the same slip band between them, and the stage and state beside the title. A faint guide runs down the chart at each milestone's date, so the bars that met it line up against it. A dropped milestone is not drawn. The **Deliverables tab** adds a *Next milestone* column once any deliverable has milestones beneath it: the first not yet reached, with its plan and state.
 
   Two things make a wide chart readable rather than just correct: **rows alternate in tone**, because the eye travels a long way from a name to its bars and a hairline rule does not survive that trip; and a dashed **Today** line marks where now falls, which is the reference every other bar is read against. That line is computed when the page opens, not when it is generated, so it stays right without a refresh.
 

@@ -856,6 +856,7 @@ def cmd_add(args):
     apply_closure(row, args, created, None)
     apply_dates(data, row, args, created, creating=True)
     apply_sprints(data, row, args, created)
+    apply_milestone(data, row, args, created)
     commit_status(row, args, created)
     # A row added straight into Implementing or Done takes the same stamps a
     # status change does - adding is just the first write of that status.
@@ -938,6 +939,7 @@ def cmd_set(args):
             changed.append("%s=%s" % (key, value))
     apply_dates(data, row, args, changed)
     apply_sprints(data, row, args, changed)
+    apply_milestone(data, row, args, changed)
     commit_status(row, args, changed)
     apply_closure(row, args, changed, was)
     apply_reopen(row, args, changed, was)
@@ -956,6 +958,9 @@ def cmd_set(args):
     code = finish(args, data, "Item %s: %s" % (args.id, ", ".join(changed)))
     if line:
         print("\n  Add to the sprint record's Committed items, today:\n  " + line)
+    reached = reached_now(data, row, was)
+    if reached:
+        print("\n  " + reached)
     return code
 
 
@@ -1353,6 +1358,341 @@ def cmd_closeouts(args):
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# Milestones. PMBOK's milestone list, kept beside the WBS rather than in
+# it: a named, dated event with no effort, reached when the rows naming it are
+# done. A row's one end date cannot tell a deliverable reached in stages - a
+# PoC proven in February, production a year later - and a milestone can, for
+# several capabilities at once. Its stage comes from the register's own
+# vocabulary, so every deliverable in a project reads on the same columns.
+
+MILESTONES = "milestones"
+MILESTONE_ID = re.compile(r"^M(\d+)$")
+
+
+def milestones(data):
+    return R.rows(data, MILESTONES) if MILESTONES in data else []
+
+
+def find_milestone(data, mid):
+    return next((m for m in milestones(data) if m.get("ID") == mid), None)
+
+
+def kids_of(data):
+    kids = {}
+    for r in R.rows(data, ITEMS):
+        if r.get("Parent") not in (None, "") and r.get("Status") != "Cancelled":
+            kids.setdefault(str(r.get("Parent")), []).append(r)
+    return kids
+
+
+def latest_of(resolved):
+    """The resolved date that ends last (dates.latest gives only its end)."""
+    resolved = [r for r in resolved if r]
+    return max(resolved, key=lambda r: r["end"]) if resolved else None
+
+
+def as_text(iso):
+    y, mo, dd = (int(x) for x in iso.split("-"))
+    return "%d-%s-%d" % (y, D.MONTHS[mo - 1], dd)
+
+
+def landed(row, kids):
+    """When a row landed: its own Actual End, or a parent's latest child's."""
+    if row.get("Status") == "Cancelled":
+        return None
+    own = D.resolve(row.get("Actual End"))
+    below = kids.get(str(row.get("ID")))
+    if own or not below:
+        return own
+    ends = [e for e in (landed(k, kids) for k in below) if e]
+    return latest_of(ends) if ends else None
+
+
+def planned(data, row, kids):
+    """When a row is expected to land: a parent's latest child; a Done leaf by
+    when it landed; an open leaf by its Planned End, else the end of the sprint
+    it is committed to, which the roadmap draws it across anyway."""
+    if row.get("Status") == "Cancelled":
+        return None
+    below = kids.get(str(row.get("ID")))
+    if below:
+        ends = [e for e in (planned(data, k, kids) for k in below) if e]
+        return latest_of(ends) if ends else None
+    if row.get("Status") == "Done":
+        return D.resolve(row.get("Actual End")) or D.resolve(row.get("Planned End"))
+    own = D.resolve(row.get("Planned End"))
+    if own:
+        return own
+    sprint = latest_held(data, row)
+    ends = sprint_calendar(data).get(sprint, (None, None))[1] if sprint else None
+    return D.resolve(as_text(ends)) if ends else None
+
+
+def against(base, when):
+    """'on plan', 'late' or 'early', at the coarser precision of the two."""
+    if not base or not when:
+        return None
+    amount = D.variance(base, when)["amount"]
+    return "late" if amount > 0 else "early" if amount < 0 else "on plan"
+
+
+def milestone_state(data, m, kids=None):
+    """A milestone as derived from its rows: reached, open, no work, or dropped."""
+    kids = kids if kids is not None else kids_of(data)
+    rows = [r for r in R.rows(data, ITEMS)
+            if r.get("Milestone") == m.get("ID") and r.get("Status") != "Cancelled"]
+    base = D.resolve(m.get("Baseline"))
+    st = {"id": m.get("ID"), "title": m.get("Title", ""), "stage": m.get("Stage"),
+          "baseline": base["text"] if base else None,
+          "rows": [r["ID"] for r in rows],
+          "done": [r["ID"] for r in rows if r.get("Status") == "Done"],
+          "actual": None, "plan": None, "against": None}
+    if m.get("Status") == "Dropped":
+        st["state"] = "dropped"
+    elif not rows:
+        st["state"] = "no work"
+    elif all(r.get("Status") == "Done" for r in rows):
+        ends = [e for e in (landed(r, kids) for r in rows) if e]
+        actual = latest_of(ends) if ends else None
+        st.update(state="reached", actual=actual["text"] if actual else None,
+                  against=against(base, actual))
+    else:
+        ends = [e for e in (planned(data, r, kids) for r in rows) if e]
+        plan = latest_of(ends) if ends else None
+        started = any(r.get("Status") in ("Implementing", "Done") for r in rows)
+        st.update(state="in progress" if started else "open",
+                  plan=plan["text"] if plan else None,
+                  against=against(base, plan))
+        if base and base["end"] < date.today().isoformat():
+            st["against"] = "late"
+    return st
+
+
+def journey(data, rid):
+    """A row's journey: its direct children by the stages (or the milestones)
+    named beneath it. Each cell says how far that child has got at that stage.
+    Computed here once; the dashboard and the status report read it."""
+    row = find(data, rid)
+    if row is None:
+        return None
+    kids = kids_of(data)
+    items = R.rows(data, ITEMS)
+    beneath = [r for r in items if str(r.get("ID")) in subtree_ids(items, row["ID"])
+               and r.get("Status") != "Cancelled" and r.get("Milestone")]
+    named = {r["Milestone"] for r in beneath}
+    ms = [m for m in milestones(data) if m.get("ID") in named and m.get("Status") != "Dropped"]
+    if not ms:
+        return None
+    states = {m["ID"]: milestone_state(data, m, kids) for m in ms}
+    stages = vocabulary(data, "stage")
+    if all(m.get("Stage") for m in ms):
+        keys = [s for s in stages if any(m.get("Stage") == s for m in ms)]
+        columns = [{"key": s, "label": s, "milestones": [states[m["ID"]] for m in ms if m.get("Stage") == s]}
+                   for s in keys]
+    else:
+        order = sorted(ms, key=lambda m: ((D.resolve(m.get("Baseline")) or {}).get("end") or "9999",
+                                          int(MILESTONE_ID.match(m["ID"]).group(1)) if MILESTONE_ID.match(m["ID"]) else 0))
+        columns = [{"key": m["ID"], "label": m.get("Title", m["ID"]), "milestones": [states[m["ID"]]]}
+                   for m in order]
+    out = []
+    for child in sorted(kids.get(str(row["ID"]), []), key=lambda r: (str(r.get("Code") or ""), r["ID"])):
+        below = subtree_ids(items, child["ID"]) | {str(child["ID"])}
+        under = [r for r in beneath if str(r.get("ID")) in below]
+        cells = []
+        for col in columns:
+            ids = {m["id"] for m in col["milestones"]}
+            mine = [r for r in under if r.get("Milestone") in ids]
+            if not mine:
+                cells.append({"state": "none"})
+            elif all(r.get("Status") == "Done" for r in mine):
+                ends = [e for e in (landed(r, kids) for r in mine) if e]
+                cells.append({"state": "done", "date": latest_of(ends)["text"] if ends else None})
+            else:
+                ends = [e for e in (planned(data, r, kids) for r in mine) if e]
+                started = any(r.get("Status") in ("Implementing", "Done") for r in mine)
+                cells.append({"state": "in progress" if started else "planned",
+                              "date": latest_of(ends)["text"] if ends else None})
+        out.append({"id": child["ID"], "title": child.get("Title", ""), "cells": cells})
+    return {"row": row["ID"], "title": row.get("Title", ""), "columns": columns, "rows": out}
+
+
+def apply_milestone(data, row, args, changed):
+    value = getattr(args, "milestone", None)
+    if value is None:
+        return
+    if value == "":
+        if row.pop("Milestone", None) is not None:
+            changed.append("Milestone cleared")
+        return
+    m = find_milestone(data, value)
+    if m is None:
+        sys.exit("%r is not a milestone in this register.\n  known: %s"
+                 % (value, ", ".join(x["ID"] for x in milestones(data)) or "none - wbs.py milestone add"))
+    if m.get("Status") == "Dropped":
+        sys.exit("Milestone %s was dropped; a row cannot reach it." % value)
+    row["Milestone"] = value
+    changed.append("Milestone=%s" % value)
+
+
+def reached_now(data, row, was):
+    """When a row's close reaches its milestone, say so and ask for the evidence."""
+    mid = row.get("Milestone")
+    if not mid or row.get("Status") != "Done" or was == "Done":
+        return None
+    m = find_milestone(data, mid)
+    st = milestone_state(data, m) if m else None
+    if not st or st["state"] != "reached":
+        return None
+    return ("Milestone %s %s is reached (%s%s). Note how it was shown:\n"
+            "  wbs.py milestone note --id %s \"...\""
+            % (mid, st["title"], st["actual"] or "date unknown",
+               ", %s against %s" % (st["against"], st["baseline"]) if st["against"] else "", mid))
+
+
+def check_stage(data, stage):
+    if stage in (None, ""):
+        return
+    allowed = vocabulary(data, "stage")
+    if stage not in allowed:
+        sys.exit("%r is not a stage in this register.\n  stages: %s" % (
+            stage, ", ".join(allowed) or "none yet - wbs.py stages <register> \"Proven\" \"Production\""))
+
+
+def cmd_milestone(args):
+    data = R.load(args.register)
+    data.setdefault(MILESTONES, [])
+    action = args.milestone_command
+    if action == "add":
+        check_stage(data, args.stage)
+        nums = [int(MILESTONE_ID.match(m["ID"]).group(1)) for m in milestones(data)
+                if MILESTONE_ID.match(str(m.get("ID")))]
+        m = {"ID": "M%d" % (max(nums) + 1 if nums else 1), "Title": args.title}
+        if args.stage:
+            m["Stage"] = args.stage
+        if args.baseline:
+            check_date("Baseline", args.baseline)
+            m["Baseline"] = args.baseline
+        if args.description:
+            m["Description"] = args.description
+        R.rows(data, MILESTONES).append(m)
+        return finish(args, data, "Added milestone %s  %s%s%s\n  Rows reach it with: wbs.py set --id <n> --milestone %s"
+                      % (m["ID"], m["Title"], " | %s" % args.stage if args.stage else "",
+                         " | baseline %s" % args.baseline if args.baseline else "", m["ID"]))
+    m = find_milestone(data, args.id)
+    if m is None:
+        sys.exit("No milestone %s." % args.id)
+    changed = []
+    if action == "set":
+        if args.title:
+            m["Title"] = args.title
+            changed.append("Title=%s" % args.title)
+        if args.stage is not None:
+            check_stage(data, args.stage)
+            if args.stage:
+                m["Stage"] = args.stage
+            else:
+                m.pop("Stage", None)
+            changed.append("Stage=%s" % (args.stage or "cleared"))
+        if args.description is not None:
+            m["Description"] = args.description
+            changed.append("Description set")
+        if args.baseline:
+            # Written once, like a row's: a baseline that can be quietly edited
+            # is just another plan.
+            if m.get("Baseline"):
+                sys.exit("Milestone %s has a baseline (%s). Moving it is: wbs.py milestone "
+                         "rebaseline --id %s --baseline <date> --reason \"...\""
+                         % (m["ID"], m["Baseline"], m["ID"]))
+            check_date("Baseline", args.baseline)
+            m["Baseline"] = args.baseline
+            changed.append("Baseline=%s" % args.baseline)
+        if not changed:
+            sys.exit("Nothing to change.")
+    elif action == "rebaseline":
+        if not (args.reason or "").strip():
+            sys.exit("Moving a baseline needs --reason: the record of why.")
+        check_date("Baseline", args.baseline)
+        before = m.get("Baseline")
+        m["Baseline"] = args.baseline
+        log_schedule(data, m["ID"], "Baseline", before, args.baseline, args.reason)
+        changed.append("Baseline %s -> %s (logged)" % (before or "none", args.baseline))
+    elif action == "note":
+        title = (args.title or "").strip()
+        if ":" in title or "\n" in title:
+            sys.exit("A note's title is one line with no colon.")
+        add_note(m, args.text, title)
+        changed.append("note added")
+    elif action == "drop":
+        if not (args.closure or "").strip():
+            sys.exit("Dropping a milestone needs --closure: why, and where its rows went.")
+        m["Status"] = "Dropped"
+        m["Comments"] = ("Closure %s (Dropped): %s\n\n%s" % (today_text(), one_paragraph(args.closure),
+                                                            m.get("Comments") or "")).strip()
+        named = [r["ID"] for r in R.rows(data, ITEMS)
+                 if r.get("Milestone") == m["ID"] and r.get("Status") not in CLOSED]
+        changed.append("dropped" + ("; open rows still naming it: %s - move or clear them"
+                                    % ", ".join(str(i) for i in named) if named else ""))
+    return finish(args, data, "Milestone %s: %s" % (m["ID"], ", ".join(changed)))
+
+
+def cmd_milestones(args):
+    data = R.load(args.register)
+    kids = kids_of(data)
+    states = [milestone_state(data, m, kids) for m in milestones(data)]
+    if args.json:
+        print(json.dumps(states, indent=2))
+        return 0
+    if not states:
+        print("No milestones yet. Add one: wbs.py milestone add <register> \"Title\" [--stage S] [--baseline DATE]")
+        return 0
+    for s in states:
+        when = ("reached %s" % s["actual"] if s["state"] == "reached" else
+                "plan %s" % s["plan"] if s["plan"] else s["state"])
+        print("  %-4s %-12s %s\n       baseline %s | %s%s | %d of %d row(s) done%s"
+              % (s["id"], s["stage"] or "-", s["title"], s["baseline"] or "-", when,
+                 " (%s)" % s["against"] if s["against"] else "", len(s["done"]), len(s["rows"]),
+                 "" if s["state"] in ("reached", "open", "in progress") else " | %s" % s["state"].upper()))
+    return 0
+
+
+def cmd_stages(args):
+    data = R.load(args.register)
+    vocabs = data.setdefault("meta", {}).setdefault("settings", {}).setdefault("vocabularies", {})
+    if not args.names:
+        print("Stages: %s" % (", ".join(vocabs.get("stage") or []) or "none set"))
+        return 0
+    used = {m.get("Stage") for m in milestones(data) if m.get("Stage")}
+    lost = sorted(used - set(args.names))
+    if lost:
+        sys.exit("Milestones use %s, which the new list drops. Keep them, or move "
+                 "those milestones first." % ", ".join(lost))
+    vocabs["stage"] = list(args.names)
+    return finish(args, data, "Stages, in order: %s" % ", ".join(args.names))
+
+
+def cmd_journey(args):
+    data = R.load(args.register)
+    j = journey(data, args.id)
+    if args.json:
+        print(json.dumps(j, indent=2))
+        return 0
+    if not j:
+        print("Item %s has no milestones beneath it." % args.id)
+        return 0
+    word = lambda c: ("done %s" % c["date"] if c["state"] == "done" else
+                      "-" if c["state"] == "none" else
+                      "%s%s" % (c["state"], " %s" % c["date"] if c.get("date") else ""))
+    head = ["%s (%s)" % (c["label"], ", ".join("%s %s" % (m["id"], m["state"] if m["state"] != "reached"
+                                                            else "reached %s" % m["actual"])
+                                                for m in c["milestones"])) for c in j["columns"]]
+    print("Journey of %s %s" % (j["row"], j["title"]))
+    print("  | %s | %s |" % ("Item", " | ".join(head)))
+    for r in j["rows"]:
+        print("  | %s %s | %s |" % (r["id"], r["title"], " | ".join(word(c) for c in r["cells"])))
+    return 0
+
+
 def cmd_check(args):
     data = R.load(args.register)
     items = R.rows(data, ITEMS)
@@ -1578,6 +1918,34 @@ def cmd_check(args):
                         % (len(unnoted), " since %s" % rule_from if rule_from else "",
                            ", ".join(unnoted)))
 
+    # Milestones: each named one exists, its stage is the register's,
+    # and a live one has work tied to it and has not quietly passed its date.
+    known_ms = {}
+    for m in milestones(data):
+        mid = m.get("ID")
+        if not MILESTONE_ID.match(str(mid)) or mid in known_ms:
+            errors.append("milestone %r: an ID is M1, M2... and unique" % mid)
+        known_ms[mid] = m
+        if m.get("Stage") and m["Stage"] not in vocabulary(data, "stage"):
+            errors.append("milestone %s: Stage %r is not one of the register's stages" % (mid, m["Stage"]))
+    kids = kids_of(data)
+    for row in items:
+        mid = row.get("Milestone")
+        if mid and mid not in known_ms:
+            errors.append("item %s: Milestone %s does not exist" % (row.get("ID"), mid))
+        elif mid and known_ms[mid].get("Status") == "Dropped" and row.get("Status") not in CLOSED:
+            warnings.append("item %s: names milestone %s, which was dropped - move or clear it"
+                            % (row.get("ID"), mid))
+    for m in known_ms.values():
+        st = milestone_state(data, m, kids)
+        if st["state"] == "no work":
+            warnings.append("milestone %s: no row reaches it - tie its work with set --milestone %s"
+                            % (m.get("ID"), m.get("ID")))
+        elif st["state"] in ("open", "in progress") and st["baseline"] \
+                and D.resolve(m.get("Baseline"))["end"] < date.today().isoformat():
+            warnings.append("milestone %s: baseline %s has passed and it is not reached - "
+                            "rebaseline it with a reason, or drop it" % (m.get("ID"), st["baseline"]))
+
     if "key_deliverables" in data:
         warnings.append("register still carries a key_deliverables collection "
                         "- run migrate")
@@ -1699,8 +2067,14 @@ def cmd_migrate(args):
         if row.get("Status") == "Backlog":
             row["Status"] = "Portfolio Backlog"
             notes.append("item %s: Status Backlog -> Portfolio Backlog" % row.get("ID"))
+    # The stage vocabulary starts empty and is the project's own, so it is
+    # registered once and never filled from a standard.
+    if "stage" not in vocabs:
+        vocabs["stage"] = list(C.STAGES)
+        notes.append("vocabulary 'stage' registered (empty: wbs.py stages sets it)")
     for name, spec in ((SPRINTS, C.SPRINT_FIELDS),
-                       (SCHEDULE_LOG, C.SCHEDULE_LOG_FIELDS)):
+                       (SCHEDULE_LOG, C.SCHEDULE_LOG_FIELDS),
+                       (MILESTONES, C.MILESTONE_FIELDS)):
         if name not in data:
             data[name] = []
             notes.append("%s collection added" % name)
@@ -2634,6 +3008,8 @@ def main():
                               "sprint is part of that commitment: sets Sprint Planned")
         sub.add_argument("--later", action="store_true",
                          help="...or it is not in this sprint: no sprint is set")
+        sub.add_argument("--milestone", metavar="M",
+                         help="the milestone this row reaches (M1...), or '' to clear")
         sub.add_argument("--dry-run", action="store_true")
 
     s = subs.add_parser("add", help="add an item, claiming the next ID")
@@ -2709,6 +3085,63 @@ def main():
     s.add_argument("--root", help="the folder whose WBS registers are read (default: the current one)")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_closeouts)
+
+    mp = subs.add_parser("milestone", help="add, change, rebaseline, note or drop a milestone")
+    mps = mp.add_subparsers(dest="milestone_command")
+    s = mps.add_parser("add", help="a named, dated event rows reach")
+    s.add_argument("register")
+    s.add_argument("title")
+    s.add_argument("--stage", help="one of the register's stages (wbs.py stages)")
+    s.add_argument("--baseline", metavar="DATE", help="the committed date (%s)" % D.FORMS)
+    s.add_argument("--description")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_milestone)
+    s = mps.add_parser("set", help="change a milestone's title, stage, description, or first baseline")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("--title")
+    s.add_argument("--stage", help="'' clears")
+    s.add_argument("--baseline", metavar="DATE", help="the first baseline only; later moves are rebaseline")
+    s.add_argument("--description")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_milestone)
+    s = mps.add_parser("rebaseline", help="move a milestone's baseline, recording why")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("--baseline", required=True, metavar="DATE")
+    s.add_argument("--reason", required=True)
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_milestone)
+    s = mps.add_parser("note", help="a dated note: how a milestone was shown to be reached")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("text")
+    s.add_argument("--title")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_milestone)
+    s = mps.add_parser("drop", help="abandon a milestone, with why")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("--closure", required=True, metavar="NOTE")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_milestone)
+
+    s = subs.add_parser("milestones", help="each milestone with its stage, baseline and derived state")
+    s.add_argument("register")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_milestones)
+
+    s = subs.add_parser("stages", help="the register's stages, in order; with names, set them")
+    s.add_argument("register")
+    s.add_argument("names", nargs="*")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_stages)
+
+    s = subs.add_parser("journey", help="a row's children by the stages or milestones beneath it")
+    s.add_argument("register")
+    s.add_argument("--id", required=True)
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_journey)
 
     s = subs.add_parser("check", help="validate IDs, parents and vocabularies")
     s.add_argument("register")

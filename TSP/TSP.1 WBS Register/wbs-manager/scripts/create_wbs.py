@@ -20,7 +20,7 @@ ITEM_FIELDS = ["ID", "Parent", "Code", "Title", "Description",
                "Acceptance Criteria", "Owner", "Estimated Effort (h)",
                "Type", "Class", "Nature", "Delivers", "Key Deliverable", "Category",
                "Status", "Priority", "Horizon", "Sprint Planned", "Sprint Carried",
-               "Sprint Added", "Sprint Ended", "Sprint Closeouts", "Key Dependencies", "Action Plan",
+               "Sprint Added", "Sprint Ended", "Sprint Closeouts", "Milestone", "Key Dependencies", "Action Plan",
                "Planning Considerations", "Validation Approach",
                "Control Approach", "Control Tool", "Project Phase",
                "Baseline Start", "Baseline End", "Planned Start", "Planned End",
@@ -66,6 +66,13 @@ YESNO = ["Y", "N"]
 # never defined here - the ceremonies own the cadence, the register consumes it.
 SPRINT_FIELDS = ["Sprint", "Starts", "Ends"]
 
+# Milestones sit beside the WBS, as PMBOK's milestone list does: a named,
+# dated event with no effort, reached when the rows naming it are done. Its
+# stage comes from the register's own stage vocabulary, empty until a project
+# sets it (PoC, Pilot, Production, or whatever its lifecycle calls them).
+MILESTONE_FIELDS = ["ID", "Title", "Stage", "Baseline", "Description", "Status", "Comments"]
+STAGES = []
+
 
 def main():
     p = argparse.ArgumentParser(description=__doc__,
@@ -80,10 +87,11 @@ def main():
         sys.exit("%s already exists. Pass --force to overwrite." % args.output)
 
     data = R.new("wbs-register", args.project,
-                 {"items": [], "sprints": [], "schedule_log": []},
+                 {"items": [], "sprints": [], "schedule_log": [], "milestones": []},
                  settings={"fields": {"items": ITEM_FIELDS,
                                       "sprints": SPRINT_FIELDS,
-                                      "schedule_log": SCHEDULE_LOG_FIELDS},
+                                      "schedule_log": SCHEDULE_LOG_FIELDS,
+                                      "milestones": MILESTONE_FIELDS},
                            "vocabularies": {"status": STATUSES,
                                             "priority": PRIORITIES,
                                             "type": TYPES,
@@ -91,7 +99,8 @@ def main():
                                             "nature": NATURES,
                                             "delivers": DELIVERS,
                                             "horizon": HORIZONS,
-                                            "key deliverable": YESNO}})
+                                            "key deliverable": YESNO,
+                                            "stage": STAGES}})
     if args.execution:
         data["meta"]["execution"] = {"folder": args.execution}
     R.save(args.output, data)

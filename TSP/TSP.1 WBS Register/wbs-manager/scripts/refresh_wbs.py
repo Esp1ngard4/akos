@@ -173,6 +173,43 @@ def build_schedule(items, log, sprints=None):
     return payload
 
 
+def build_milestones(register):
+    """Each milestone as the page draws it, and the journey of every row with
+    milestones beneath it. The state and the journey come from wbs.py
+    (milestone_state, journey); only the dates are resolved here, as for rows."""
+    import wbs as W
+    rows = R.rows(register, "items")
+    kids = W.kids_of(register)
+    span = lambda r: {"s": r["start"], "e": r["end"], "t": r["text"]} if r else None
+    out = []
+    for m in W.milestones(register):
+        st = W.milestone_state(register, m, kids)
+        out.append({"id": st["id"], "t": st["title"], "st": st["stage"], "state": st["state"],
+                    "ag": st["against"], "b": span(D.resolve(m.get("Baseline"))),
+                    "w": span(D.resolve(st["actual"] or st["plan"])),
+                    "n": len(st["rows"]), "dn": len(st["done"])})
+    by_id = {str(r.get("ID")): r for r in rows}
+    above = set()
+    for r in rows:
+        if not r.get("Milestone"):
+            continue
+        cur, seen = by_id.get(str(r.get("Parent"))), set()
+        while cur is not None and str(cur["ID"]) not in seen:
+            seen.add(str(cur["ID"]))
+            above.add(cur["ID"])
+            cur = by_id.get(str(cur.get("Parent")))
+    # A journey says something only where a child has milestones beneath it;
+    # where each child names its own, the Milestone line on it says it all.
+    journeys = {}
+    for rid in above:
+        if not any(kid["ID"] in above for kid in kids.get(str(rid), [])):
+            continue
+        j = W.journey(register, rid)
+        if j:
+            journeys[str(rid)] = j
+    return out, journeys
+
+
 OUTCOME_LABEL = {"carry": "carried", "land": "landed", "park": "parked", "drop": "dropped"}
 
 
@@ -640,6 +677,18 @@ tr:hover td{background:#f0f4ff}
 .rm-head .rm-track{height:20px}
 .rm-tick{position:absolute;top:0;height:20px;border-left:1px solid #e5e7eb;font-size:10px;color:#6b7280}
 .rm-tick span{padding-left:4px;white-space:nowrap}
+.rm-msline{position:absolute;right:0;top:0;bottom:0;pointer-events:none;z-index:1}
+.rm-msline i{position:absolute;top:0;bottom:0;width:0;border-left:1px dotted #7c3aed;opacity:.5}
+.rm-group{font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px 2px;position:sticky;left:0}
+.rm-msrow .rm-track{min-height:22px}
+.ms-dia{position:absolute;top:50%;width:10px;height:10px;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #6d28d9;background:#fff;z-index:3;box-sizing:border-box}
+.ms-dia.at{background:#6d28d9}.ms-dia.at.reached{background:#16a34a;border-color:#16a34a}.ms-dia.at.late{background:#dc2626;border-color:#dc2626}
+.ms-dia.leg{position:relative;display:inline-block;top:auto;transform:rotate(45deg);margin:0 4px 0 8px;vertical-align:middle}
+.ms-id{color:#6d28d9}.ms-stage{font-size:10px;font-weight:700;background:#ede9fe;color:#5b21b6;border-radius:8px;padding:1px 6px}
+.ms-state{font-size:11px;color:#1d4ed8}.ms-state.late{color:#b91c1c}.ms-state.reached{color:#15803d}.ms-state.nowork{color:#6b7280}
+.jy{padding:8px 20px}.jy h4{margin:6px 0;font-size:13px;color:#334155}
+.jy-table{border-collapse:collapse;width:100%}.jy-table th,.jy-table td{font-size:12px;padding:5px 8px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:top}
+.jy-sub{font-weight:400;color:#6b7280;font-size:10px}.jy-done{color:#15803d;font-weight:600}.jy-none{color:#9ca3af}
 .rm-nowline{position:absolute;right:0;top:0;bottom:0;pointer-events:none;z-index:2}
 .rm-nowline i{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #0f766e;opacity:.75}
 .rm-now-lab{position:absolute;top:1px;transform:translateX(-50%);font-size:9px;font-weight:700;
@@ -849,6 +898,8 @@ const DATA=__ITEMS__;
 const S=__STATS__;
 const SPRINTS=__SPRINTS__;
 const BOARDS=__BOARDS__;
+const MILESTONES=__MILESTONES__;
+const JOURNEYS=__JOURNEYS__;
 
 let activeTab='tree';
 let showCancelled=false;   // R28: kept deliberately, noise by default
@@ -1077,6 +1128,8 @@ function openDetail(id,viaHash){
           ${chip('Planned',d.sp)}${chip('Carried',(d.sc||[]).join(', '))}${chip('Added',d.sa)}${chip('Ended',d.se)}
         </div>
         ${(d.jr||[]).length?`<div class="journey" title="The sprints this card went through, and how each ended for it"><b>Journey</b>${d.jr.map(esc).join(' &middot; ')}</div>`:''}
+        ${d.ms?(()=>{const m=MILESTONES.find(x=>x.id===d.ms);return `<div class="journey" title="The milestone this row reaches"><b>Milestone</b>&#9670; ${esc(d.ms)}${m?` ${m.st?esc(m.st)+' &middot; ':''}${esc(m.t)} &middot; ${esc(msWhen(m))}`:''}</div>`;})():''}
+        ${journeyTable(JOURNEYS[String(d.id)])}
         <div class="datebox">
           ${dbox('Baseline start',d.dbs)}${dbox('Baseline end',d.dbe)}
           ${dbox('Planned start',d.dps)}${dbox('Planned end',d.dpe)}
@@ -1230,7 +1283,15 @@ function renderVerify(){
 function renderDeliverables(){
   const dels=DATA.filter(d=>d.kd==='Y').sort(byCode);
   if(!dels.length)return '<p class="muted">No rows tagged Key Deliverable = Y. Tag a Feature or Enabler to see it here.</p>';
-  let h=`<table><tr><th>ID</th><th>Code</th><th>Deliverable</th><th>Delivers</th><th>Status</th><th>Work items</th><th>Done</th><th>Progress</th><th>Effort</th><th>Planned</th><th>Released</th><th>Owner</th></tr>`;
+  // The next milestone beneath a deliverable: the first not yet reached, by its date.
+  const nextMs=d=>{const j=JOURNEYS[String(d.id)];if(!j)return '-';
+    const open=[].concat(...j.columns.map(c=>c.milestones)).filter(m=>m.state!=='reached');
+    if(!open.length)return '<span class="ms-state reached">all reached</span>';
+    open.sort((a,b)=>String(a.plan||a.baseline||'~').localeCompare(String(b.plan||b.baseline||'~')));
+    const m=MILESTONES.find(x=>x.id===open[0].id)||{};
+    return `<span class="ms-state ${msClass(m)}">&#9670; ${esc(open[0].id)} ${esc(msWhen(m))}${m.ag?' &middot; '+esc(m.ag):''}</span>`;};
+  const anyMs=dels.some(d=>JOURNEYS[String(d.id)]);
+  let h=`<table><tr><th>ID</th><th>Code</th><th>Deliverable</th><th>Delivers</th><th>Status</th><th>Work items</th><th>Done</th><th>Progress</th><th>Effort</th><th>Planned</th><th>Released</th>${anyMs?'<th>Next milestone</th>':''}<th>Owner</th></tr>`;
   dels.forEach(d=>{
     const sub=descendants(d.id);
     const done=sub.filter(k=>k.s==='Done').length;
@@ -1242,7 +1303,7 @@ function renderDeliverables(){
       <span style="position:absolute;inset:0;font-size:10px;text-align:center;line-height:14px;color:#1a1a2e">${pct}%</span></div>`;
     h+=`<tr><td><button class="idbtn" onclick="openDetail(${d.id})" title="Open the full record">${d.id}</button></td><td>${d.c}</td><td><strong>${d.t}</strong></td><td>${d.dl||'-'}</td>
       <td>${badge(d.s)}</td><td>${live}</td><td>${done}</td><td>${bar}</td><td>${effort}h</td>
-      <td>${d.rel||'-'}</td><td>${d.relon||'-'}</td><td>${d.o||'-'}</td></tr>`;
+      <td>${d.rel||'-'}</td><td>${d.relon||'-'}</td>${anyMs?`<td>${nextMs(d)}</td>`:''}<td>${d.o||'-'}</td></tr>`;
   });
   h+=`</table>`;
   const others=DATA.filter(d=>(d.ty==='Deliverable'||d.ty==='Feature')&&d.kd!=='Y').length;
@@ -1492,6 +1553,7 @@ function roadmapSpan(){
   let lo=Infinity,hi=-Infinity;
   DATA.filter(visible).forEach(d=>instants(d).forEach(v=>{if(v<lo)lo=v;if(v>hi)hi=v;}));
   SPRINTS.forEach(s=>{const a=num(s.Starts),b=num(s.Ends);if(a<lo)lo=a;if(b>hi)hi=b;});
+  liveMilestones().forEach(m=>[m.b,m.w].forEach(x=>{if(!x)return;const v=num(x.e);if(v<lo)lo=v;if(v>hi)hi=v;}));
   if(!isFinite(lo))return null;
   const pad=Math.max((hi-lo)*0.02,3*DAY);
   return {lo:lo-pad,hi:hi+pad};
@@ -1560,6 +1622,43 @@ function slipBand(d,s,pct,num,DAY){
     title="${slipText(d)}"><i class="from"></i><i class="to"></i>${n}</div>`;
 }
 
+/* Milestones: named, dated events beside the rows, reached when the
+   rows naming them are done. State and dates come from wbs.py. */
+const liveMilestones=()=>MILESTONES.filter(m=>m.state!=='dropped'&&(m.b||m.w));
+function msWhen(m){
+  if(m.state==='reached')return `reached ${m.w?m.w.t:'-'}`;
+  if(m.state==='no work')return 'no work tied';
+  return `${m.state==='in progress'?'in progress, ':''}plan ${m.w?m.w.t:'-'}`;
+}
+function msClass(m){return m.state==='reached'?'reached':m.ag==='late'?'late':m.state==='no work'?'nowork':'open';}
+function msRow(m,pct,alt){
+  const at=x=>pct(num(x.e)+DAY);
+  let track='';
+  // The same slip band as a row's: from the promise to where it lands.
+  if(m.b&&m.w&&m.ag&&m.ag!=='on plan'){
+    const a=at(m.b),b=at(m.w),l=Math.min(a,b),w=Math.max(Math.abs(b-a),0.3);
+    track+=`<div class="rm-band ${m.ag==='late'?'late':'early'}" style="left:${l}%;width:${w}%" title="${m.ag} against baseline ${m.b.t}"><i class="from"></i><i class="to"></i></div>`;
+  }
+  if(m.b)track+=`<i class="ms-dia" style="left:${at(m.b)}%" title="${esc(m.id)} baseline ${esc(m.b.t)}"></i>`;
+  if(m.w)track+=`<i class="ms-dia at ${msClass(m)}" style="left:${at(m.w)}%" title="${esc(m.id)} ${esc(msWhen(m))}"></i>`;
+  return `<div class="rm-row rm-msrow${alt?' alt':''}"><i class="rm-st" style="background:transparent"></i>
+    <div class="rm-label" title="${esc(m.id)} ${esc(m.t)} - ${m.dn} of ${m.n} row(s) done"><b class="ms-id">&#9670; ${esc(m.id)}</b> ${m.st?`<span class="ms-stage">${esc(m.st)}</span> `:''}${esc(m.t)}</div>
+    <div class="rm-pg"><span class="ms-state ${msClass(m)}">${esc(msWhen(m))}${m.ag&&m.state!=='no work'?` &middot; ${esc(m.ag)}`:''}</span></div>
+    <div class="rm-track">${track}</div></div>`;
+}
+/* A row's delivery journey: its children by the stages (or milestones)
+   named beneath it, as wbs.py journey() gives it. */
+function journeyTable(j){
+  if(!j)return '';
+  const cell=c=>c.state==='done'?`<span class="jy-done">&#10003; ${esc(c.date||'')}</span>`
+    :c.state==='none'?'<span class="jy-none">&mdash;</span>'
+    :`${esc(c.state)}${c.date?' '+esc(c.date):''}`;
+  const head=j.columns.map(c=>`<th>${esc(c.label)}<div class="jy-sub">${c.milestones.map(m=>
+    `${esc(m.id)} &middot; ${m.state==='reached'?'reached '+esc(m.actual||''):esc((m.baseline?'baseline '+m.baseline:'')+(m.against?' · '+m.against:''))}`).join('<br>')}</div></th>`).join('');
+  return `<div class="jy"><h4>Delivery journey</h4><table class="jy-table"><tr><th>Item</th>${head}</tr>${j.rows.map(r=>
+    `<tr><td><button class="idbtn" onclick="openDetail(${r.id})">${r.id}</button> ${esc(r.title)}</td>${r.cells.map(c=>`<td>${cell(c)}</td>`).join('')}</tr>`).join('')}</table></div>`;
+}
+
 function renderRoadmap(){
   const span=roadmapSpan();
   if(!span)return '<p class="muted">No dates yet. Set Baseline, Planned or Actual dates to see a roadmap.</p>';
@@ -1586,6 +1685,7 @@ function renderRoadmap(){
     <span class="sw sw-act"></span> Actual
     <span class="sw sw-slip"></span> Slip vs baseline
     <span class="sw sw-plan" style="outline:1px dotted rgba(0,0,0,.45);outline-offset:-1px"></span> From sprint
+    ${liveMilestones().length?`<i class="ms-dia leg"></i> Milestone baseline <i class="ms-dia leg at open"></i> plan <i class="ms-dia leg at reached"></i> reached`:''}
     <span class="sep"></span><b>Status</b>
     ${Object.keys(SCOL).filter(k=>showCancelled||k!=='Cancelled')
       .map(k=>`<i class="rm-st leg" style="background:${SCOL[k]}"></i>${k}`).join(' ')}</div>`;
@@ -1603,10 +1703,20 @@ function renderRoadmap(){
   const now=Date.now();
   const showNow=now>=span.lo&&now<=span.hi;
   if(showNow)h+=`<div class="rm-nowline" style="left:${PIN}px"><i style="left:${pct(now)}%"></i></div>`;
+  /* A faint guide at each milestone's date, so the bars that met it line up
+     against it. */
+  const mls=liveMilestones();
+  if(mls.length)h+=`<div class="rm-msline" style="left:${PIN}px">${mls.filter(m=>m.w).map(m=>
+    `<i style="left:${pct(num(m.w.e)+DAY)}%"></i>`).join('')}</div>`;
   h+=`<div class="rm-row rm-head"><i class="rm-st" style="background:transparent"></i><div class="rm-label">Work Item</div><div class="rm-pg">Progress</div><div class="rm-track">`;
   tk.forEach(t=>{h+=`<div class="rm-tick" style="left:${pct(t.at)}%"><span>${t.label}</span></div>`;});
   if(showNow)h+=`<div class="rm-now-lab" style="left:${pct(now)}%">Today</div>`;
   h+=`</div></div>`;
+  if(mls.length){
+    h+=`<div class="rm-group">Milestones</div>`;
+    mls.forEach((m,i)=>{h+=msRow(m,pct,i%2);});
+    h+=`<div class="rm-group">Work items</div>`;
+  }
 
   /* A pair may be half-present, and both halves mean something. "Deliver by
      Q1-26" is an end with no start - the commonest shape a commitment takes -
@@ -1696,7 +1806,7 @@ SHELL = '''<!DOCTYPE html>
 
 
 def generate_html(project_name, items, stats, schedule=None, sprints=None,
-                  boards=None, closure_rule_from=None):
+                  boards=None, closure_rule_from=None, milestones=None, journeys=None):
     """Assemble the dashboard.
 
     The JS and CSS are plain strings, not f-strings, so braces stay as the
@@ -1720,6 +1830,7 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None,
             'sc': [str(s) for s in carried(it)],
             # The sprints it went through and how each ended for it.
             'jr': journey(W, it, order),
+            'ms': str(it.get('Milestone', '') or ''),
             'sa': str(it.get('Sprint Added', '') or ''),
             'se': str(it.get('Sprint Ended', '') or ''),
             'ty': str(it.get('Type', '') or ''),
@@ -1769,6 +1880,8 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None,
                          'fl': verification_flags(it, v, closure_rule_from)}
     js = (JS.replace('__SPRINTS__', json.dumps(sprints or []))
             .replace('__BOARDS__', json.dumps(boards or {}))
+            .replace('__MILESTONES__', json.dumps(milestones or []))
+            .replace('__JOURNEYS__', json.dumps(journeys or {}))
             .replace('__ITEMS__', json.dumps(compact))
             .replace('__STATS__', json.dumps({
                 'total': stats['total'], 'done': stats['done'],
@@ -1813,7 +1926,9 @@ def main():
     schedule = build_schedule(items, register.get('schedule_log'), sprints)
     boards = build_boards(register, sprints)
     rule_from = ((register.get('meta') or {}).get('settings') or {}).get('closure_notes_from')
-    html = generate_html(project_name, items, stats, schedule, sprints, boards, rule_from)
+    milestones, journeys = build_milestones(register)
+    html = generate_html(project_name, items, stats, schedule, sprints, boards, rule_from,
+                         milestones, journeys)
 
     html = html.replace('__HASH__', register['meta'].get('values_hash',''))
     # A project whose Execution folders differ from the standard says so in the

@@ -27,6 +27,7 @@ it, which is kept out of git. No row is ever deleted - it goes Inactive.
 import argparse
 import datetime as dt
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -281,6 +282,38 @@ def cmd_done(args):
         return 0
     log_change(data, row["ID"], changes, args.note or "Done.", on)
     return finish(args, path, data, "%s  %s - done %s" % (row["ID"], row.get("What"), on))
+
+
+FOCUS_ITEM = re.compile(r"^(\d+|M\d+)$")
+
+
+def cmd_focus(args):
+    """What a communication's report tells: WBS rows and milestones, dated, so
+    each report can ask whether it is still the story. With no
+    focus the report tells the key deliverables, as it always has."""
+    path = STK.resolve(args.register)
+    data = R.load(path)
+    coll, row = find_row(data, args.id)
+    if coll != S.COMMS:
+        sys.exit("A focus belongs to a communication (C.n), not %s." % row["ID"])
+    if args.items is None:
+        print("%s  %s - focus: %s%s" % (
+            row["ID"], row.get("What"),
+            ", ".join(row.get("Focus") or []) or "none (its report tells the key deliverables)",
+            " (set %s)" % row["Focus Set"] if row.get("Focus Set") else ""))
+        return 0
+    items = [x.strip() for x in args.items.split(",") if x.strip()]
+    bad = [x for x in items if not FOCUS_ITEM.match(x)]
+    if bad:
+        sys.exit("A focus item is a WBS row ID (201) or a milestone ID (M1), not %s." % ", ".join(bad))
+    on = today(args.on)
+    changes = apply(row, {"Focus": items, "Focus Set": on if items else ""})
+    if not changes:
+        print("%s already has that focus - nothing written." % row["ID"])
+        return 0
+    log_change(data, row["ID"], changes, args.reason or ("Focus set." if items else "Focus cleared."), on)
+    return finish(args, path, data, "%s  %s - focus: %s" % (
+        row["ID"], row.get("What"), ", ".join(items) or "cleared: its report tells the key deliverables"))
 
 
 def cmd_contact(args):
@@ -566,6 +599,13 @@ def main():
     s.add_argument("--title", help="a few words, no colon, for a note looked for later")
     s.add_argument("text")
     s.set_defaults(func=cmd_note)
+
+    s = subs.add_parser("focus", help="what a communication's report tells: WBS rows and milestones")
+    writes(s)
+    s.add_argument("--id", required=True)
+    s.add_argument("--items", metavar="201,M1,M2",
+                   help="WBS row and milestone IDs, comma-separated; '' clears; none prints the focus")
+    s.set_defaults(func=cmd_focus)
 
     s = subs.add_parser("done", help="a communication happened: stamp Last Done")
     s.add_argument("register")

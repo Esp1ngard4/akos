@@ -743,6 +743,102 @@ def test_closeout(root, scratch):
     check("board: the page carries the Closed out column", "KB_OUT=['out','Closed out']" in page, out[-200:])
 
 
+def test_milestones(root, scratch):
+    """Milestones beside the WBS, a deliverable's journey across its stages,
+    the status report telling them, and a communication's focus. The worked
+    example: three capabilities proven in a PoC, then taken to production."""
+    import importlib
+    from datetime import date
+    print("\nMilestones and the delivery journey")
+    tsp = os.path.join(root, "TSP")
+    scripts = os.path.join(tsp, "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs, refresh = os.path.join(scripts, "wbs.py"), os.path.join(scripts, "refresh_wbs.py")
+    work = os.path.join(scratch, "milestones")
+    os.makedirs(work, exist_ok=True)
+    reg, html = os.path.join(work, "WBS PM.json"), os.path.join(work, "WBS Dashboard.html")
+    run([os.path.join(scripts, "create_wbs.py"), reg, "PM"], work)
+    ok, out = run_raw([wbs, "milestone", "add", reg, "Proven", "--stage", "Proven"], work)
+    check("milestone: a stage must be one of the register's", not ok and "not a stage" in out, out)
+    run([wbs, "stages", reg, "Proven", "Production"], work)
+    run([wbs, "milestone", "add", reg, "Parameter management proven", "--stage", "Proven", "--baseline", "Feb-26"], work)
+    run([wbs, "milestone", "add", reg, "Parameter management in production", "--stage", "Production", "--baseline", "Feb-27"], work)
+    run([wbs, "add", reg, "Parameter Management", "--type", "Deliverable", "--status", "Not Started",
+         "--key-deliverable", "Y"], work)
+    n = 2
+    for title, poc, prod, st in (("Creation", "2026-Feb-20", "Jan-27", "Not Started"),
+                                 ("Engine", "2026-Feb-24", "Feb-27", "Implementing")):
+        run([wbs, "add", reg, title, "--type", "Feature", "--parent", "1", "--status", "Not Started"], work)
+        run([wbs, "add", reg, "Proven in a PoC", "--parent", str(n), "--status", "Done", "--actual-end", poc,
+             "--closure", "What happened: proven. AC: (1) met. Follow-up: none.", "--milestone", "M1"], work)
+        run([wbs, "add", reg, "Delivered to production", "--parent", str(n), "--status", st,
+             "--planned-end", prod, "--milestone", "M2"], work)
+        n += 3
+    ok, out = run_raw([wbs, "milestones", reg], work)
+    check("milestones: reached when its rows are done, else planned from them",
+          ok and "reached 2026-Feb-24 (on plan)" in out and "plan Feb-27 (on plan)" in out, out)
+    ok, out = run_raw([wbs, "journey", reg, "--id", "1"], work)
+    check("journey: the capabilities by stage",
+          ok and "| 2 Creation | done 2026-Feb-20 | planned Jan-27 |" in out
+          and "| 5 Engine | done 2026-Feb-24 | in progress Feb-27 |" in out, out)
+    ok, out = run([refresh, reg, html, "PM"], work)
+    page = io.open(html, encoding="utf-8").read() if ok else ""
+    check("dashboard: the milestone lane and the journey", "function msRow(" in page and '"M1"' in page
+          and "function journeyTable(" in page, out[-200:])
+
+    rep_scripts = os.path.join(tsp, "TSP.10 Reporting", "reporting", "scripts")
+    sys.path.insert(0, rep_scripts)
+    try:
+        for name in ("report", "wbs"):
+            sys.modules.pop(name, None)
+        report = importlib.import_module("report")
+    finally:
+        # report.py puts the WBS scripts on the path as it loads: keep them,
+        # take out only what this test added.
+        sys.path.remove(rep_scripts)
+    w = report.Wbs(reg)
+    ms = report.milestone_map(w, date(2026, 11, 6))
+    check("report: what is due after the window is listed as due later",
+          sorted(str(it["id"]) for it in ms["later"]) == ["1", "M2"]
+          and [it["id"] for it in ms["earlier"]] == ["M1"], str(ms))
+    j = report.journeys_for(w, [1])
+    check("report: a key deliverable's journey", len(j) == 1 and len(j[0]["rows"]) == 2, str(j))
+    told = report.told_views(w, date(2026, 11, 6), {"comms": [{"id": "C.1", "what": "Steering",
+                                                                "focus": ["5", "M2"], "focus_set": "2026-11-06"}]})
+    check("report: a communication's focus has its own view",
+          sorted(str(it["id"]) for it in told["C.1"]["milestones"]["later"]) == ["5", "M2"], str(told))
+    check("report: the external copy carries nobody's focus",
+          "told" not in report.external_copy({"kind": "status-report", "told": told}))
+    data = json.load(io.open(reg, encoding="utf-8"))
+    for i in data["items"]:
+        if i["ID"] in (4, 7):
+            i["Planned End"] = "Jul-26"
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data, indent=2))
+    od = report.milestone_map(report.Wbs(reg), date(2026, 11, 6))
+    check("report: open work planned before the window stays visible, marked overdue",
+          any(it.get("overdue") for it in od["months"][0]["items"]), str(od["months"][0]))
+    risk = {"ref": "R.1", "detail": "Leak", "type": "Risk", "scope": "PM", "dri": "A", "priority": 80, "trend": None,
+            "days_since_update": 3,
+            "description": "Because of a public repo, there is a risk that names return, which may result in a leak.",
+            "plan": "Scan before every push.\n- the hook blocks it", "updates": [{"on": "2026-10-12", "t": "Tracked."}]}
+    card = report.risks_html([risk])
+    check("report: a risk card reads in labelled parts",
+          "<dt>Cause</dt>" in card and "<dt>Response</dt>" in card and "<li>the hook blocks it</li>" in card
+          and "<dt>Latest</dt>" in card, card)
+    check("report: the external copy shows no update log",
+          "updates" not in report.external_copy({"kind": "status-report", "risks": [dict(risk, sharable="Y")]})["risks"][0])
+
+    stk = os.path.join(tsp, "TSP.13 Stakeholder Register", "stakeholder-manager", "scripts", "stk.py")
+    plan = os.path.join(work, "plan")
+    os.makedirs(plan, exist_ok=True)
+    run([os.path.join(os.path.dirname(stk), "create_stk.py"), plan, "--scope", "PM"], work)
+    sreg = os.path.join(plan, "Stakeholders PM.json")
+    run([stk, "add-comm", sreg, "Steering status", "--report", "status-report", "--cadence", "monthly"], work)
+    ok, out = run_raw([stk, "focus", sreg, "--id", "C.1", "--items", "5,M2", "--on", "2026-11-06"], work)
+    comm = [c for c in json.load(io.open(sreg, encoding="utf-8"))["communications"] if c["ID"] == "C.1"]
+    check("stakeholders: a communication's focus is set and dated",
+          ok and comm and comm[0].get("Focus") == ["5", "M2"] and comm[0].get("Focus Set") == "2026-11-06", out)
+
+
 def test_shared_modules(root, scratch):
     """Modules copied into every skill folder must be identical.
 
@@ -3052,6 +3148,7 @@ def main():
         test_execution_layout(root, scratch)
         test_readable_card(root, scratch)
         test_closeout(root, scratch)
+        test_milestones(root, scratch)
         test_content_system(root, scratch)
         test_notebook_manager(root, scratch)
         test_sprint_ceremonies(root, scratch)
