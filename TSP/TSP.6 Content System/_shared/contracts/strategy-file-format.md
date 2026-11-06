@@ -126,7 +126,7 @@ A campaign's pieces, one row each: the arc read whole, whether a piece is a cand
 
 **Type and channel are independent and neither may be inferred from the other.** A video can go to LinkedIn or Instagram; a carousel and an article are both `linkedin`. Combinations are not validated: they are not enumerable in advance.
 
-**For types this system cannot produce** (video, deck, poster) the piece holds the **source artifact** that enables the final: a storyboard, a deck skeleton, poster copy. Never a rendered `.mp4`, `.pptx`, or image.
+**For types this system cannot produce** (video, deck, poster) the piece holds the **source artifact** that enables the final: a storyboard, a deck skeleton, poster copy. The system never renders the final; the author may keep it in the bundle's `media/` folder ([`posts-format.md`](posts-format.md)).
 
 ## Candidates, commitments and context
 
@@ -154,6 +154,7 @@ No parser or schema-validation library — verification is the agent re-applying
 
 | Date | Change |
 |---|---|
+| 2026-11-06 | Finals of types the system cannot produce may be kept in the bundle's `media/` folder; the system still writes only the source. See `posts-format.md`. |
 | 2026-10-06 | Pieces are committed in the WBS. Plans gained `**Serves:**`, the goal they advance, which decides the WBS a piece's row lives in. The commitment table became the **arc table**: `Date` and `Status` gave way to `WBS`, the Ref of the row that commits the piece. `**Stage:**`, `**End date:**`, activation and the `pending`/`delivered`/`missed` scoring retired: when, whether and done are WBS fields now. A row is a candidate, committed or context by which of `WBS` and `Piece` is set. Old labels are read and ignored, never written. Migration: the one campaign on disk was at `refining` with six undated candidates, so only its header changes. |
 | 2026-08-13 | Campaigns gained `**Stage:** refining \| active`. Author's proposal, and it closed two gaps at once: nothing in the system held thinking that spans several pieces, and nothing convened an accumulating inbox. A refining campaign is a backlog; activating it is the grooming pass. Absent means `active`, so plans written before this field keep their denominator. |
 | 2026-08-12 | Always-on plans gained `**Started:**`, the month from which a monthly target applies. Found when the first real plan met six posts published across the eighteen months before it existed: without a start, reviewing that history scores it against a target nobody had set. Months before `Started` are counted, never scored. First specified as system-written from today's date; corrected the same day to asked-with-a-default, because today's date is not the same fact as when the author intends to begin. |

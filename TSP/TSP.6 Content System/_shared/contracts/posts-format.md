@@ -14,6 +14,7 @@ content-system/posts/YYYY-MM-DD-slug/
   blog-article.md
   linkedin-short-post.md
   instagram-video.md
+  media/                   <- optional; finals and media the piece used, kept out of git
 ```
 
 - The folder date is the bundle's first artifact date. Individual artifacts carry their own dates in the index.
@@ -22,9 +23,11 @@ content-system/posts/YYYY-MM-DD-slug/
 
 **`backbone.md` is never duplicated per artifact.** Angle, Six Questions, outline, claims, scope, status and the WBS Ref are properties of the thinking, not of a rendering.
 
-## Source artifacts, never finals
+## Source artifacts, and where finals are kept
 
-For types this system cannot produce — `video`, `deck`, `poster` — the stored file is the **source that enables the final**: a storyboard, a deck skeleton, poster copy. Never a rendered `.mp4`, `.pptx`, or image. Production happens in external tools, and those formats are gitignored repo-wide in any case.
+For types this system cannot produce — `video`, `deck`, `poster` — the artifact it writes is the **source that enables the final**: a storyboard, a deck skeleton, poster copy. The system never renders a final; production happens in external tools.
+
+**The bundle is also where the piece is archived**, and the only place: a public communication in a stakeholder register records each publication with a pointer back here, never a copy (TSP.13). The rendered finals (`.mp4`, `.pptx`, the image) and the media the piece used (screenshots, images, diagrams) may be kept in an optional `media/` folder inside the bundle, put there by the author. Nothing reads it: a file in `media/` is not an artifact, has no index row, and says nothing about whether the piece is published. Keep `media/` out of git (`content-system/posts/*/media/` in the project's `.gitignore`): the files are binaries, and they live where the folder does.
 
 ## `backbone.md`
 
@@ -135,5 +138,6 @@ No parser or schema-validation library. No per-scope folder tree. No second inde
 
 | Date | Change |
 |---|---|
+| 2026-11-06 | The bundle is the piece's archive. Finals and the media a piece used may be kept in an optional `media/` folder inside it, kept out of git; the system still writes only the source. Replaces "never a rendered file", which left finals with no home, and the claim that those formats were gitignored, which no project was told to do. A stakeholder register's content communication points here instead of copying. |
 | 2026-10-06 | Pieces run on the WBS. A bundle is a piece; its `backbone.md` carries `status` (`drafting`, `locked`, `published`, `dropped`), a date per state reached, and the WBS Ref of the row that commits it. The WBS row moves at three transitions, on the author's word. A missing status is read from the index, so older bundles need no backfill. The `commitments:` pointer and the index's `Commitment` column are retired: a commitment was a plan row identified by its date, and the WBS row now carries both; the column was blank on all seven rows. |
 | 2026-08-11 | Created by feature 004. Bundle layout replaces one `draft.md` per folder, resolving the long-standing defect where the index permitted `Format: both` but only one artifact could be stored. Index columns `Format` → `Type` + `Channel`, `Scope` moved to path form, `Commitment` and `Published` added. Seven existing posts migrated. |

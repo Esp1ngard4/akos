@@ -173,7 +173,8 @@ content-system/posts/YYYY-MM-DD-slug/
   backbone.md              <- one per bundle, always
   blog-article.md
   linkedin-short-post.md
-  instagram-video.md       <- a storyboard; the .mp4 never lives here
+  instagram-video.md       <- a storyboard; this skill never writes the .mp4
+  media/                   <- optional; the author's finals and media, never read
 ```
 
 - **Folder**: today's date and a short kebab-case slug. Created once the angle is set, or earlier when an idea is promoted from `content-system/ideas.md` — a folder holding only `## Idea` and `## Notes` is a valid, expected state. **Either way, only once the WBS Ref is known** (see *The piece and its WBS row*).
@@ -187,7 +188,7 @@ content-system/posts/YYYY-MM-DD-slug/
 
 **Each artifact is finished independently.** Its own date, its own index row, its own lock, its own claim check and anti-AI voice check. Shared thinking does not mean shared prose. Locking the last of them moves the piece to `locked`.
 
-**For types this system cannot produce** — video, deck, poster — write the **source artifact** that enables the final: a storyboard, a deck skeleton, poster copy. Never a rendered `.mp4`, `.pptx` or image.
+**For types this system cannot produce** — video, deck, poster — write the **source artifact** that enables the final: a storyboard, a deck skeleton, poster copy. Never render the final. The author may keep finals and the media a piece used in the bundle's `media/` folder; it is not an artifact, gets no index row, and is never read as a sign of publication.
 
 ### The index
 

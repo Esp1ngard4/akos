@@ -82,7 +82,7 @@ Use these to clarify the post quickly. Ask **only the single most blocking** at 
 - **LinkedIn**: Move fast; tight lines, natural pacing.
 - **Save**: Write the draft to its artifact file — `<channel>-<type>.md` in the bundle folder. Optionally use Canvas for in-session editing.
 - **One artifact at a time.** Where the bundle has several, draft, refine and lock each in turn. They share the angle, the Six Questions, the outline and the claims record; they do not share prose, and each passes the voice check and the claim check on its own.
-- **For a type this skill cannot render directly** — video, deck, poster — load its module from `references/types/` and write the **source artifact** it specifies: a storyboard, a deck skeleton, poster copy. Never a rendered `.mp4`, `.pptx` or image. If a requested type has no module, say so rather than silently writing an article.
+- **For a type this skill cannot render directly** — video, deck, poster — load its module from `references/types/` and write the **source artifact** it specifies: a storyboard, a deck skeleton, poster copy. Never render the final. If a requested type has no module, say so rather than silently writing an article.
 - **Don’t lock a weak draft**: If the draft doesn’t meet the bar (story not worth telling, execution thin), say so in one sentence and propose what’s missing—then refine the outline or the draft. Keep refining until the post is great. Only then offer it as final.
 - **Interview checkpoint**: One question to confirm voice/tone and any sensitive details to avoid.
 

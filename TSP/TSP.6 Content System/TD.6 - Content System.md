@@ -52,9 +52,12 @@ The skills read and write a **`content-system/` folder at your project root** �
 ```
 content-system/
   strategies/<category>/<slug>.md     one file per scope, holding its plans
-  posts/YYYY-MM-DD-slug/              one folder per bundle
+  posts/YYYY-MM-DD-slug/              one folder per bundle, the piece's archive
+    media/                            optional: its finals and the media it used
   ideas.md                            the inbox
 ```
+
+**A piece's folder is its archive.** The skills write only source artifacts (an article, a storyboard, a deck skeleton); the rendered video, deck or image, and the media a piece used, may be kept in its `media/`, which nothing reads. They are binaries: add `content-system/posts/*/media/` to your project's `.gitignore`.
 
 **Committed pieces also have a row in a WBS register** — the register of the project or area that owns the goal a plan serves, wherever your WBS registers already live. The skills find a register by its shape (`meta.kind: wbs-register` and its `meta.scope`), searching from the project root, never from a configured path.
 
@@ -114,7 +117,7 @@ What is **not** tested is whether an interview produces a good piece. No test as
 - **TSP.3 TSP Register** — row 6. Type `Tool`; Status `Implemented`; Doc Aux `Yes`.
 - **TSP.1 WBS Register — the one dependency, by design.** A piece's commitment, effort, sprint, planned dates and done-state are its WBS row's fields, so the content system copies none of them. The same dependency TSP.8 Sprint Ceremonies has, and for the same reason: the work is planned in one place.
 - **TSP.8 Sprint Ceremonies** — content needs no ceremony of its own. Grooming refines candidates, planning commits pieces and sets their sprint, the close-out counts them with everything else.
-- **TSP.13 Stakeholder Register** — a project's public communication points to a plan here (`content: <scope> › <plan>`), one way. When a piece is published, `stk.py done --piece <post bundle> --link <URL>` copies its artifacts into that communication's folder in `Comms`, reading the bundle and writing nothing to it; the bundle stays this tool's record of the piece.
+- **TSP.13 Stakeholder Register** — a project's public communication points to a plan here (`content: <scope> › <plan>`), one way. When a piece is published, `stk.py done --piece <post bundle> --link <URL>` records the sending in that communication's folder in `Comms`: a `Sent.md` with the link and a pointer back to the bundle, nothing copied. The bundle stays the piece's archive and is never written from there.
 - **No calendar or task manager.** `content-review` never infers a window from either; the author names it, or names a sprint ID read from a WBS register's own calendar.
 
 ## Open items
@@ -129,6 +132,7 @@ What is **not** tested is whether an interview produces a good piece. No test as
 
 | Version | Date | Changes |
 |---|---|---|
+| 2.1 | 2026-11-06 | **A piece's folder is its archive.** "Never the rendered file" had two meanings: what the system produces, and what a piece's folder may hold. The first stays; the second left finished videos, decks and images with no home. The author may now keep them, and the media a piece used, in an optional `media/` folder in the piece's folder, which nothing reads and a project keeps out of git. A stakeholder register's content communication points to the folder when a piece is published (TSP.13 v1.8), copying nothing. |
 | 2.0 | 2026-10-07 | **Content runs on the WBS.** Plans name the goal they serve (`Serves`); a committed piece has a row in the WBS of that goal's owner. A piece carries a dated status (`drafting`, `locked`, `published`, `dropped`) and a WBS Ref; start, publish and drop propose the matching WBS change on the author's yes. The commitment table became the arc table; `Stage`, `End date`, activation, commitment write-back, campaign scoring, the index's `Commitment` column and `sprints.md` retired, their jobs taken by the WBS. The review gained the content-vs-WBS and no-goal checks, and the roadmap reads planned dates through the Ref. One dependency, TSP.1. The open item on a tool prefix is dropped: the names are intended. |
 | 1.1 | 2026-10-02 | **Implemented, as a first version.** The skills are in real use and improve as they are used; *What is not proven* stays, unchanged, so the label does not claim more than has run. No change to any skill or contract. |
 | 1.0 | 2026-09-01 | Published as TSP.6. Contracts, personas and writing principles moved to `_shared/`; `install.py` extended to carry it beside the skill; smoke test added for links, contract references, installed layout and shared reuse. Personal strategies, posts, ideas and voice archive not published — the tool ships, the author's data does not. |
