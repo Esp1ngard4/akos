@@ -114,6 +114,7 @@ What is **not** tested is whether an interview produces a good piece. No test as
 - **TSP.3 TSP Register** — row 6. Type `Tool`; Status `Implemented`; Doc Aux `Yes`.
 - **TSP.1 WBS Register — the one dependency, by design.** A piece's commitment, effort, sprint, planned dates and done-state are its WBS row's fields, so the content system copies none of them. The same dependency TSP.8 Sprint Ceremonies has, and for the same reason: the work is planned in one place.
 - **TSP.8 Sprint Ceremonies** — content needs no ceremony of its own. Grooming refines candidates, planning commits pieces and sets their sprint, the close-out counts them with everything else.
+- **TSP.13 Stakeholder Register** — a project's public communication points to a plan here (`content: <scope> › <plan>`), one way. When a piece is published, `stk.py done --piece <post bundle> --link <URL>` copies its artifacts into that communication's folder in `Comms`, reading the bundle and writing nothing to it; the bundle stays this tool's record of the piece.
 - **No calendar or task manager.** `content-review` never infers a window from either; the author names it, or names a sprint ID read from a WBS register's own calendar.
 
 ## Open items

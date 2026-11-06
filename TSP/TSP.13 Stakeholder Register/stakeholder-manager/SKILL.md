@@ -132,9 +132,20 @@ python <skill>/scripts/stk.py focus <reg> --id C.2 --items ""            # clear
 ### Send a communication
 
 1. `python <skill>/scripts/stk.py audience <reg> --id C.2 [--split]` — the people, each once, with the address for the channel (falling back to the person's preferred channel), anyone with no address, and the share level. `external` means anyone in the audience is external: the external copy goes to all of them, or `--split` gives the two lists for two sends.
-2. A report: generate it with the reporting tool, at the share level this communication gives.
+2. A report: generate it with the reporting tool, then `report.py export "<record>" --comm C.n`, which takes the share level from this communication and writes the copy into the communication's folder as a **sending** (below).
 3. The user sends it.
-4. `python <skill>/scripts/stk.py done <reg> --id C.2 [--on YYYY-MM-DD] [--note "..."]`.
+4. `python <skill>/scripts/stk.py done <reg> --id C.2 [--file <path> ...] [--link URL] [--sending "<name>"] [--on YYYY-MM-DD] [--note "..."]`. Content: `--piece <post bundle>` with the link where it was published.
+
+### Where what was sent is kept
+
+- **Each communication has a folder, and each sending a subfolder** holding everything that went out together: the report, the email that carried it, an attachment, a dashboard image, a video. `PrjMgm/Comms/C.2 <name>/<sending>/`, or under `Confidential/Comms/` for a communication marked **`Confidential: Y`** (`stk.py set --id C.2 --confidential Y`; default N; a public, content communication can never be Y). The planning folder may be numbered (`0. PrjMgm`, `03. PrjMgm`); so may the folders in it.
+- **The two Comms folders are created when first needed**, recorded in the project's artifact register where it has one, governed by this tool. Everything inside them is this tool's and is never registered one by one. The folder is found by the communication's ID, so a renamed communication keeps it.
+- **A sending is named by what it carries**: the report record's name (`2026-11-06 Status`), a content piece's date and title, or the name given with `--sending` (a date, by default, when `done` brings files and no export made one).
+- **Exporting the same sending again moves the earlier copy into its `PreviousV/`**, stamped with when it was written; nothing that may have gone out is overwritten.
+- **`done` marks a sending as gone**: it archives into the latest sending not yet sent (what the last export wrote) unless `--sending` names one, copies the `--file`s in (refusing a name already there), writes `Sent.md` (when, to whom by name, the files, where it went, the focus at the time) and logs the same on the communication. Done with no files and no export stamps *Last Done* as before. A register outside a PrjMgm folder has nowhere to keep them, and `done` says so.
+- **Content**: `--piece` copies the published post's artifacts (not its backbone) from `content-system/posts/<date-slug>/`, reading it and writing nothing there.
+- **`Reports/` and `Comms/` keep different things**: `Reports/<type>/` holds a report's record (its data, the ratings and summary confirmed, the trends read from it) and the owner's working view, never sent; `Comms/` holds what was sent, the only place a reader's copy lives.
+- The dashboard's communication detail lists its sendings, newest first, linked; `check` flags a public communication marked confidential and a folder whose communication is gone.
 
 ### What is due
 
@@ -181,4 +192,4 @@ Tabs: the power/interest grid, engagement (gaps first), communications (overdue 
 - **The Project Brief** — says what the project is for; the people and what they hear are here.
 - **`action-tracker-manager` (TSP.12)** — holds what other people owe; this register holds who they are and what they hear.
 - **`notebook-capture` (TSP.7)** — notes of an interactive communication (a meeting) are its meeting notes.
-- **The content system (TSP.6)** — a public audience's communication points to one of its plans; it is never written from here.
+- **The content system (TSP.6)** — a public audience's communication points to one of its plans; a published piece is copied into the communication's folder with `done --piece`. It is never written from here.

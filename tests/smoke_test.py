@@ -1816,6 +1816,85 @@ def test_status_board(root, scratch):
                   or "the WBS as of the team board's last consolidation" in page), out[-300:])
 
 
+def test_comms_archive(root, scratch):
+    """What a communication sends is kept by sending, under Comms or
+    Confidential/Comms by its flag; a content piece is archived read-only."""
+    print("\nThe communications archive")
+    scripts = os.path.join(root, "TSP", STK_TOOL, STK_SKILL, "scripts")
+    stk = os.path.join(scripts, "stk.py")
+    work = os.path.join(scratch, "comms-archive")
+    mgmt = os.path.join(work, "0. PrjMgm")
+    os.makedirs(mgmt, exist_ok=True)
+    run([os.path.join(scripts, "create_stk.py"), mgmt, "--scope", "Atlas"], work)
+    reg = os.path.join(mgmt, "Stakeholders Atlas.json")
+    for what, extra in [("Steering status", ["--report", "status-report", "--cadence", "monthly"]),
+                        ("Team note", ["--cadence", "weekly"]),
+                        ("Blog", ["--channel", "content: Brand > Blog"])]:
+        run([stk, "add-comm", reg, what] + extra, work)
+    load = lambda: json.load(io.open(reg, encoding="utf-8"))
+    row = lambda cid: next(c for c in load()["communications"] if c["ID"] == cid)
+    ok, out = run_raw([stk, "set", reg, "--id", "C.1", "--confidential", "Y"], work)
+    check("archive: a communication is marked confidential", ok and row("C.1").get("Confidential") == "Y", out)
+    ok, out = run_raw([stk, "set", reg, "--id", "C.3", "--confidential", "Y"], work)
+    check("archive: a public communication cannot be confidential", not ok and "public" in out, out)
+
+    sys.path.insert(0, scripts)
+    try:
+        import stk_register as STK
+        page = STK.comm_folder(reg, row("C.1"), create=True)
+        sending = os.path.join(page, "2026-11-06 Status")
+        STK.place_export(sending, "Status (external).html", "first")
+        STK.place_export(sending, "Status (external).html", "second")
+    finally:
+        sys.path.remove(scripts)
+    check("archive: a confidential communication's sendings sit under Confidential/Comms",
+          os.path.dirname(page) == os.path.join(mgmt, "Confidential", "Comms")
+          and os.path.basename(page) == "C.1 Steering status", page)
+    check("archive: exporting a sending again keeps the earlier copy in PreviousV",
+          io.open(os.path.join(sending, "Status (external).html"), encoding="utf-8").read() == "second"
+          and len(os.listdir(os.path.join(sending, "PreviousV"))) == 1, os.listdir(sending))
+
+    email = os.path.join(work, "Email.md")
+    io.open(email, "w", encoding="utf-8").write("Hi all.")
+    ok, out = run_raw([stk, "done", reg, "--id", "C.1", "--file", email, "--link", "https://example.org/x",
+                       "--on", "2026-11-06"], work)
+    note = os.path.join(sending, "Sent.md")
+    note = io.open(note, encoding="utf-8").read() if os.path.exists(note) else ""
+    check("archive: done keeps the files in the latest unsent sending, with a Sent note and a log line",
+          ok and os.path.exists(os.path.join(sending, "Email.md")) and "https://example.org/x" in note
+          and any("Sent 2026-11-06 Status" in (x.get("Reason") or "") for x in load().get("change_log", [])),
+          out + note)
+    ok, out = run_raw([stk, "done", reg, "--id", "C.1", "--sending", "2026-11-06 Status", "--file", email], work)
+    check("archive: a file already in the sending is refused", not ok and "already in" in out, out)
+    ok, out = run_raw([stk, "done", reg, "--id", "C.2", "--file", email, "--on", "2026-11-07"], work)
+    check("archive: a communication that is not confidential is kept under Comms, a new sending dated",
+          ok and os.path.exists(os.path.join(mgmt, "Comms", "C.2 Team note", "2026-11-07", "Email.md")), out)
+
+    post = os.path.join(work, "content-system", "posts", "2026-11-10-bets")
+    os.makedirs(post, exist_ok=True)
+    os.makedirs(os.path.join(work, "content-system", "strategies"), exist_ok=True)
+    io.open(os.path.join(post, "backbone.md"), "w", encoding="utf-8").write(u"# Backbone — Bets, not roadmaps\n")
+    io.open(os.path.join(post, "blog-article.md"), "w", encoding="utf-8").write("The piece.")
+    ok, out = run_raw([stk, "done", reg, "--id", "C.3", "--piece", "2026-11-10-bets", "--link",
+                       "https://blog.example/bets", "--on", "2026-11-10"], work)
+    check("archive: a published content piece is kept with its link, the post read only",
+          ok and os.path.exists(os.path.join(mgmt, "Comms", "C.3 Blog", "2026-11-10 Bets, not roadmaps", "blog-article.md"))
+          and sorted(os.listdir(post)) == ["backbone.md", "blog-article.md"], out)
+    ok, out = run_raw([stk, "done", reg, "--id", "C.2", "--piece", post], work)
+    check("archive: --piece goes with a content communication only", not ok and "content communication" in out, out)
+    ok, out = run_raw([stk, "check", reg], work)
+    check("archive: check finds nothing wrong with the archive", "belongs to no communication" not in out
+          and "never confidential" not in out, out)
+    os.makedirs(os.path.join(mgmt, "Comms", "C.99 Gone"))
+    ok, out = run_raw([stk, "check", reg], work)
+    check("archive: check flags a folder whose communication is gone",
+          "C.99" in out and "belongs to no communication" in out, out)
+    ok, out = run_raw([os.path.join(scripts, "refresh_stk.py"), reg], work)
+    page = os.path.join(mgmt, "Stakeholder Dashboard.html")
+    page = io.open(page, encoding="utf-8").read() if os.path.exists(page) else ""
+    check("archive: the dashboard lists a communication's sendings", ok and "2026-11-07" in page, out[-300:])
+
+
 def test_project_definition(root, scratch):
     """The brief's tool: its own smoke test, installed into an empty project, and
     the status report reading the brief through it, or saying it is not there."""
@@ -2072,6 +2151,22 @@ def test_reporting(root, scratch):
     ok, out = run([report, "export", status, "--comm", "C.1"], work)
     html = io.open(shared, encoding="utf-8").read() if os.path.exists(shared) else ""
     check("a risk marked Sharable reaches the external copy", ok and "Design late" in html, out[:300])
+
+    # In a PrjMgm folder, a communication's copy goes into its own folder as a
+    # sending, and a second export keeps the first in PreviousV.
+    mg = os.path.join(scratch, "report-archive", "0. PrjMgm")
+    os.makedirs(os.path.join(mg, "Reports", "Status"), exist_ok=True)
+    shutil.copy2(os.path.join(project, "Stakeholders Atlas.json"), mg)
+    archived = os.path.join(mg, "Reports", "Status", "2026-10-20 Status.json")
+    shutil.copy2(status, archived)
+    for _ in range(2):
+        ok, out = run([report, "export", archived, "--comm", "C.1"], work)
+    sending = os.path.join(mg, "Comms", "C.1 Status report", "2026-10-20 Status")
+    check("export --comm writes into the communication's folder, as a sending",
+          ok and os.path.isfile(os.path.join(sending, "2026-10-20 Status (external).html"))
+          and not os.path.exists(archived[:-5] + " (external).html"), out[-300:])
+    check("a second export of the sending keeps the first in PreviousV",
+          os.path.isdir(os.path.join(sending, "PreviousV")) and len(os.listdir(os.path.join(sending, "PreviousV"))) == 1)
 
     ok, out = run([report, "charter", project, "--as-of", "2026-10-20"], work)
     charter = os.path.join(project, "Reports", "Charter", "2026-10-20 Charter.json")
@@ -3182,6 +3277,7 @@ def main():
         test_weekly_review(root, scratch)
         test_action_tracker(root, scratch)
         test_stakeholder_register(root, scratch)
+        test_comms_archive(root, scratch)
         test_project_definition(root, scratch)
         test_status_board(root, scratch)
         test_onboarding(root, scratch)

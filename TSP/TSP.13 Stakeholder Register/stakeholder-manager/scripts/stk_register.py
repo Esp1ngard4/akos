@@ -161,6 +161,164 @@ def in_confidential(register_path):
     return any(ID_PREFIX.sub("", p) == CONFIDENTIAL for p in parts)
 
 
+# --- the communications archive ---------------------------------------------
+#
+# What was sent is kept by communication and by sending: <planning folder>/
+# Comms/<C.n name>/<sending>/, or under Confidential/Comms for a confidential
+# communication. The two Comms folders are the artifact register's to record;
+# everything inside them is this tool's.
+
+COMMS_FOLDER = "Comms"
+ABOUT = {CONFIDENTIAL: "Material about people, not for the whole project: the stakeholder register "
+                       "and its contacts, and anything else confidential. Out of git.",
+         COMMS_FOLDER: "What the project's communications sent, one folder per communication and "
+                       "one per sending (stakeholder-manager)."}
+UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+
+
+def safe_name(text, cap=60):
+    """A folder or file name from a title: no characters Windows refuses."""
+    return UNSAFE.sub("-", S.clean(text).replace(": ", " - ")).strip(" .-")[:cap].strip(" .-") or "untitled"
+
+
+def management_folder(register_path):
+    """The planning folder (`PrjMgm`, `0. PrjMgm`, `NN. PrjMgm`) a register sits in."""
+    cur = os.path.dirname(os.path.abspath(register_path))
+    while True:
+        if PLANNING_NAME.match(os.path.basename(cur)):
+            return cur
+        up = os.path.dirname(cur)
+        if up == cur:
+            return None
+        cur = up
+
+
+def _artifact_py():
+    """The artifact register's script: beside this skill once installed, or in
+    the catalogue when run from the AKOS repository. None when it is not there."""
+    skills = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    for path in [os.path.join(skills, "artifact-register")] + sorted(
+            glob.glob(os.path.join(skills, "..", "*", "artifact-register"))):
+        script = os.path.join(path, "scripts", "artifact.py")
+        if os.path.exists(script):
+            return os.path.abspath(script)
+    return None
+
+
+def ensure_folder(parent, name, register_path=None):
+    """`name` in `parent`, numbered or not; created when missing and recorded in
+    the project's artifact register when it has one, governed by this tool where
+    the tool register names it."""
+    found = _named(parent, name)
+    if found:
+        return found
+    path = os.path.join(parent, name)
+    os.makedirs(path)
+    mgmt = management_folder(register_path) if register_path else None
+    records = _records(mgmt) if mgmt else {}
+    art = records.get("artifact-register", (None,))[0]
+    script = _artifact_py()
+    m = ID_PREFIX.match(os.path.basename(parent))
+    if art and m and script:
+        import sys
+        argv = [sys.executable, script, "add", art, path, "--name", name, "--type", "Folder",
+                "--parent-digital", m.group(1).lstrip("0") or "0", "--description", ABOUT.get(name, name)]
+        tools = records.get("tsp-register", (None, {}))[1].get("tools", [])
+        tool = next((t for t in tools
+                     if SKILL in [x.strip() for x in str(t.get("Skill") or "").split(",")]), None)
+        if name == COMMS_FOLDER and tool:
+            argv += ["--managed-by", "TSP.%s" % tool.get("ID")]
+        subprocess.run(argv, check=False, stdout=subprocess.DEVNULL)
+    return _named(parent, name) or path
+
+
+def comms_root(register_path, comm, create=False):
+    """Where a communication's sendings are kept: Comms in the management folder,
+    or Confidential/Comms when the communication is confidential."""
+    mgmt = management_folder(register_path)
+    if not mgmt:
+        return None
+    base = mgmt
+    if S.clean(comm.get("Confidential")) == "Y":
+        base = _named(mgmt, CONFIDENTIAL) or (ensure_folder(mgmt, CONFIDENTIAL, register_path) if create else None)
+        if not base:
+            return None
+    return _named(base, COMMS_FOLDER) or (ensure_folder(base, COMMS_FOLDER, register_path) if create else None)
+
+
+def comm_folder(register_path, comm, create=False):
+    """A communication's own folder, `C.n <name>`, found by its ID so a renamed
+    communication keeps it."""
+    root = comms_root(register_path, comm, create)
+    if not root:
+        return None
+    cid = comm.get("ID")
+    for entry in sorted(os.listdir(root)):
+        if (entry == cid or entry.startswith(cid + " ")) and os.path.isdir(os.path.join(root, entry)):
+            return os.path.join(root, entry)
+    if not create:
+        return None
+    path = os.path.join(root, safe_name("%s %s" % (cid, comm.get("What") or "")))
+    os.makedirs(lp(path))
+    return path
+
+
+def sendings(folder):
+    """A communication's sendings, newest first: name, files, and the Sent.md note when sent."""
+    out = []
+    if not folder or not os.path.isdir(lp(folder)):
+        return out
+    for entry in os.listdir(lp(folder)):
+        path = os.path.join(folder, entry)
+        if not os.path.isdir(lp(path)) or entry == "PreviousV":
+            continue
+        files = sorted(f for f in os.listdir(lp(path)) if os.path.isfile(lp(os.path.join(path, f))) and f != "Sent.md")
+        sent = lp(os.path.join(path, "Sent.md"))
+        out.append({"name": entry, "files": files, "sent": os.path.exists(sent),
+                    "note": io.open(sent, encoding="utf-8").read() if os.path.exists(sent) else "",
+                    "mtime": os.path.getmtime(lp(path))})
+    out.sort(key=lambda s: (s["name"], s["mtime"]), reverse=True)
+    return out
+
+
+def lp(path):
+    """A path Windows accepts past 260 characters. Sendings sit deep in a synced
+    folder (NN. PrjMgm/NN. Confidential/NN. Comms/C.n .../<sending>/PreviousV/),
+    so the archive's own file operations go through this."""
+    if os.name != "nt" or path.startswith("\\\\?\\"):
+        return path
+    return "\\\\?\\" + os.path.abspath(path)
+
+
+def retire(sending, filename):
+    """Move a file already in a sending to its PreviousV/, stamped with when it
+    was written, so a new export never overwrites what may have been sent."""
+    target = os.path.join(sending, filename)
+    if not os.path.exists(lp(target)):
+        return None
+    prev = os.path.join(sending, "PreviousV")
+    os.makedirs(lp(prev), exist_ok=True)
+    stem, ext = os.path.splitext(filename)
+    stamp = dt.datetime.fromtimestamp(os.path.getmtime(lp(target))).strftime("%Y-%m-%d %H%M")
+    moved = os.path.join(prev, "%s (%s)%s" % (stem, stamp, ext))
+    n = 2
+    while os.path.exists(lp(moved)):
+        moved = os.path.join(prev, "%s (%s, %d)%s" % (stem, stamp, n, ext))
+        n += 1
+    os.replace(lp(target), lp(moved))
+    return moved
+
+
+def place_export(sending, filename, source_text):
+    """Write an export into a sending, an earlier one moved to its PreviousV/."""
+    os.makedirs(lp(sending), exist_ok=True)
+    retire(sending, filename)
+    target = os.path.join(sending, filename)
+    with io.open(lp(target), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(source_text)
+    return target
+
+
 def resolve(path):
     """A register path from a register path or its folder. Exits if neither."""
     if os.path.isdir(path):
@@ -589,6 +747,20 @@ def check(data, register_path=None):
             add("warning", cid, "the audience resolves to nobody")
         for who in res["missing"]:
             add("warning", cid, "no address for %s" % who)
+    # The archive: a public communication is never confidential, and
+    # a communication folder belongs to a communication the register still holds.
+    comms = R.rows(data, S.COMMS)
+    for comm in comms:
+        if S.clean(comm.get("Confidential")) == "Y" and is_content(comm):
+            add("error", comm.get("ID"), "public (content: ...) and marked Confidential: a public communication is never confidential")
+    if register_path:
+        ids = {c.get("ID") for c in comms}
+        for flag in ("N", "Y"):
+            root = comms_root(register_path, {"Confidential": flag})
+            for entry in sorted(os.listdir(root)) if root else []:
+                cid = entry.split(" ")[0]
+                if os.path.isdir(os.path.join(root, entry)) and cid not in ids:
+                    add("warning", cid, "a folder in %s belongs to no communication in the register" % root)
     if unchecked:
         add("note", "", "content pointers not checked: no content-system/ at or above the register")
     return found

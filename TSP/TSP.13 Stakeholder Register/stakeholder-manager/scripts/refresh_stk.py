@@ -21,6 +21,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -87,6 +88,8 @@ def main():
         rec["gap"] = S.gap(row, data)
         people.append(rec)
 
+    out = args.out or os.path.join(os.path.dirname(os.path.abspath(path)),
+                                   "Stakeholder Dashboard.html")
     comms = []
     for row in R.rows(data, S.COMMS):
         rec = dict(row)
@@ -95,6 +98,15 @@ def main():
         rec.update({"state": state, "due": when.isoformat() if when else "",
                     "share_level": res["share_level"], "public": res["public"],
                     "recipients": None if res["public"] else len(res["people"])})
+        # What it sent, newest first, from its folder in Comms.
+        folder = STK.comm_folder(path, row)
+        rec["sendings"] = []
+        for s in STK.sendings(folder)[:8]:
+            where = re.findall(r"\*\*Where:\*\* (\S+)", s["note"])
+            rec["sendings"].append({"name": s["name"], "files": s["files"], "sent": s["sent"],
+                                    "where": where[-1] if where else None,
+                                    "rel": os.path.relpath(os.path.join(folder, s["name"]),
+                                                           os.path.dirname(os.path.abspath(out))).replace(os.sep, "/")})
         comms.append(rec)
 
     payload = {
@@ -114,8 +126,6 @@ def main():
     if "{{EDITION}}" not in template:
         raise SystemExit("Template is missing the {{EDITION}} placeholder.")
 
-    out = args.out or os.path.join(os.path.dirname(os.path.abspath(path)),
-                                   "Stakeholder Dashboard.html")
     stem, ext = os.path.splitext(out)
     bare = stem + " (no notes)" + (ext or ".html")
     values_hash = data["meta"].get("values_hash", "")

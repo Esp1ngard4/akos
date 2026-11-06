@@ -1414,26 +1414,38 @@ def print_pdf(html_path, pdf_path):
     return browser if os.path.exists(pdf_path) else None
 
 
-def comm_audience(record_path, rec, comm_id):
-    """The share level a communication sends this record at, from the register of
-    the project the record belongs to; refuses a communication carrying another report."""
-    prjmgm = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(record_path))))
+def comm_audience(record_path, rec, comm_id, register=None):
+    """(share level, communication, register path) for a communication sending
+    this record, from the register of the project the record belongs to, or the
+    one --register names for a record kept outside any project;
+    refuses a communication carrying another report."""
     STK = _stk()
-    data = stakeholders(prjmgm, rec.get("scope", ""))
+    if register:
+        path = register if os.path.isfile(register) else STK.find(os.path.abspath(register))
+        if not path:
+            sys.exit("No stakeholder register at %s." % register)
+        data = R.load(path)
+    else:
+        prjmgm = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(record_path))))
+        path = STK.find(prjmgm)
+        data = stakeholders(prjmgm, rec.get("scope", ""))
     comm = next((c for c in R.rows(data, "communications") if c.get("ID") == comm_id), None)
     if not comm:
-        sys.exit("%s is not a communication in %s's stakeholder register." % (comm_id, rec.get("scope") or prjmgm))
+        sys.exit("%s is not a communication in %s's stakeholder register%s." % (
+            comm_id, rec.get("scope") or "this project",
+            "" if register else " (a record kept outside a project takes --register)"))
     if comm.get("Report") != rec.get("kind"):
         sys.exit("%s carries %s, not this %s." % (comm_id, comm.get("Report") or "no report", rec.get("kind")))
-    return STK.resolve_audience(data, comm)["share_level"]
+    return STK.resolve_audience(data, comm)["share_level"], comm, path
 
 
 def cmd_export(args):
     rec = json.load(io.open(args.record, encoding="utf-8"))
     if rec.get("kind") not in ("status-report", "sprint-update", "charter"):
         sys.exit("Export takes a status report, a sprint update or a charter record.")
+    comm, reg = None, None
     if args.comm:
-        level = comm_audience(args.record, rec, args.comm)
+        level, comm, reg = comm_audience(args.record, rec, args.comm, getattr(args, "register", None))
         if args.audience and args.audience != level:
             sys.exit("%s goes out at %s, but --audience says %s. Drop one." % (args.comm, level, args.audience))
         args.audience = level
@@ -1445,7 +1457,6 @@ def cmd_export(args):
     key = "roadmap" if rec["kind"] == "sprint-update" else "milestones"
     if view and view.get(key):
         rec = dict(rec, journeys=view["journeys"], focused=True, **{key: view[key]})
-        stem += " %s" % args.comm
         print("  %s tells its focus: %s" % (args.comm, ", ".join(str(x) for x in view["items"])))
     elif view:
         print("  %s's focus is not in this %s: it tells the key deliverables" % (args.comm, rec["kind"]))
@@ -1465,8 +1476,22 @@ def cmd_export(args):
             print("  %d risk(s) or issue(s) left out: not marked Sharable = Y (%s)"
                   % (len(out), ", ".join(r["ref"] for r in out)))
     page = {"status-report": render_status, "charter": render_charter}.get(rec["kind"], render_update)(rec)
-    with io.open(stem + ".html", "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(page)
+    folder = _stk().comm_folder(reg, comm, create=True) if comm and reg else None
+    if comm and reg and not folder:
+        print("  %s's register is in no PrjMgm folder: written beside the record" % args.comm)
+    if folder:
+        # What a communication sends lives in its own folder, one sending per
+        # record; an earlier export of it moves to PreviousV.
+        STK = _stk()
+        sending = os.path.join(folder, os.path.basename(args.record[:-5]))
+        name = os.path.basename(stem)
+        STK.place_export(sending, name + ".html", page)
+        if args.pdf:
+            STK.retire(sending, name + ".pdf")
+        stem = os.path.join(sending, name)
+    else:
+        with io.open(stem + ".html", "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(page)
     print("View: %s" % (stem + ".html"))
     if not args.pdf:
         return 0
@@ -2711,7 +2736,8 @@ def main():
     s.set_defaults(func=cmd_confirm)
     s = sub.add_parser("export", help="a copy for a reader outside the work, and its PDF")
     s.add_argument("record")
-    s.add_argument("--comm", metavar="C.n", help="a communication in the project's Stakeholder Register: its share level sets the audience")
+    s.add_argument("--comm", metavar="C.n", help="a communication in the project's Stakeholder Register: its share level sets the audience, and the copy goes into its folder in Comms as a sending")
+    s.add_argument("--register", help="with --comm, for a record kept outside any project: the stakeholder register, or its project's management folder")
     s.add_argument("--audience", choices=AUDIENCES, default=None,
                    help="external (default): only what is marked Sharable; owner: the report as it is")
     s.add_argument("--pdf", action="store_true", help="also print it to PDF with the machine's Chrome or Edge")

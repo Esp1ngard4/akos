@@ -26,8 +26,10 @@ it, which is kept out of git. No row is ever deleted - it goes Inactive.
 """
 import argparse
 import datetime as dt
+import io
 import os
 import re
+import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,6 +52,7 @@ OPTIONS = {
               ("mode", "Mode", "mode"), ("audience", "Audience", None),
               ("cadence", "Cadence", "cadence"), ("channel", "Channel", None),
               ("owner", "Owner", None), ("last_done", "Last Done", None),
+              ("confidential", "Confidential", "yesno"),
               ("status", "Status", "status"), ("notes", "Notes", None)],
 }
 ALL_OPTS = sorted(set(o for opts in OPTIONS.values() for o, _, _ in opts))
@@ -236,6 +239,8 @@ def cmd_set(args):
         if not S.clean(args.reason):
             sys.exit("Clearing %s's notes log removes every entry: say why with --reason." % row["ID"])
     referenced(data, values)
+    if values.get("Confidential") == "Y" and STK.is_content(dict(row, **values)):
+        sys.exit("%s is public (content: ...): a public communication cannot be confidential." % row["ID"])
     changes = apply(row, values)
     if not changes:
         print("%s already holds those values - nothing written." % row["ID"])
@@ -268,20 +273,103 @@ def cmd_note(args):
     return finish(args, path, data, "%s  note added" % row["ID"])
 
 
+def piece_of(ref, register_path):
+    """A content post bundle (posts/YYYY-MM-DD-slug/) and its title, from a path
+    or a slug; read, never written."""
+    strategies = STK.content_root(register_path)
+    folder = ref if os.path.isdir(ref) else (
+        os.path.join(os.path.dirname(strategies), "posts", ref) if strategies else ref)
+    if not os.path.isdir(folder):
+        sys.exit("No post bundle at %s." % ref)
+    title = os.path.basename(os.path.normpath(folder))
+    backbone = os.path.join(folder, "backbone.md")
+    if os.path.exists(backbone):
+        head = io.open(backbone, encoding="utf-8").readline().strip().lstrip("#").strip()
+        title = re.sub(r"^Backbone\s*[—-]\s*", "", head) or title
+    files = [os.path.join(folder, f) for f in sorted(os.listdir(folder))
+             if f.endswith(".md") and f != "backbone.md" and os.path.isfile(os.path.join(folder, f))]
+    return files, title
+
+
 def cmd_done(args):
-    """A communication happened: stamp Last Done. A skip is not recorded."""
+    """A communication happened: stamp Last Done, and archive what went
+    out as a sending in the communication's folder. A skip is not
+    recorded."""
     path = STK.resolve(args.register)
     data = R.load(path)
     coll, row = find_row(data, args.id)
     if coll != S.COMMS:
         sys.exit("`done` is for a communication (C.n), not %s." % row["ID"])
     on = today(args.on)
+    files = list(args.file or [])
+    name = args.sending
+    if args.piece:
+        if not STK.is_content(row):
+            sys.exit("--piece goes with a content communication (Channel content: ...); %s is not one." % row["ID"])
+        pieces, title = piece_of(args.piece, path)
+        files = pieces + files
+        name = name or STK.safe_name("%s %s" % (on, title), 80)
+    for f in files:
+        if not os.path.isfile(f):
+            sys.exit("No file at %s." % f)
+    # The sending: the one named, else the latest not yet sent (what the last
+    # export wrote), else a new one dated today when there are files to keep.
+    folder = STK.comm_folder(path, row, create=bool(files or name or args.link))
+    if (files or name or args.link) and not folder:
+        sys.exit("The register is in no PrjMgm folder: there is nowhere to keep what %s sent." % row["ID"])
+    sending = None
+    if name:
+        sending = os.path.join(folder, STK.safe_name(name, 80))
+    elif folder:
+        unsent = [s for s in STK.sendings(folder) if not s["sent"]]
+        if unsent:
+            sending = os.path.join(folder, unsent[0]["name"])
+        elif files or args.link:
+            sending = os.path.join(folder, on)
+    if args.dry_run:
+        print("%s  %s - done %s%s" % (row["ID"], row.get("What"), on,
+                                      "; would archive in %s" % sending if sending else ""))
+        print("\n  dry run - nothing written.")
+        return 0
+    kept = []
+    if sending:
+        os.makedirs(STK.lp(sending), exist_ok=True)
+        for f in files:
+            target = os.path.join(sending, os.path.basename(f))
+            if os.path.exists(STK.lp(target)):
+                sys.exit("%s is already in %s: rename it, or name another sending." % (os.path.basename(f), sending))
+        for f in files:
+            shutil.copy2(f, STK.lp(os.path.join(sending, os.path.basename(f))))
+        kept = sorted(x for x in os.listdir(STK.lp(sending))
+                      if os.path.isfile(STK.lp(os.path.join(sending, x))) and x != "Sent.md")
+        people = [p["Name"] for p in STK.resolve_audience(data, row)["people"]]
+        lines = ["## Sent %s" % on, "",
+                 "- **To:** %s" % ("the public (%s)" % row.get("Channel") if STK.is_content(row)
+                                   else ", ".join(people) or "no one active"),
+                 "- **Files:** %s" % (", ".join(kept) or "none")]
+        if args.link:
+            lines.append("- **Where:** %s" % args.link)
+        if row.get("Focus"):
+            lines.append("- **Focus:** %s" % ", ".join(row["Focus"]))
+        if args.note:
+            lines.append("- **Note:** %s" % args.note)
+        note = os.path.join(sending, "Sent.md")
+        head = "" if os.path.exists(STK.lp(note)) else "# %s - %s\n\n" % (row["ID"], os.path.basename(sending))
+        with io.open(STK.lp(note), "a", encoding="utf-8", newline="\n") as fh:
+            fh.write(head + "\n".join(lines) + "\n\n")
     changes = apply(row, {"Last Done": on})
-    if not changes:
+    if not changes and not sending:
         print("%s already done on %s - nothing written." % (row["ID"], on))
         return 0
-    log_change(data, row["ID"], changes, args.note or "Done.", on)
-    return finish(args, path, data, "%s  %s - done %s" % (row["ID"], row.get("What"), on))
+    logged = args.note or "Done."
+    if sending:
+        logged = "Sent %s: %s%s%s.%s" % (os.path.basename(sending), ", ".join(kept) or "no files",
+                                        "; at %s" % args.link if args.link else "",
+                                        "; focus %s" % ", ".join(row["Focus"]) if row.get("Focus") else "",
+                                        " %s" % args.note if args.note else "")
+    log_change(data, row["ID"], changes or ["Sent again"], logged, on)
+    return finish(args, path, data, "%s  %s - done %s%s" % (
+        row["ID"], row.get("What"), on, "\n  archived in %s" % sending if sending else ""))
 
 
 # A row or milestone ID; qualified by a register's scope when it lives in
@@ -616,6 +704,12 @@ def main():
     s.add_argument("--id", required=True)
     s.add_argument("--on", metavar="YYYY-MM-DD")
     s.add_argument("--note")
+    s.add_argument("--sending", help="the sending to archive in (default: the latest not yet sent, "
+                                     "else a new one dated today)")
+    s.add_argument("--file", action="append", metavar="PATH",
+                   help="a file that went out with it (an email, an attachment, an image); repeat for each")
+    s.add_argument("--link", metavar="URL", help="where it went out (a published post, a shared page)")
+    s.add_argument("--piece", metavar="POST", help="content: the published post bundle (posts/<date-slug>)")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_done)
 
