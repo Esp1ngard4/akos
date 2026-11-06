@@ -1877,9 +1877,12 @@ def test_comms_archive(root, scratch):
     io.open(os.path.join(post, "blog-article.md"), "w", encoding="utf-8").write("The piece.")
     ok, out = run_raw([stk, "done", reg, "--id", "C.3", "--piece", "2026-11-10-bets", "--link",
                        "https://blog.example/bets", "--on", "2026-11-10"], work)
-    check("archive: a published content piece is kept with its link, the post read only",
-          ok and os.path.exists(os.path.join(mgmt, "Comms", "C.3 Blog", "2026-11-10 Bets, not roadmaps", "blog-article.md"))
-          and sorted(os.listdir(post)) == ["backbone.md", "blog-article.md"], out)
+    sent = os.path.join(mgmt, "Comms", "C.3 Blog", "2026-11-10 Bets, not roadmaps")
+    note = os.path.join(sent, "Sent.md")
+    note = io.open(note, encoding="utf-8").read() if os.path.exists(note) else ""
+    check("archive: a published content piece is recorded with its link, pointing to the piece, nothing copied",
+          ok and os.listdir(sent) == ["Sent.md"] and "**Piece:**" in note and "2026-11-10-bets" in note
+          and sorted(os.listdir(post)) == ["backbone.md", "blog-article.md"], out + note)
     ok, out = run_raw([stk, "done", reg, "--id", "C.2", "--piece", post], work)
     check("archive: --piece goes with a content communication only", not ok and "content communication" in out, out)
     ok, out = run_raw([stk, "check", reg], work)
@@ -1892,7 +1895,8 @@ def test_comms_archive(root, scratch):
     ok, out = run_raw([os.path.join(scripts, "refresh_stk.py"), reg], work)
     page = os.path.join(mgmt, "Stakeholder Dashboard.html")
     page = io.open(page, encoding="utf-8").read() if os.path.exists(page) else ""
-    check("archive: the dashboard lists a communication's sendings", ok and "2026-11-07" in page, out[-300:])
+    check("archive: the dashboard lists a communication's sendings, a content one linking its piece",
+          ok and "2026-11-07" in page and "posts/2026-11-10-bets" in page, out[-300:])
 
 
 def test_project_definition(root, scratch):

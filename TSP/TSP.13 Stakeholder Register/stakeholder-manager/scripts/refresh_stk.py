@@ -103,8 +103,12 @@ def main():
         rec["sendings"] = []
         for s in STK.sendings(folder)[:8]:
             where = re.findall(r"\*\*Where:\*\* (\S+)", s["note"])
+            piece = re.findall(r"\*\*Piece:\*\* (.+)", s["note"])
+            if piece:
+                piece = os.path.normpath(os.path.join(folder, s["name"], piece[-1].strip()))
+                piece = os.path.relpath(piece, os.path.dirname(os.path.abspath(out))).replace(os.sep, "/")
             rec["sendings"].append({"name": s["name"], "files": s["files"], "sent": s["sent"],
-                                    "where": where[-1] if where else None,
+                                    "where": where[-1] if where else None, "piece": piece or None,
                                     "rel": os.path.relpath(os.path.join(folder, s["name"]),
                                                            os.path.dirname(os.path.abspath(out))).replace(os.sep, "/")})
         comms.append(rec)

@@ -274,8 +274,9 @@ def cmd_note(args):
 
 
 def piece_of(ref, register_path):
-    """A content post bundle (posts/YYYY-MM-DD-slug/) and its title, from a path
-    or a slug; read, never written."""
+    """A published piece's folder (posts/YYYY-MM-DD-slug/) and its title, from a
+    path or a slug. Read, never written: the piece is archived there, finals in
+    its media/, so a content sending points to it and copies nothing."""
     strategies = STK.content_root(register_path)
     folder = ref if os.path.isdir(ref) else (
         os.path.join(os.path.dirname(strategies), "posts", ref) if strategies else ref)
@@ -286,9 +287,7 @@ def piece_of(ref, register_path):
     if os.path.exists(backbone):
         head = io.open(backbone, encoding="utf-8").readline().strip().lstrip("#").strip()
         title = re.sub(r"^Backbone\s*[—-]\s*", "", head) or title
-    files = [os.path.join(folder, f) for f in sorted(os.listdir(folder))
-             if f.endswith(".md") and f != "backbone.md" and os.path.isfile(os.path.join(folder, f))]
-    return files, title
+    return os.path.abspath(folder), title
 
 
 def cmd_done(args):
@@ -303,11 +302,11 @@ def cmd_done(args):
     on = today(args.on)
     files = list(args.file or [])
     name = args.sending
+    piece = None
     if args.piece:
         if not STK.is_content(row):
             sys.exit("--piece goes with a content communication (Channel content: ...); %s is not one." % row["ID"])
-        pieces, title = piece_of(args.piece, path)
-        files = pieces + files
+        piece, title = piece_of(args.piece, path)
         name = name or STK.safe_name("%s %s" % (on, title), 80)
     for f in files:
         if not os.path.isfile(f):
@@ -347,6 +346,12 @@ def cmd_done(args):
                  "- **To:** %s" % ("the public (%s)" % row.get("Channel") if STK.is_content(row)
                                    else ", ".join(people) or "no one active"),
                  "- **Files:** %s" % (", ".join(kept) or "none")]
+        if piece:
+            try:
+                where_piece = os.path.relpath(piece, sending)
+            except ValueError:
+                where_piece = piece
+            lines.append("- **Piece:** %s" % where_piece.replace(os.sep, "/"))
         if args.link:
             lines.append("- **Where:** %s" % args.link)
         if row.get("Focus"):
@@ -363,7 +368,8 @@ def cmd_done(args):
         return 0
     logged = args.note or "Done."
     if sending:
-        logged = "Sent %s: %s%s%s.%s" % (os.path.basename(sending), ", ".join(kept) or "no files",
+        what = ", ".join(kept) or ("the piece in posts/%s" % os.path.basename(piece) if piece else "no files")
+        logged = "Sent %s: %s%s%s.%s" % (os.path.basename(sending), what,
                                         "; at %s" % args.link if args.link else "",
                                         "; focus %s" % ", ".join(row["Focus"]) if row.get("Focus") else "",
                                         " %s" % args.note if args.note else "")

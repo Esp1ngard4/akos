@@ -379,7 +379,7 @@ function commDetail(c) {
     <h4>What it sent</h4>
     ${(c.sendings || []).length ? (c.sendings || []).map(s => `<div class="sending"><a href="${esc(encodeURI(s.rel))}">${esc(s.name)}</a>
       ${s.sent ? "" : ` <span class="pill st-due">not sent yet</span>`}
-      <div class="sub">${esc(s.files.join(", ") || "no files")}${s.where ? ` · <a href="${esc(s.where)}">where it went</a>` : ""}</div></div>`).join("")
+      <div class="sub">${esc(s.files.join(", ") || (s.piece ? "" : "no files"))}${s.piece ? ` · <a href="${esc(encodeURI(s.piece))}">the piece</a>` : ""}${s.where ? ` · <a href="${esc(s.where)}">where it went</a>` : ""}</div></div>`).join("")
       : `<div class="muted">Nothing archived yet.</div>`}
     ` + detailTail(c);
 }
