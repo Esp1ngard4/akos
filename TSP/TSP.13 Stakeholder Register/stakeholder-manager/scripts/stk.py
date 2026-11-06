@@ -53,6 +53,7 @@ OPTIONS = {
               ("cadence", "Cadence", "cadence"), ("channel", "Channel", None),
               ("owner", "Owner", None), ("last_done", "Last Done", None),
               ("confidential", "Confidential", "yesno"),
+              ("view", "View", "view"),
               ("status", "Status", "status"), ("notes", "Notes", None)],
 }
 ALL_OPTS = sorted(set(o for opts in OPTIONS.values() for o, _, _ in opts))

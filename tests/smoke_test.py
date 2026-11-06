@@ -1816,6 +1816,82 @@ def test_status_board(root, scratch):
                   or "the WBS as of the team board's last consolidation" in page), out[-300:])
 
 
+def test_categories_and_calendar(root, scratch):
+    """A project's own categories, inherited down the tree; the calendar view
+    drawn from them, the span the work's own with far time compressed."""
+    import importlib
+    from datetime import date
+    print("\nCategories and the calendar view")
+    tsp = os.path.join(root, "TSP")
+    scripts = os.path.join(tsp, "TSP.1 WBS Register", "wbs-manager", "scripts")
+    wbs = os.path.join(scripts, "wbs.py")
+    work = os.path.join(scratch, "calendar")
+    os.makedirs(work, exist_ok=True)
+    reg = os.path.join(work, "WBS Cal.json")
+    run([os.path.join(scripts, "create_wbs.py"), reg, "Cal"], work)
+    ok, out = run_raw([wbs, "add", reg, "Free", "--type", "Deliverable", "--category", "Anything"], work)
+    check("category: without a list it is free text", ok, out)
+    ok, out = run_raw([wbs, "categories", reg, "Platform", "Reporting"], work)
+    check("category: a list that drops a value in use is refused", not ok and "Rows 1" in out, out)
+    run([wbs, "set", reg, "--id", "1", "--category", ""], work)
+    run([wbs, "categories", reg, "Platform", "Reporting"], work)
+    ok, out = run_raw([wbs, "add", reg, "Engine", "--type", "Deliverable", "--category", "Plaform"], work)
+    check("category: add holds it to the project's list", not ok and "not in the category vocabulary" in out, out)
+    run([wbs, "set", reg, "--id", "1", "--category", "Platform"], work)
+    run([wbs, "add", reg, "Core", "--type", "Feature", "--parent", "1"], work)
+    ok, out = run_raw([wbs, "check", reg], work)
+    check("category: a register using its list passes check", ok and " 0 error(s)" in out, out[-300:])
+    html = os.path.join(work, "WBS Dashboard.html")
+    run([os.path.join(scripts, "refresh_wbs.py"), reg, html, "Cal"], work)
+    page = io.open(html, encoding="utf-8").read() if os.path.exists(html) else ""
+    check("category: the dashboard filters by it and shows the inherited one",
+          "function effCat(" in page and "setCat(this.value)" in page and '"categories": ["Platform", "Reporting"]' in page)
+
+    rep_scripts = os.path.join(tsp, "TSP.10 Reporting", "reporting", "scripts")
+    sys.path.insert(0, rep_scripts)
+    try:
+        for name in ("report", "wbs"):
+            sys.modules.pop(name, None)
+        report = importlib.import_module("report")
+    finally:
+        sys.path.remove(rep_scripts)
+    import wbs as W
+    data = json.load(io.open(reg, encoding="utf-8"))
+    check("category: a row inherits its nearest categorised ancestor's, never stored",
+          W.effective_category(data, 2) == ("Platform", 1) and "Category" not in W.find(data, 2))
+
+    data["sprints"] = [{"Sprint": "S1", "Starts": "2026-10-19", "Ends": "2026-11-01"},
+                       {"Sprint": "S2", "Starts": "2026-11-02", "Ends": "2026-11-15"}]
+    data["items"] = [
+        {"ID": 1, "Title": "Engine", "Type": "Deliverable", "Key Deliverable": "Y", "Category": "Platform",
+         "Status": "Implementing", "Baseline End": "Dec-26"},
+        {"ID": 2, "Parent": 1, "Title": "Core", "Status": "Done", "Actual Start": "2026-Sep-14", "Actual End": "2026-Oct-30"},
+        {"ID": 3, "Parent": 1, "Title": "Edge", "Status": "Implementing", "Planned End": "Mar-27"},
+        {"ID": 4, "Title": "Dashboards", "Type": "Deliverable", "Key Deliverable": "Y", "Category": "Reporting",
+         "Status": "Not Started"},
+        {"ID": 5, "Parent": 4, "Title": "First", "Status": "Not Started", "Sprint Planned": "S2", "Planned End": "2027-Jan-15"},
+        {"ID": 6, "Title": "Loose", "Type": "Deliverable", "Key Deliverable": "Y", "Status": "Not Started", "Planned End": "Jun-28"},
+        {"ID": 7, "Title": "Someday", "Type": "Deliverable", "Key Deliverable": "Y", "Status": "Not Started"}]
+    io.open(reg, "w", encoding="utf-8").write(json.dumps(data, indent=2))
+    as_of = date(2026, 11, 6)
+    cal = report.calendar_map(report.Wbs(reg), as_of)
+    rows = {r["id"]: r for r in cal["rows"]}
+    check("calendar: a bar from the earliest actual start below it to where the roadmap places it",
+          rows.get(1, {}).get("start") == "2026-09-14" and rows[1]["end"] == "2027-03-31", str(cal["rows"]))
+    check("calendar: else from the first sprint the work is in; else a point at its end",
+          rows.get(4, {}).get("start_text") == "sprint S2" and rows.get(6, {}).get("start") is None, str(cal["rows"]))
+    check("calendar: what has no date is listed", [u["id"] for u in cal["undated"]] == [7], str(cal["undated"]))
+    labels = [c["label"] for c in report.cal_scale("2025-03-01", "2028-06-30", as_of)[0]]
+    check("calendar: months near today, quarters within a year, years beyond",
+          "Oct 2026" in labels and "Q2 2027" in labels and "Jan-Jun 2028" in labels, str(labels))
+    page = report.calendar_html({"projects": [cal]}, as_of)
+    check("calendar: grouped by the project's categories in its order, the rest as Other",
+          re.findall(r'<div class="cal-cat">([^<]*)</div>', page) == ["Platform", "Reporting", "Other"]
+          and "cal-today" in page and "Not yet dated" in page)
+    check("calendar: the shared copy names no row ID",
+          "#1 " not in report.calendar_html({"projects": [cal]}, as_of, ids=False))
+
+
 def test_comms_archive(root, scratch):
     """What a communication sends is kept by sending, under Comms or
     Confidential/Comms by its flag; a content piece is archived read-only."""
@@ -2171,6 +2247,15 @@ def test_reporting(root, scratch):
           and not os.path.exists(archived[:-5] + " (external).html"), out[-300:])
     check("a second export of the sending keeps the first in PreviousV",
           os.path.isdir(os.path.join(sending, "PreviousV")) and len(os.listdir(os.path.join(sending, "PreviousV"))) == 1)
+    stk_py = os.path.join(stk, "stk.py")
+    run([stk_py, "set", os.path.join(mg, "Stakeholders Atlas.json"), "--id", "C.1", "--view", "calendar"], work)
+    ok, out = run([report, "export", archived, "--comm", "C.1"], work)
+    html = io.open(os.path.join(sending, "2026-10-20 Status (external).html"), encoding="utf-8").read() if ok else ""
+    check("a communication whose View is calendar gets the calendar, not the roadmap",
+          ok and "<h2>Calendar" in html and "<h2>Roadmap" not in html, out[-300:])
+    ok, out = run([report, "export", archived, "--view", "both", "--audience", "owner"], work)
+    html = io.open(archived[:-5] + ".html", encoding="utf-8").read() if ok else ""
+    check("export without --comm takes --view", ok and "<h2>Calendar" in html and "<h2>Roadmap" in html, out[-300:])
 
     ok, out = run([report, "charter", project, "--as-of", "2026-10-20"], work)
     charter = os.path.join(project, "Reports", "Charter", "2026-10-20 Charter.json")
@@ -3282,6 +3367,7 @@ def main():
         test_action_tracker(root, scratch)
         test_stakeholder_register(root, scratch)
         test_comms_archive(root, scratch)
+        test_categories_and_calendar(root, scratch)
         test_project_definition(root, scratch)
         test_status_board(root, scratch)
         test_onboarding(root, scratch)

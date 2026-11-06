@@ -36,7 +36,7 @@ FIELDS = {
     # Focus: what the communication's report tells - WBS row IDs and milestone
     # IDs - dated by Focus Set, so each report can ask whether it is still the story.
     COMMS: ["ID", "What", "Report", "Mode", "Audience", "Cadence", "Channel", "Owner",
-            "Last Done", "Focus", "Focus Set", "Confidential", "Status", "Notes"],
+            "Last Done", "Focus", "Focus Set", "Confidential", "View", "Status", "Notes"],
     CHANGES: ["ID", "Changed On", "Item", "Change", "Reason"],
 }
 
@@ -55,6 +55,8 @@ VOCABULARIES = {
     "report": ["status-report", "sprint-update", "closure"],
     # A confidential communication is archived under Confidential/Comms.
     "yesno": ["Y", "N"],
+    # What a communication's report shows: the roadmap, a calendar, or both.
+    "view": ["roadmap", "calendar", "both"],
 }
 
 LIST_FIELDS = ("Groups", "Audience", "Focus")

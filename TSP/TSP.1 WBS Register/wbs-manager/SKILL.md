@@ -123,7 +123,7 @@ The noun/verb column is the quickest test in practice: deliverables and features
 | Acceptance Criteria | No | How completion is verified |
 | Owner | No | Person responsible |
 | Estimated Effort (h) | No | Hours estimate |
-| Category | No | PMBOK area or project-specific grouping |
+| Category | No | The project's own grouping of its work, from the register's list (`wbs.py categories`; free text without one). Set it on the deliverables: a row without one inherits its nearest categorised ancestor's. See operation 4e |
 | Status | Yes | Portfolio Backlog / Funnel / Not Started / Implementing / Done / Cancelled |
 | Priority | No | Must / Should / Could / Won't (MoSCoW) |
 | Baseline Start / End | No | The original commitment. **Write-once** — `set` refuses to overwrite one; `rebaseline` is the verb. A parent may carry its own. |
@@ -398,6 +398,19 @@ python <skill-path>/scripts/wbs.py milestone set|rebaseline|note|drop "<register
 `check` adds: a row naming a milestone that does not exist, and a milestone stage outside the vocabulary (errors); a live milestone no row reaches, an unreached one past its baseline, and an open row naming a dropped one (warnings). `migrate` registers the `milestones` collection, the `Milestone` field and the empty `stage` vocabulary.
 
 The schedule dates hang off these same moments rather than forming a separate routine — see **When each date is written** below for which field belongs to which. Committing to a sprint is also when a story's **baseline** is set, and it is set once.
+
+### 4e. Categories
+
+A project groups its work by its own **categories**: the streams a stakeholder would recognise (*Platform*, *Reporting*, *Data*). The calendar view in the reports groups by project, then by category; the dashboard filters by it.
+
+```bash
+python <skill-path>/scripts/wbs.py categories "<register>" "Platform" "Reporting" "Data"   # the list, in order; no names prints it
+python <skill-path>/scripts/wbs.py set "<register>" --id 12 --category Platform
+```
+
+- **Each project keeps its own list**; two projects need not share one. With a list, `add` and `set` refuse a value outside it and `check` flags one found; a list that drops a category still in use is refused until those rows move. Without a list, Category is free text.
+- **Categorise the deliverables, and their work follows**: a row without a category takes its nearest categorised ancestor's (`effective_category()`), computed wherever it is read and never stored. A row with none above it is *Other*.
+- The dashboard's detail shows a row's effective category, *(from <parent>)* when inherited, and the tree's filter shows one category with the rows above it for context.
 
 ### 5. Generate dashboard
 ```bash

@@ -922,7 +922,29 @@ kids.forEach(v=>v.sort(byCode));
    keeps the record of why - but it is noise in the common case, and on a
    roadmap it draws bars for work that will never happen. Hidden by default,
    never hidden permanently. */
-function visible(d){return showCancelled||d.s!=='Cancelled';}
+// A row's category is its own, else its nearest categorised ancestor's:
+// categorising the deliverables is enough. Computed here, never stored.
+function effCat(d){
+  let c=d;const seen=new Set();
+  while(c&&!seen.has(String(c.id))){seen.add(String(c.id));if(c.cat)return {v:c.cat,from:c===d?null:c};c=byId.get(String(c.pa));}
+  return {v:'',from:null};
+}
+const OTHER='~other';
+let catFilter='',catKeep=null;     // the rows in the chosen category, and their ancestors for context
+function setCat(v){
+  catFilter=v;catKeep=null;
+  if(v){catKeep=new Set();DATA.forEach(d=>{if((effCat(d).v||OTHER)!==v)return;let c=d;
+    while(c&&!catKeep.has(String(c.id))){catKeep.add(String(c.id));c=byId.get(String(c.pa));}});}
+  render();
+}
+function catSelect(){
+  const found=[...new Set(DATA.map(d=>effCat(d).v).filter(Boolean))];
+  if(!found.length&&!(S.categories||[]).length)return '';
+  const list=[...(S.categories||[]),...found.filter(c=>!(S.categories||[]).includes(c)).sort()];
+  const opt=(v,l)=>`<option value="${esc(v)}"${catFilter===v?' selected':''}>${esc(l)}</option>`;
+  return `<span class="sep"></span><select title="Show one category, with the rows above it for context" onchange="setCat(this.value)">${opt('','All categories')}${list.map(c=>opt(c,c)).join('')}${opt(OTHER,'Other (none)')}</select>`;
+}
+function visible(d){return (showCancelled||d.s!=='Cancelled')&&(!catKeep||catKeep.has(String(d.id)));}
 function childrenOf(id){return (kids.get(id===null?null:String(id))||[]).filter(visible);}
 function roots(){return childrenOf(null);}
 function hasKids(d){return childrenOf(d.id).length>0;}
@@ -977,7 +999,7 @@ function treeControls(extra){
   return `<div class="filters">
     <span class="btn" onclick="expandAll()">Expand all</span>
     <span class="btn" onclick="collapseAll()">Collapse all</span>
-    ${lv.join('')}${extra||''}</div>`;
+    ${lv.join('')}${catSelect()}${extra||''}</div>`;
 }
 
 /* ---------- item detail ---------- */
@@ -1124,7 +1146,7 @@ function openDetail(id,viaHash){
           ${chip('Status',d.s)}${chip('Type',d.ty)}${chip('Class',d.cl)}${chip('Nature',d.na)}
           ${chip('Delivers',d.dl)}${chip('Priority',d.p)}${chip('Effort',d.e?d.e+'h':'')}
           ${chip('Horizon',d.hz)}${chip('Key deliverable',d.kd==='Y'?'Yes':'')}
-          ${chip('Owner',d.o)}${chip('Category',d.cat)}${chip('Phase',d.ph)}
+          ${chip('Owner',d.o)}${(()=>{const e=effCat(d);return chip('Category',e.v&&e.from?e.v+' (from '+(e.from.t||e.from.id)+')':e.v);})()}${chip('Phase',d.ph)}
           ${chip('Planned',d.sp)}${chip('Carried',(d.sc||[]).join(', '))}${chip('Added',d.sa)}${chip('Ended',d.se)}
         </div>
         ${(d.jr||[]).length?`<div class="journey" title="The sprints this card went through, and how each ended for it"><b>Journey</b>${d.jr.map(esc).join(' &middot; ')}</div>`:''}
@@ -1891,7 +1913,7 @@ def generate_html(project_name, items, stats, schedule=None, sprints=None,
                 'cancelled': stats['cancelled'], 'no_status': stats['no_status'],
                 'total_effort': stats['total_effort'],
                 'statuses': stats['statuses'], 'priorities': stats['priorities'],
-                'types': stats['types'],
+                'types': stats['types'], 'categories': stats.get('categories') or [],
             }))
             .replace('__TIMESTAMP__', timestamp))
     return (SHELL.replace('__CSS__', CSS)
@@ -1920,6 +1942,9 @@ def main():
     items = [dict((f, row[f]) for f in fields if row.get(f) is not None)
              for row in rows]
     stats = compute_stats(items)
+    # The register's categories, in order: the filter lists them first.
+    stats['categories'] = list((((register.get('meta') or {}).get('settings') or {})
+                                .get('vocabularies') or {}).get('category') or [])
     sprints = [s for s in (register.get('sprints') or [])
                if s.get('Starts') and s.get('Ends')]
     sprints.sort(key=lambda s: s['Starts'])

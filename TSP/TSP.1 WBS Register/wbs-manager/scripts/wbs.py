@@ -831,7 +831,7 @@ def cmd_add(args):
     for field, value in (("type", args.type), ("class", args.klass),
                          ("nature", args.nature), ("delivers", args.delivers),
                          ("status", args.status), ("priority", args.priority),
-                         ("horizon", args.horizon)):
+                         ("horizon", args.horizon), ("category", args.category)):
         check_vocab(data, field, value)
     check_parent(data, None, args.parent)
 
@@ -843,7 +843,7 @@ def cmd_add(args):
                        ("Delivers", args.delivers), ("Status", args.status),
                        ("Priority", args.priority), ("Owner", args.owner),
                        ("Key Deliverable", args.key_deliverable),
-                       ("Horizon", args.horizon),
+                       ("Horizon", args.horizon), ("Category", args.category),
                        ("Description", args.description)):
         if value:
             row[key] = value
@@ -914,7 +914,7 @@ def cmd_set(args):
     for field, value in (("type", args.type), ("class", args.klass),
                          ("nature", args.nature), ("delivers", args.delivers),
                          ("status", args.status), ("priority", args.priority),
-                         ("horizon", args.horizon)):
+                         ("horizon", args.horizon), ("category", args.category)):
         check_vocab(data, field, value)
     if args.parent is not None:
         check_parent(data, args.id, args.parent)
@@ -928,7 +928,7 @@ def cmd_set(args):
                        ("Status", args.status), ("Priority", args.priority),
                        ("Owner", args.owner),
                        ("Key Deliverable", args.key_deliverable),
-                       ("Horizon", args.horizon)):
+                       ("Horizon", args.horizon), ("Category", args.category)):
         if value is None:
             continue
         if value == "":                      # explicit clear
@@ -1671,6 +1671,39 @@ def cmd_stages(args):
     return finish(args, data, "Stages, in order: %s" % ", ".join(args.names))
 
 
+# A project's categories: its own list, in order, which add,
+# set and check hold Category to. Without a list Category is free text. A row
+# without one takes its nearest categorised ancestor's, so categorising the
+# deliverables is enough; it is computed wherever it is read, never stored.
+
+def effective_category(data, rid):
+    """(category, the ID it comes from) for a row: its own, else its nearest
+    categorised ancestor's; (None, None) when no row above it has one."""
+    by_id = {r.get("ID"): r for r in data.get(ITEMS, [])}
+    cur, seen = by_id.get(as_id(rid)), set()
+    while cur is not None and cur.get("ID") not in seen:
+        seen.add(cur.get("ID"))
+        if cur.get("Category"):
+            return cur["Category"], cur.get("ID")
+        cur = by_id.get(as_id(cur.get("Parent"))) if cur.get("Parent") not in (None, "") else None
+    return None, None
+
+
+def cmd_categories(args):
+    data = R.load(args.register)
+    vocabs = data.setdefault("meta", {}).setdefault("settings", {}).setdefault("vocabularies", {})
+    if not args.names:
+        print("Categories: %s" % (", ".join(vocabs.get("category") or []) or "none set (Category is free text)"))
+        return 0
+    lost = sorted({str(r.get("ID")) for r in data.get(ITEMS, [])
+                   if r.get("Category") and r["Category"] not in args.names}, key=int)
+    if lost:
+        sys.exit("Rows %s have a category the new list drops. Move them first "
+                 "(wbs.py set --id N --category ...), or keep it in the list." % ", ".join(lost))
+    vocabs["category"] = list(args.names)
+    return finish(args, data, "Categories, in order: %s" % ", ".join(args.names))
+
+
 def cmd_journey(args):
     data = R.load(args.register)
     j = journey(data, args.id)
@@ -1713,7 +1746,7 @@ def cmd_check(args):
         for field, vocab in (("Type", "type"), ("Class", "class"),
                              ("Nature", "nature"),
                              ("Delivers", "delivers"), ("Status", "status"),
-                             ("Priority", "priority"),
+                             ("Priority", "priority"), ("Category", "category"),
                              ("Key Deliverable", "key deliverable")):
             value = row.get(field)
             allowed = vocabulary(data, vocab)
@@ -2977,6 +3010,8 @@ def main():
         sub.add_argument("--owner")
         sub.add_argument("--key-deliverable", choices=["Y", "N"])
         sub.add_argument("--horizon", help="Next / Future, or '' to clear")
+        sub.add_argument("--category", help="one of the register's categories (wbs.py categories), "
+                                            "or '' to clear; its rows below inherit it")
         for dest, field in SPRINT_ARGS:
             sub.add_argument("--" + dest.replace("_", "-"), dest=dest,
                              metavar="SPRINT",
@@ -3136,6 +3171,12 @@ def main():
     s.add_argument("names", nargs="*")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_stages)
+
+    s = subs.add_parser("categories", help="the register's categories, in order; with names, set them")
+    s.add_argument("register")
+    s.add_argument("names", nargs="*")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_categories)
 
     s = subs.add_parser("journey", help="a row's children by the stages or milestones beneath it")
     s.add_argument("register")

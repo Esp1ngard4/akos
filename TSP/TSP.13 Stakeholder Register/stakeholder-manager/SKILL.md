@@ -128,6 +128,7 @@ python <skill>/scripts/stk.py focus <reg> --id C.2 --items ""            # clear
 - Its report (`report.py export --comm C.2`) tells the focus under *Roadmap · in focus*, with each focused row's delivery journey, in place of the key deliverables. A **status report** tells the items in its own project and notes the rest as told elsewhere; a **sprint update** tells them across all the projects it spans, each in a lane of its own. **With no focus, the report tells the key deliverables**, as it always has.
 - **The focus is not `Key Deliverable`.** A key deliverable is a lasting fact the planning checks rely on; a focus changes from report to report and differs by audience, so it belongs to the communication, not the row.
 - **It is dated, so it is revisited:** the owner's status report lists each communication's focus with its date and asks whether it is still the story. Change it when the story moves; clear it when the key deliverables say enough.
+- **How it is drawn is the communication's `View`**: `roadmap` (the default: month columns), `calendar` (bars from start to end, by project and category) or `both` (`stk.py set --id C.2 --view both`). Some readers follow a timeline, others what is due when; the focus decides what is told, the View how.
 
 ### Send a communication
 
